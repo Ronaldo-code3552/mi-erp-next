@@ -24,12 +24,39 @@ interface Props {
 
 type Tabs = 'general' | 'economico' | 'clasificacion' | 'otros';
 
+// --- COMPONENTES AUXILIARES (SACADOS FUERA) ---
+
+// Ahora recibe activeTab y onClick como props explícitas
+const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: Tabs, label: string, icon: any, activeTab: Tabs, onClick: (id: Tabs) => void }) => (
+    <button
+        type="button"
+        onClick={() => onClick(id)}
+        className={`flex items-center gap-2 px-4 py-3 text-[11px] font-black tracking-widest border-b-2 transition-all ${
+            activeTab === id 
+            ? 'border-blue-600 text-blue-600 bg-blue-50/50' 
+            : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'
+        }`}
+    >
+        <Icon size={16} /> {label}
+    </button>
+);
+
+const FormInput = ({ label, className, ...props }: any) => (
+    <div className="flex flex-col gap-1.5">
+        <label className="text-[10px] font-black text-slate-500 uppercase ml-1">{label}</label>
+        <input 
+            className={`w-full border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 ${className || ''}`}
+            {...props}
+        />
+    </div>
+);
+
+// --- COMPONENTE PRINCIPAL ---
+
 export default function ProductFormModal({ isOpen, onClose, onSuccess, productToEdit }: Props) {
     const [activeTab, setActiveTab] = useState<Tabs>('general');
     const [loading, setLoading] = useState(false);
     const [catalogs, setCatalogs] = useState<any>(null);
-    
-    // Usamos Partial<Producto> para que coincida con los tipos corregidos
     const [formData, setFormData] = useState<Partial<Producto>>({});
 
     const isReadOnly = !!(productToEdit && productToEdit.estado === false);
@@ -40,20 +67,16 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 if (res.isSuccess) setCatalogs(res.data);
             });
             
-            // Cargar datos o inicializar
             if (productToEdit) {
                 setFormData({
                     ...productToEdit,
-                    // CORRECCIÓN: Mapeo directo usando los nombres reales de la BD/Interfaz
                     tipobienId: productToEdit.tipobienId, 
                     subclasebienId: productToEdit.subclasebienId || '', 
                     unidadmedidaId: productToEdit.unidadmedidaId || '',
                     condicion_estado: productToEdit.condicion_estado || 'STOCK',
-                    // Mapeos de nombres diferentes si fuera necesario (pero ya arreglamos la interfaz)
                     detraccion_porcentaje: productToEdit.detraccion_porcentaje || 0
                 });
             } else {
-                // Valores iniciales para Crear Nuevo
                 setFormData({ 
                     descripcion: '', codigo_existencia: '', codigo_barra: '', marca: '', 
                     codigo_osce: '', imagen: '', 
@@ -85,7 +108,6 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         setFormData(prev => ({
             ...prev,
             detraccionbienserviceId: selectedKey,
-            // CORRECCIÓN: Usar el nombre correcto de la propiedad
             detraccion_porcentaje: selectedOption ? parseFloat(selectedOption.aux) : 0
         }));
     };
@@ -94,17 +116,14 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         e.preventDefault();
         setLoading(true);
         try {
-            // Preparamos el payload (objeto a enviar al backend)
             const payload = {
                 ...formData,
-                empresaId: '005', // Hardcodeado según tu lógica actual
+                empresaId: '005',
                 cuentausuarioId: 'CU0001',
-                afecto_inafecto: true, // Asumimos true por defecto o deberías agregar un checkbox en el form
+                afecto_inafecto: true,
                 ubidst: '000000',
                 emite_ticket: false,
-                cod_admin: 100001, // Ojo: En tu JSON es número, aquí lo mandas como número
-                
-                // Conversiones de seguridad para asegurar tipos numéricos
+                cod_admin: 100001,
                 precio: parseFloat(String(formData.precio || 0)),
                 costo: parseFloat(String(formData.costo || 0)),
                 detraccion_porcentaje: parseFloat(String(formData.detraccion_porcentaje || 0))
@@ -129,31 +148,6 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         }
     };
 
-    // ... (TabButton y FormInput se mantienen igual) ...
-    const TabButton = ({ id, label, icon: Icon }: { id: Tabs, label: string, icon: any }) => (
-        <button
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`flex items-center gap-2 px-4 py-3 text-[11px] font-black tracking-widest border-b-2 transition-all ${
-                activeTab === id 
-                ? 'border-blue-600 text-blue-600 bg-blue-50/50' 
-                : 'border-transparent text-slate-400 hover:text-slate-600 hover:bg-slate-50'
-            }`}
-        >
-            <Icon size={16} /> {label}
-        </button>
-    );
-
-    const FormInput = ({ label, ...props }: any) => (
-        <div className="flex flex-col gap-1.5">
-            <label className="text-[10px] font-black text-slate-500 uppercase ml-1">{label}</label>
-            <input 
-                className={`w-full border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 ${props.className || ''}`}
-                {...props}
-            />
-        </div>
-    );
-
     return (
         <Modal 
             isOpen={isOpen} 
@@ -162,10 +156,11 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
             size="lg"
         >
             <div className="flex border-b mb-6 -mx-6 px-6 bg-white sticky top-0 z-10 overflow-x-auto">
-                <TabButton id="general" label="GENERALES" icon={IconInfoCircle} />
-                <TabButton id="economico" label="ECONÓMICO" icon={IconCurrencyDollar} />
-                <TabButton id="clasificacion" label="CLASIFICACIÓN" icon={IconTags} />
-                <TabButton id="otros" label="CONFIGURACIÓN" icon={IconSettings} />
+                {/* Pasamos activeTab y la función setActiveTab como onClick */}
+                <TabButton id="general" label="GENERALES" icon={IconInfoCircle} activeTab={activeTab} onClick={setActiveTab} />
+                <TabButton id="economico" label="ECONÓMICO" icon={IconCurrencyDollar} activeTab={activeTab} onClick={setActiveTab} />
+                <TabButton id="clasificacion" label="CLASIFICACIÓN" icon={IconTags} activeTab={activeTab} onClick={setActiveTab} />
+                <TabButton id="otros" label="CONFIGURACIÓN" icon={IconSettings} activeTab={activeTab} onClick={setActiveTab} />
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6">
@@ -188,12 +183,6 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                         <FormInput label="Código Interno" name="codigo_existencia" value={formData.codigo_existencia || ''} onChange={handleInputChange} disabled={isReadOnly} />
                         <FormInput label="Código de Barras" name="codigo_barra" value={formData.codigo_barra || ''} onChange={handleInputChange} disabled={isReadOnly} />
                         
-                        {/* NOTA IMPORTANTE SOBRE MARCA: 
-                           En tu BD 'marca' es un VARCHAR, no un ID. 
-                           Si 'catalogs.marcas' devuelve IDs, el backend debe esperar un ID.
-                           Si el backend espera texto, aquí deberías enviar el texto seleccionado.
-                           Asumiré que es Texto Input libre o un Select que devuelve Texto.
-                        */}
                         <div className="md:col-span-1">
                              <FormInput label="Marca" name="marca" value={formData.marca || ''} onChange={handleInputChange} disabled={isReadOnly} />
                         </div>
@@ -220,7 +209,6 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                         </div>
 
                         <div className="md:col-span-1">
-                            {/* CORREGIDO: name="detraccion_porcentaje" */}
                             <FormInput label="% Detracción" name="detraccion_porcentaje" type="number" value={formData.detraccion_porcentaje || 0} onChange={handleInputChange} disabled={isReadOnly} />
                         </div>
                         
@@ -251,20 +239,15 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 {/* --- PESTAÑA CLASIFICACIÓN --- */}
                 {activeTab === 'clasificacion' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        {/* CORREGIDO: name="tipobienId" */}
                         <SearchableSelect label="Tipo de Bien" name="tipobienId" value={formData.tipobienId || ''} options={catalogs?.tipo_bien} onChange={handleInputChange} disabled={isReadOnly} />
-                        
-                        {/* CORREGIDO: name="unidadmedidaId" */}
                         <SearchableSelect label="Unidad Medida" name="unidadmedidaId" value={formData.unidadmedidaId || ''} options={catalogs?.unidad_medida} onChange={handleInputChange} disabled={isReadOnly} />
-                        
                         <div className="col-span-2">
-                            {/* CORREGIDO: name="subclasebienId" */}
                             <SearchableSelect label="Subclase / Categoría" name="subclasebienId" value={formData.subclasebienId || ''} options={catalogs?.sub_clase_bien} onChange={handleInputChange} disabled={isReadOnly} />
                         </div>
                     </div>
                 )}
 
-                {/* --- PESTAÑA OTROS (Se mantiene igual, solo verifica que condicion_estado exista en Producto) --- */}
+                {/* --- PESTAÑA OTROS --- */}
                 {activeTab === 'otros' && (
                     <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className="flex flex-col gap-1.5">

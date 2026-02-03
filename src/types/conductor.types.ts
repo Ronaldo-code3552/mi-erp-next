@@ -3,11 +3,17 @@ export interface Conductor {
     nombres: string;
     apellidos: string;
     docidentId: string;
-    nro_licencia: string;
     nro_documento: string;
-    licencia_conducir?: string;
-    telefono_movil?: string;
     direccion?: string;
+    correo?: string;
+    ubidst?: string;
+    telefono_fijo?: string;
+    telefono_movil?: string;
+    licencia_conducir?: string;
     estado: boolean;
     empresaId: string;
+    documento_identidad?: {
+        descripcion_corta: string;
+        descripcion: string;
+    };
 }

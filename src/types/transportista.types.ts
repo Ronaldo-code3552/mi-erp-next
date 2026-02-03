@@ -6,4 +6,8 @@ export interface Transportista {
     numero_doc: string;
     estado: boolean;
     empresaId: string;
+    documento_identidad?: {
+        descripcion_corta: string;
+        descripcion: string;
+    };
 }
