@@ -73,17 +73,23 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+
+        const payload = {
+            ...formData,
+            empresaId: '005' 
+        };
         try {
             if (transportistaToEdit?.transportistaId) {
-                await transportistaService.update(transportistaToEdit.transportistaId, formData);
+                await transportistaService.update(transportistaToEdit.transportistaId, payload);
                 toast.success("Transportista actualizado correctamente");
             } else {
-                await transportistaService.create(formData);
+                await transportistaService.create(payload);
                 toast.success("Transportista registrado correctamente");
             }
             onSuccess();
             onClose();
         } catch (error) {
+            console.error(error); // Es bueno ver el error en consola para depurar
             toast.error("Error al procesar la solicitud");
         } finally {
             setLoading(false);

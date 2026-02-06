@@ -101,17 +101,23 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
+        const payload = {
+            ...formData,
+            empresaId: '005'
+        };
+
         try {
             if (unitToEdit?.unidadtransporteId) {
-                await unidadTransporteService.update(unitToEdit.unidadtransporteId, formData);
+                await unidadTransporteService.update(unitToEdit.unidadtransporteId, payload);
                 toast.success("Vehículo actualizado correctamente");
             } else {
-                await unidadTransporteService.create(formData);
+                await unidadTransporteService.create(payload);
                 toast.success("Vehículo registrado correctamente");
             }
             onSuccess();
             onClose();
         } catch (error) {
+            console.error(error); 
             toast.error("Error al procesar la solicitud");
         } finally {
             setLoading(false);

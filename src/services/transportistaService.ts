@@ -37,6 +37,10 @@ export const transportistaService = {
         const response = await apiClient.put(`/Transportista/${id}`, data);
         return response.data;
     },
+    delete: async (id: string): Promise<ApiResponse<any>> => {
+        const response = await apiClient.delete(`/Transportista/${id}`);
+        return response.data;
+    },
 
     anular: async (id: string): Promise<ApiResponse<any>> => {
         const response = await apiClient.patch(`/Transportista/anular/${id}`);

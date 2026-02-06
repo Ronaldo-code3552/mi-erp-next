@@ -1,0 +1,52 @@
+{ 
+ doc_referencia = ///PREGUNTA CHRISTIAN,
+ doc_referencia_numero ={
+    <asp:Label runat="server" Style="font-weight: 600;">NUMERO:</asp:Label>
+    <asp:TextBox runat="server" ID="TXTNUMDOCREF" CssClass="form-control" placeholder="Numero"></asp:TextBox>
+ }
+ fecha_doc = {
+    <div class="form-group">
+    <label style="font-weight: 600">FECHA DOC:</label>
+    <asp:TextBox runat="server" ID="TXTFECHA_DOC" TextMode="Date" CssClass="form-control"></asp:TextBox>
+    </div>
+ }
+ correlativo = {
+    <label style="font-weight: 600">N° GUIA:</label>
+    <label style="font-weight: 600; float: right;" for="chkManual"># manual</label>
+    <div class="input-group">
+        <asp:TextBox runat="server" ID="TXTNUMERO_VAL" CssClass="form-control" MaxLength="7" Enabled="true" Style="text-transform: uppercase"></asp:TextBox>
+        <span class="input-group-addon">
+            <asp:CheckBox runat="server" ID="chkManual" ClientIDMode="Static" AutoPostBack="true" OnCheckedChanged="chkManual_CheckedChanged" />
+        </span>
+    </div>
+    ------------------------------------------
+    var numero = TXTNUMERO_VAL.Text;
+    ENTGUIA.Correlativo = Convert.ToInt32(numero).ToString("0000000");
+ }
+ otro_motivo_traslado = {
+    <asp:Label runat="server" ID="lblOtroMotivo" Style="font-weight: 600;">OTRO MOTIVO TRASLADO:</asp:Label>
+<asp:TextBox runat="server" ID="TXTOTROMOTIVO" CssClass="form-control" Type="Search" Style="text-transform: uppercase; margin-top: 4px;"></asp:TextBox>
+<asp:DropDownList runat="server" ID="cboAlmacenesMotivo" CssClass="form-control" AutoPostBack="true" Style="text-transform: uppercase; margin-top: 4px;" Visible="false" OnSelectedIndexChanged="cboAlmacenesMotivo_SelectedIndexChanged"></asp:DropDownList>
+ }
+ movilidadId = ,///PREGUNTA CHRISTIAN
+ guia_remision_remitente = ,///PREGUNTA CHRISTIAN
+ foto_guiaremision = ,--EL XCORE LO MANDA COMO VACIO POR DEFECTO
+ estado_documento_sunat = 0, --PREGUNTARLE A CHRISTIAN
+ documentoReferencia = {
+    <asp:Label runat="server" Style="font-weight: 600;">SERIE:</asp:Label>
+    <asp:TextBox ID="TXTSERIEDOCREF" runat="server" CssClass="form-control" placeholder="Serie"></asp:TextBox>
+
+    <div class="col-xs-6">
+        <asp:Label runat="server" Style="font-weight: 600;">NUMERO:</asp:Label>
+        <asp:TextBox runat="server" ID="TXTNUMDOCREF" CssClass="form-control" placeholder="Numero"></asp:TextBox>
+    </div>
+
+    ENTGUIA.documentoReferencia = TXTSERIEDOCREF.Text + " - " + TXTNUMDOCREF.Text;
+},
+ documentoReferenciaTipo ={
+    <asp:DropDownList ID="DDLTIPODOCREF" runat="server" CssClass="form-control">
+    <asp:ListItem Text="" Value="00"></asp:ListItem>
+    <asp:ListItem Text="" Value="01">FACTURA</asp:ListItem>
+</asp:DropDownList>
+ }
+}

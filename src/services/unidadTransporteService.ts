@@ -31,6 +31,10 @@ export const unidadTransporteService = {
     create: async (data: Partial<UnidadTransporte>) => {
         return (await apiClient.post(`/UnidadTransporte`, data)).data;
     },
+    delete: async (id: string): Promise<ApiResponse<any>> => {
+        const response = await apiClient.delete(`/UnidadTransporte/${id}`);
+        return response.data;
+    },
 
     update: async (id: string, data: Partial<UnidadTransporte>) => {
         return (await apiClient.put(`/UnidadTransporte/${id}`, data)).data;

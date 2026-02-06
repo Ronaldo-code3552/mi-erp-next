@@ -180,10 +180,33 @@ export default function ProductosPage() {
                             value={tempFilters.tipo_bien}
                             onChange={(vals) => setTempFilters({...tempFilters, tipo_bien: vals})}
                         />
-                         {/* ... Agrega aquí el resto de MultiSelects igual que en tu React ... */}
+                        <MultiSelect 
+                            label="SubClase / Categoría" 
+                            options={catalogs.sub_clase_bien?.map((t:any) => ({ label: t.value, value: t.key }))}
+                            value={tempFilters.sub_clase_bien}
+                            onChange={(vals) => setTempFilters({...tempFilters, sub_clase_bien: vals})}
+                        />
+                        <MultiSelect 
+                            label="Unidad de Medida" 
+                            options={catalogs.unidad_medida?.map((t:any) => ({ label: `${t.value} (${t.aux})`, value: t.key }))}
+                            value={tempFilters.unidad_medida}
+                            onChange={(vals) => setTempFilters({...tempFilters, unidad_medida: vals})}
+                        />
+                        <MultiSelect 
+                            label="Tipo de Detracción" 
+                            options={catalogs.detraccion_bien_service?.map((t:any) => ({ label: t.value, value: t.key }))}
+                            value={tempFilters.detraccion_bien_service}
+                            onChange={(vals) => setTempFilters({...tempFilters, detraccion_bien_service: vals})}
+                        />
+                        <MultiSelect 
+                            label="Condición del Stock" 
+                            options={catalogs.condicion_estado?.map((t:any) => ({ label: t.value, value: t.key }))}
+                            value={tempFilters.condicion_estado}
+                            onChange={(vals) => setTempFilters({...tempFilters, condicion_estado: vals})}
+                        />
                     </div>
                 ) : (
-                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando filtros...</div>
+                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando catálogos...</div>
                 )}
             </FiltrosAvanzados>
 

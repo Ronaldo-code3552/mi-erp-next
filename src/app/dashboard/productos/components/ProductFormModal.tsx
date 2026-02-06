@@ -24,9 +24,6 @@ interface Props {
 
 type Tabs = 'general' | 'economico' | 'clasificacion' | 'otros';
 
-// --- COMPONENTES AUXILIARES (SACADOS FUERA) ---
-
-// Ahora recibe activeTab y onClick como props explícitas
 const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: Tabs, label: string, icon: any, activeTab: Tabs, onClick: (id: Tabs) => void }) => (
     <button
         type="button"
@@ -51,8 +48,6 @@ const FormInput = ({ label, className, ...props }: any) => (
     </div>
 );
 
-// --- COMPONENTE PRINCIPAL ---
-
 export default function ProductFormModal({ isOpen, onClose, onSuccess, productToEdit }: Props) {
     const [activeTab, setActiveTab] = useState<Tabs>('general');
     const [loading, setLoading] = useState(false);
@@ -60,6 +55,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
     const [formData, setFormData] = useState<Partial<Producto>>({});
 
     const isReadOnly = !!(productToEdit && productToEdit.estado === false);
+    const isEditing = !!productToEdit; 
 
     useEffect(() => {
         if (isOpen) {
@@ -80,8 +76,9 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 setFormData({ 
                     descripcion: '', codigo_existencia: '', codigo_barra: '', marca: '', 
                     codigo_osce: '', imagen: '', 
-                    precio: 0, costo: 0, 
-                    detraccionbienserviceId: '000', detraccion_porcentaje: 0,
+                    precio: '' as any, costo: '' as any, 
+                    detraccionbienserviceId: '000', 
+                    detraccion_porcentaje: '' as any,
                     cuenta_contable: '', operacionesItemId: '',
                     tipobienId: 0, unidadmedidaId: '', subclasebienId: '', 
                     condicion_estado: 'STOCK', observacion: '',
@@ -156,7 +153,6 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
             size="lg"
         >
             <div className="flex border-b mb-6 -mx-6 px-6 bg-white sticky top-0 z-10 overflow-x-auto">
-                {/* Pasamos activeTab y la función setActiveTab como onClick */}
                 <TabButton id="general" label="GENERALES" icon={IconInfoCircle} activeTab={activeTab} onClick={setActiveTab} />
                 <TabButton id="economico" label="ECONÓMICO" icon={IconCurrencyDollar} activeTab={activeTab} onClick={setActiveTab} />
                 <TabButton id="clasificacion" label="CLASIFICACIÓN" icon={IconTags} activeTab={activeTab} onClick={setActiveTab} />
@@ -200,16 +196,41 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className={`p-4 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-emerald-50/40 border-emerald-100'}`}>
                             <label className="text-[10px] font-black text-emerald-700 uppercase">Precio Venta (S/)</label>
-                            <input type="number" step="0.01" name="precio" className="w-full bg-transparent text-2xl font-black text-emerald-900 outline-none" value={formData.precio || 0} onChange={handleInputChange} disabled={isReadOnly} />
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                name="precio" 
+                                className="w-full bg-transparent text-2xl font-black text-emerald-900 outline-none" 
+                                value={formData.precio} 
+                                onChange={handleInputChange} 
+                                disabled={isReadOnly} 
+                                placeholder="0.00"
+                            />
                         </div>
 
                         <div className={`p-4 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-rose-50/40 border-rose-100'}`}>
                             <label className="text-[10px] font-black text-rose-700 uppercase">Costo Compra (S/)</label>
-                            <input type="number" step="0.01" name="costo" className="w-full bg-transparent text-2xl font-black text-rose-900 outline-none" value={formData.costo || 0} onChange={handleInputChange} disabled={isReadOnly} />
+                            <input 
+                                type="number" 
+                                step="0.01" 
+                                name="costo" 
+                                className="w-full bg-transparent text-2xl font-black text-rose-900 outline-none" 
+                                value={formData.costo} 
+                                onChange={handleInputChange} 
+                                disabled={isReadOnly} 
+                                placeholder="0.00"
+                            />
                         </div>
 
                         <div className="md:col-span-1">
-                            <FormInput label="% Detracción" name="detraccion_porcentaje" type="number" value={formData.detraccion_porcentaje || 0} onChange={handleInputChange} disabled={isReadOnly} />
+                            <FormInput 
+                                label="% Detracción" 
+                                name="detraccion_porcentaje" 
+                                type="number" 
+                                value={formData.detraccion_porcentaje} 
+                                onChange={handleInputChange} 
+                                disabled={isReadOnly} 
+                            />
                         </div>
                         
                         <div className="md:col-span-2">
@@ -239,8 +260,25 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 {/* --- PESTAÑA CLASIFICACIÓN --- */}
                 {activeTab === 'clasificacion' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        <SearchableSelect label="Tipo de Bien" name="tipobienId" value={formData.tipobienId || ''} options={catalogs?.tipo_bien} onChange={handleInputChange} disabled={isReadOnly} />
-                        <SearchableSelect label="Unidad Medida" name="unidadmedidaId" value={formData.unidadmedidaId || ''} options={catalogs?.unidad_medida} onChange={handleInputChange} disabled={isReadOnly} />
+                        <SearchableSelect 
+                            label="Tipo de Bien" 
+                            name="tipobienId" 
+                            value={formData.tipobienId || ''} 
+                            options={catalogs?.tipo_bien} 
+                            onChange={handleInputChange}
+                             
+                            disabled={isReadOnly} 
+                        />
+                        
+                        <SearchableSelect 
+                            label="Unidad Medida" 
+                            name="unidadmedidaId" 
+                            value={formData.unidadmedidaId || ''} 
+                            options={catalogs?.unidad_medida} 
+                            onChange={handleInputChange} 
+                            disabled={isReadOnly || isEditing} 
+                        />
+                        
                         <div className="col-span-2">
                             <SearchableSelect label="Subclase / Categoría" name="subclasebienId" value={formData.subclasebienId || ''} options={catalogs?.sub_clase_bien} onChange={handleInputChange} disabled={isReadOnly} />
                         </div>
@@ -252,12 +290,13 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                     <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className="flex flex-col gap-1.5">
                             <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Condición del Stock</label>
+                            {/* CAMBIO: Se agregaron las clases disabled:bg-slate-50 disabled:text-slate-400 */}
                             <select 
                                 name="condicion_estado" 
                                 value={formData.condicion_estado || 'STOCK'} 
                                 onChange={handleInputChange} 
                                 disabled={isReadOnly}
-                                className="w-full border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                className="w-full border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all disabled:bg-slate-50 disabled:text-slate-400"
                             >
                                 {catalogs?.condicion_estado?.map((opt: any) => (
                                     <option key={opt.key} value={opt.key}>{opt.value}</option>
@@ -268,7 +307,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                             <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Observaciones</label>
                             <textarea 
                                 name="observacion" rows={3} disabled={isReadOnly}
-                                className="w-full border border-slate-200 p-2.5 rounded-lg outline-none"
+                                className="w-full border border-slate-200 p-2.5 rounded-lg outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                                 value={formData.observacion || ''} onChange={handleInputChange}
                             />
                         </div>

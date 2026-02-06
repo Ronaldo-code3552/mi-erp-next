@@ -5,7 +5,8 @@ import { usePathname } from "next/navigation";
 import { 
   IconPackage, 
   IconUsers, 
-  IconTruck 
+  IconTruck, 
+  IconActivity
 } from "@tabler/icons-react";
 
 const Sidebar = () => {
@@ -17,6 +18,7 @@ const Sidebar = () => {
     { title: 'Maestro Conductores', icon: <IconUsers size={20} />, path: '/dashboard/conductores' },
     { title: 'Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/transportistas' },
     { title: 'Unidad Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/unidad-transporte' }, // Ojo: verifica si tu carpeta se llama 'unidadtrasportistas' o 'unidad-transporte', puse la del tree que me diste.
+    {title: 'Guias Remision', icon: <IconActivity size={20} />, path: '/dashboard/guias-remision' },
   ];
 
   return (

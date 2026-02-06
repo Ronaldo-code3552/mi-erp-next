@@ -28,7 +28,7 @@ export default function MultiSelect({
 
     // Filtrar opciones por el buscador interno
     const filteredOptions = options.filter(opt => 
-        opt.label.toLowerCase().includes(searchTerm.toLowerCase())
+        String(opt.label || "").toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     useEffect(() => {
