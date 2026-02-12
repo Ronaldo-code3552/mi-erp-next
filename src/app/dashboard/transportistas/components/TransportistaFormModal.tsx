@@ -4,9 +4,12 @@ import { useState, useEffect } from 'react';
 import { transportistaService } from '@/services/transportistaService';
 import Modal from '@/components/ui/Modal';
 import SearchableSelect from '@/components/forms/SearchableSelect';
+import ExternalSearchInput from '@/components/forms/ExternalSearchInput'; 
 import { IconDeviceFloppy, IconLoader } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { Transportista } from '@/types/transportista.types';
+// Importamos tus nuevos tipos para usarlos en la respuesta
+import { RucResponse, DniResponse } from '@/types/apiExternal.types';
 
 interface Props {
     isOpen: boolean;
@@ -15,13 +18,11 @@ interface Props {
     transportistaToEdit?: Transportista | null;
 }
 
-// --- COMPONENTE AUXILIAR CORREGIDO ---
-// Ahora extraemos 'className' de las props y lo concatenamos al final
+// --- COMPONENTE AUXILIAR (DEFINIDO AFUERA PARA EVITAR EL BUG DE FOCO) ---
 const FormInput = ({ label, className, ...props }: any) => (
-    <div className="flex flex-col gap-1.5 text-left">
+    <div className="flex flex-col gap-1.5 text-left w-full">
         <label className="text-xs font-bold text-slate-500 uppercase">{label}</label>
         <input 
-            // Aquí está la corrección: ${className || ''} permite agregar estilos extra sin borrar los base
             className={`w-full border border-slate-200 p-2.5 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-400 transition-all uppercase ${className || ''}`} 
             {...props} 
         />
@@ -33,18 +34,20 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
     const [loading, setLoading] = useState(false);
     const [catalogs, setCatalogs] = useState<any>(null);
 
+    const EMPRESA_ID = "005"; 
     const isReadOnly = !!(transportistaToEdit && transportistaToEdit.estado === false);
 
     const initialState: Partial<Transportista> = {
         descripcion: '', 
         direccion: '', 
-        docidentId: '6', 
+        docidentId: '6', // '6' = RUC por defecto
         numero_doc: '',
-        empresaId: '005'
+        empresaId: EMPRESA_ID
     };
 
     const [formData, setFormData] = useState<Partial<Transportista>>(initialState);
 
+    // 1. Cargar Datos y Catálogos
     useEffect(() => {
         if (isOpen) {
             transportistaService.getFormDropdowns().then(res => {
@@ -53,11 +56,13 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
 
             if (transportistaToEdit) {
                 setFormData({
+                    ...transportistaToEdit,
+                    // Aseguramos que los campos obligatorios tengan valor para no romper inputs controlados
                     descripcion: transportistaToEdit.descripcion || '',
                     direccion: transportistaToEdit.direccion || '',
                     docidentId: transportistaToEdit.docidentId || '6',
                     numero_doc: transportistaToEdit.numero_doc || '',
-                    empresaId: '005'
+                    empresaId: EMPRESA_ID
                 });
             } else {
                 setFormData(initialState);
@@ -65,31 +70,51 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
         }
     }, [isOpen, transportistaToEdit]);
 
+    // 2. Manejo de cambios en inputs normales
     const handleChange = (e: any) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    // 3. Lógica inteligente al encontrar datos en SUNAT/RENIEC
+    const handleDataFound = (data: any) => {
+        // TypeScript: Verificamos propiedades para saber si es RUC o DNI
+        
+        // CASO RUC (RucResponse)
+        if ('nombreORazonSocial' in data) {
+            const rucData = data as RucResponse;
+            setFormData(prev => ({
+                ...prev,
+                descripcion: rucData.nombreORazonSocial,
+                direccion: rucData.direccionCompleta || rucData.direccion || ''
+            }));
+        } 
+        // CASO DNI (DniResponse)
+        else if ('nombreCompleto' in data) {
+            const dniData = data as DniResponse;
+            setFormData(prev => ({
+                ...prev,
+                descripcion: dniData.nombreCompleto,
+                direccion: dniData.direccion || '' // DNI a veces no trae dirección
+            }));
+        }
+    };
+
+    // 4. Guardar
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-
-        const payload = {
-            ...formData,
-            empresaId: '005' 
-        };
         try {
             if (transportistaToEdit?.transportistaId) {
-                await transportistaService.update(transportistaToEdit.transportistaId, payload);
+                await transportistaService.update(transportistaToEdit.transportistaId, formData);
                 toast.success("Transportista actualizado correctamente");
             } else {
-                await transportistaService.create(payload);
+                await transportistaService.create(formData);
                 toast.success("Transportista registrado correctamente");
             }
             onSuccess();
             onClose();
         } catch (error) {
-            console.error(error); // Es bueno ver el error en consola para depurar
             toast.error("Error al procesar la solicitud");
         } finally {
             setLoading(false);
@@ -105,6 +130,39 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
         >
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    
+                    {/* SELECCIONAR TIPO DOCUMENTO */}
+                    <SearchableSelect 
+                        label="Tipo Doc." 
+                        name="docidentId" 
+                        options={catalogs?.documento_identidad} 
+                        value={formData.docidentId || ''} 
+                        onChange={handleChange} 
+                        disabled={isReadOnly}
+                    />
+
+                    {/* INPUT INTELIGENTE DE BÚSQUEDA */}
+                    <ExternalSearchInput
+                        label="Número Documento"
+                        name="numero_doc"
+                        value={formData.numero_doc || ''}
+                        onChange={handleChange}
+                        onSuccess={handleDataFound}
+                        empresaId={EMPRESA_ID}
+                        
+                        // Usamos las keys exactas de tu JSON: "DNI", "CEX", "RUC"
+                        type={
+                            (formData.docidentId === 'DNI') ? 'DNI' : 
+                            (formData.docidentId === 'CEX') ? 'CARNET' : 
+                            'RUC' // Por defecto para "RUC" u otros
+                        }
+
+                        disabled={isReadOnly}
+                        required
+                        className="font-mono" 
+                    />
+
+                    {/* RAZÓN SOCIAL (Se llena solo) */}
                     <div className="md:col-span-2">
                         <FormInput 
                             label="Razón Social / Nombre" 
@@ -117,26 +175,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                         />
                     </div>
                     
-                    <SearchableSelect 
-                        label="Tipo Doc." 
-                        name="docidentId" 
-                        options={catalogs?.documento_identidad} 
-                        value={formData.docidentId || ''} 
-                        onChange={handleChange} 
-                        disabled={isReadOnly}
-                    />
-                    
-                    {/* AHORA ESTE INPUT MANTENDRÁ LOS ESTILOS BASE + FONT-MONO */}
-                    <FormInput 
-                        label="Número Documento" 
-                        name="numero_doc" 
-                        value={formData.numero_doc || ''} 
-                        onChange={handleChange} 
-                        required 
-                        disabled={isReadOnly} 
-                        className="font-mono"
-                    />
-                    
+                    {/* DIRECCIÓN (Se llena solo con RUC) */}
                     <div className="md:col-span-2">
                         <FormInput 
                             label="Dirección Legal" 
@@ -148,6 +187,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                     </div>
                 </div>
 
+                {/* BOTONES */}
                 {!isReadOnly && (
                     <div className="flex justify-end gap-3 pt-4 border-t mt-4">
                         <button type="button" onClick={onClose} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>

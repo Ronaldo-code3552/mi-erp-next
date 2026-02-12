@@ -4,9 +4,11 @@ import { useState, useEffect } from 'react';
 import { unidadTransporteService } from '@/services/unidadTransporteService';
 import Modal from '@/components/ui/Modal';
 import SearchableSelect from '@/components/forms/SearchableSelect';
+import ExternalSearchInput from '@/components/forms/ExternalSearchInput'; // Importamos el componente buscador
 import { IconDeviceFloppy, IconLoader } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { UnidadTransporte } from '@/types/unidadTransporte.types';
+import { PlacaVehiculoResponse } from '@/types/apiExternal.types'; // Asegúrate de tener este tipo exportado
 
 interface Props {
     isOpen: boolean;
@@ -15,8 +17,7 @@ interface Props {
     unitToEdit?: UnidadTransporte | null;
 }
 
-// --- COMPONENTE AUXILIAR CORREGIDO ---
-// Ahora acepta 'className' y lo combina con los estilos base
+// --- COMPONENTE AUXILIAR ---
 const FormInput = ({ label, className, ...props }: any) => (
     <div className="flex flex-col gap-1.5 text-left">
         <label className="text-xs font-bold text-slate-500 uppercase">{label}</label>
@@ -32,6 +33,8 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
     const [loading, setLoading] = useState(false);
     const [catalogs, setCatalogs] = useState<any>(null);
     
+    const EMPRESA_ID = "005";
+
     // Estados para lógica dependiente (Marca -> Modelo)
     const [selectedMarca, setSelectedMarca] = useState("");
     const [filteredModelos, setFilteredModelos] = useState<any[]>([]);
@@ -47,7 +50,7 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
         nro_matricula_carrosa1: '',
         nro_matricula_carrosa2: '',
         observaciones: '',
-        empresaId: '005',
+        empresaId: EMPRESA_ID,
         estado: '1'
     };
 
@@ -62,7 +65,6 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
 
             if (unitToEdit) {
                 setFormData(unitToEdit);
-                // Pre-seleccionar la marca basada en el modelo de la unidad
                 if (unitToEdit.modelo?.marcaId) {
                     setSelectedMarca(String(unitToEdit.modelo.marcaId));
                 }
@@ -76,7 +78,6 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
     // 2. FILTRADO DE MODELOS (Cascading Dropdown)
     useEffect(() => {
         if (selectedMarca && catalogs?.modelo) {
-            // Filtramos los modelos que pertenezcan a la marca seleccionada
             const filtrados = catalogs.modelo.filter(
                 (m: any) => String(m.groupKey || m.marcaId) === String(selectedMarca)
             );
@@ -86,38 +87,90 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
         }
     }, [selectedMarca, catalogs]);
 
+    // --- MANEJO DE CAMBIOS ---
+
     const handleMarcaChange = (e: any) => {
         const newMarcaId = e.target.value;
         setSelectedMarca(newMarcaId);
-        // Limpiamos el modelo al cambiar de marca para evitar inconsistencias
         setFormData(prev => ({ ...prev, modeloId: '' })); 
     };
 
     const handleChange = (e: any) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        
+        // Transformación especial para placas (limpiar guiones si quieres guardar limpio, o dejarlos)
+        // Aquí solo aseguramos Mayúsculas visualmente, el ExternalInput ya maneja lo suyo.
+        let finalValue = value;
+        if (name === 'nro_matricula_cabina') {
+            finalValue = value.toUpperCase();
+        }
+
+        setFormData(prev => ({ ...prev, [name]: finalValue }));
+    };
+
+    // --- LÓGICA DE BÚSQUEDA DE PLACA (API EXTERNA) ---
+    const handlePlacaFound = (data: PlacaVehiculoResponse) => {
+        // data trae: { placa, marca, modelo, serie, color, motor, vin }
+        
+        // 1. Intentar encontrar el ID de la Marca (Texto API vs Texto Catálogo)
+        let foundMarcaId = "";
+        if (data.marca && catalogs?.marca) {
+            const marcaText = data.marca.trim().toUpperCase();
+            const marcaMatch = catalogs.marca.find((m: any) => m.value.trim().toUpperCase() === marcaText);
+            if (marcaMatch) foundMarcaId = String(marcaMatch.key);
+        }
+
+        // 2. Intentar encontrar el ID del Modelo (Necesitamos la marca primero)
+        let foundModeloId = "";
+        if (foundMarcaId && data.modelo && catalogs?.modelo) {
+            const modeloText = data.modelo.trim().toUpperCase();
+            // Buscamos solo en los modelos que pertenecen a esa marca (groupKey)
+            const modeloMatch = catalogs.modelo.find((m: any) => 
+                String(m.groupKey) === foundMarcaId && 
+                m.value.trim().toUpperCase() === modeloText
+            );
+            if (modeloMatch) foundModeloId = String(modeloMatch.key);
+        }
+
+        // 3. Construir descripción automática si está vacía
+        const descAuto = `${data.marca || ''} ${data.modelo || ''} - ${data.placa || ''}`.trim();
+
+        // 4. Actualizar Estado
+        setSelectedMarca(foundMarcaId); // Esto disparará el useEffect que filtra los modelos
+        
+        setFormData(prev => ({
+            ...prev,
+            nro_matricula_cabina: data.placa || prev.nro_matricula_cabina,
+            descripcion: prev.descripcion || descAuto, // Llena descripción si está vacía
+            modeloId: foundModeloId, // Asigna el modelo si hubo match
+            // Guardamos datos extra en observaciones ya que no hay campos específicos
+            observaciones: `COLOR: ${data.color || '-'} | MOTOR: ${data.motor || '-'} | VIN: ${data.vin || '-'} | SERIE: ${data.serie || '-'}`
+        }));
+
+        // Feedback al usuario
+        if (foundMarcaId && foundModeloId) {
+            toast.success("Vehículo identificado y vinculado al catálogo.");
+        } else if (foundMarcaId) {
+            toast.warning("Marca vinculada, pero el modelo no existe en el catálogo.");
+        } else {
+            toast.warning("Datos obtenidos, pero la Marca/Modelo no existen en su catálogo.");
+        }
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
-        const payload = {
-            ...formData,
-            empresaId: '005'
-        };
-
         try {
             if (unitToEdit?.unidadtransporteId) {
-                await unidadTransporteService.update(unitToEdit.unidadtransporteId, payload);
+                await unidadTransporteService.update(unitToEdit.unidadtransporteId, formData);
                 toast.success("Vehículo actualizado correctamente");
             } else {
-                await unidadTransporteService.create(payload);
+                await unidadTransporteService.create(formData);
                 toast.success("Vehículo registrado correctamente");
             }
             onSuccess();
             onClose();
         } catch (error) {
-            console.error(error); 
             toast.error("Error al procesar la solicitud");
         } finally {
             setLoading(false);
@@ -134,6 +187,23 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
             <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                     
+                    {/* PLACA CON BÚSQUEDA INTEGRADA */}
+                    <div className="md:col-span-1">
+                         <ExternalSearchInput
+                            label="Placa Cabina"
+                            name="nro_matricula_cabina"
+                            value={formData.nro_matricula_cabina || ''}
+                            onChange={handleChange}
+                            onSuccess={handlePlacaFound}
+                            empresaId={EMPRESA_ID}
+                            type="PLACA" // Usa el nuevo tipo agregado
+                            disabled={isReadOnly}
+                            required
+                            placeholder="ABC-123"
+                            className="font-mono font-bold"
+                        />
+                    </div>
+
                     {/* SECCIÓN PRINCIPAL */}
                     <div className="md:col-span-2">
                         <FormInput 
@@ -146,18 +216,6 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                             placeholder="Ej: VOLVO FH 500 BLANCO" 
                         />
                     </div>
-                    
-                    {/* AHORA SÍ: Mantiene los estilos base y agrega font-mono */}
-                    <FormInput 
-                        label="Placa Cabina" 
-                        name="nro_matricula_cabina" 
-                        value={formData.nro_matricula_cabina || ''} 
-                        onChange={handleChange} 
-                        required 
-                        disabled={isReadOnly}
-                        className="font-mono font-bold" 
-                        placeholder="ABC-123" 
-                    />
 
                     {/* LÓGICA DE MARCA Y MODELO */}
                     <SearchableSelect 

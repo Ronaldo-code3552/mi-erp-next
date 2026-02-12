@@ -6,7 +6,9 @@ import {
   IconPackage, 
   IconUsers, 
   IconTruck, 
-  IconActivity
+  IconActivity,
+  Icon24Hours,
+  IconAdjustmentsCode
 } from "@tabler/icons-react";
 
 const Sidebar = () => {
@@ -19,6 +21,8 @@ const Sidebar = () => {
     { title: 'Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/transportistas' },
     { title: 'Unidad Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/unidad-transporte' }, // Ojo: verifica si tu carpeta se llama 'unidadtrasportistas' o 'unidad-transporte', puse la del tree que me diste.
     {title: 'Guias Remision', icon: <IconActivity size={20} />, path: '/dashboard/guias-remision' },
+    {title: 'Motivo Traslado', icon: <Icon24Hours size={20} />, path: '/dashboard/motivo-traslado' },
+    {title: 'Tabla Transaccion', icon: <IconAdjustmentsCode size={20} />, path: '/dashboard/tabla-transaccion' },
   ];
 
   return (
