@@ -32,12 +32,13 @@ export default function TransaccionFormModal({ isOpen, onClose, onSuccess, dataT
 
     const EMPRESA_ID = "005"; 
 
+    // Estado inicial: tipoalmacenId por defecto es 3
     const initialState: TablaTransaccionesPayload = {
         descripcion: '',
         tipomovimientoId: '',
         tipoOperacionId: '',
         empresaId: EMPRESA_ID,
-        tipoalmacenId: 0
+        tipoalmacenId: 3 // VALOR POR DEFECTO FIJO
     };
 
     const [formData, setFormData] = useState<TablaTransaccionesPayload>(initialState);
@@ -49,18 +50,17 @@ export default function TransaccionFormModal({ isOpen, onClose, onSuccess, dataT
             });
 
             if (dataToEdit) {
-                // --- CORRECCIÓN DEL BUG ---
-                // El ID puede venir en la raíz (tipoalmacenId) O dentro del objeto anidado (TipoAlmacenAsociado.tipoalmacenId)
+                // Recuperamos el almacén actual (si existe) para no perderlo al editar otros campos
                 const almacenId = dataToEdit.tipoalmacenId 
                     || dataToEdit.TipoAlmacenAsociado?.tipoalmacenId 
-                    || 0;
+                    || 3; // Fallback a 3 si no tiene
 
                 setFormData({
                     descripcion: dataToEdit.descripcion || '',
                     tipomovimientoId: dataToEdit.tipomovimientoId || '',
                     tipoOperacionId: dataToEdit.tipoOperacionId || '',
                     empresaId: dataToEdit.empresaId || EMPRESA_ID,
-                    tipoalmacenId: almacenId // Asignamos el valor corregido
+                    tipoalmacenId: almacenId 
                 });
             } else {
                 setFormData(initialState);
@@ -106,7 +106,7 @@ export default function TransaccionFormModal({ isOpen, onClose, onSuccess, dataT
             isOpen={isOpen} 
             onClose={onClose} 
             title={dataToEdit ? "Editar Transacción" : "Nueva Transacción"}
-            size="lg"
+            size="md" // Reducimos tamaño ya que hay menos campos
         >
             <form onSubmit={handleSubmit} className="space-y-5">
                 
@@ -135,15 +135,8 @@ export default function TransaccionFormModal({ isOpen, onClose, onSuccess, dataT
                         value={formData.tipoOperacionId} 
                         onChange={handleChange}
                     />
-
-                    <SearchableSelect 
-                        label="Tipo Almacén (Destino/Origen)" 
-                        name="tipoalmacenId"
-                        options={getOpts('tipo_almacen')} 
-                        value={formData.tipoalmacenId} 
-                        onChange={handleChange}
-                    />
                 </div>
+                {/* Se eliminó el Select de Tipo Almacén */}
 
                 <div className="flex justify-end gap-3 pt-4 border-t mt-4">
                     <button type="button" onClick={onClose} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors text-xs">CANCELAR</button>
