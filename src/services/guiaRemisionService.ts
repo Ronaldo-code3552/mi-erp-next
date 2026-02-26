@@ -27,8 +27,8 @@ export const guiaRemisionService = {
     },
 
     // 2. Obtener Dropdowns gigantes
-    getFormDropdowns: async (empresaId: string): Promise<ApiResponse<any>> => {
-        const response = await apiClient.get(`/GuiaRemision/form-dropdowns/${empresaId}`);
+    getFormDropdowns: async (empresaId: string,almacenId:string): Promise<ApiResponse<any>> => {
+        const response = await apiClient.get(`/GuiaRemision/form-dropdowns/${empresaId}/${almacenId}`);
         return response.data;
     },
 

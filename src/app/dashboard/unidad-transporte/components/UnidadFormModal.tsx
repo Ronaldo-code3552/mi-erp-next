@@ -9,7 +9,7 @@ import SearchableSelect from '@/components/forms/SearchableSelect';
 import ExternalSearchInput from '@/components/forms/ExternalSearchInput';
 import ValidatedFormInput from '@/components/forms/ValidatedFormInput'; 
 import SimpleCrudModal from '@/components/forms/SimpleCrudModal';
-import { IconDeviceFloppy, IconLoader, IconPlus, IconEdit } from '@tabler/icons-react'; // Se quitó IconTrash
+import { IconDeviceFloppy, IconLoader, IconPlus, IconEdit } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { UnidadTransporte } from '@/types/unidadTransporte.types';
 import { PlacaVehiculoResponse } from '@/types/apiExternal.types';
@@ -25,16 +25,12 @@ interface Props {
 export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit }: Props) {
     const [loading, setLoading] = useState(false);
     
-    // Catálogos locales
     const [catalogs, setCatalogs] = useState<{ marca: any[], modelo: any[] } | null>(null);
-    
     const EMPRESA_ID = "005";
 
-    // Estados
     const [selectedMarca, setSelectedMarca] = useState("");
     const [filteredModelos, setFilteredModelos] = useState<any[]>([]);
     
-    // Estados para Modales CRUD
     const [crudModal, setCrudModal] = useState<{ type: 'MARCA' | 'MODELO' | null, action: 'ADD' | 'EDIT' | null, data?: any }>({ type: null, action: null });
 
     const isReadOnly = !!(unitToEdit && unitToEdit.estado === "0");
@@ -48,47 +44,69 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
 
     const [formData, setFormData] = useState<Partial<UnidadTransporte>>(initialState);
 
-    // 1. CARGA INICIAL
+    // --- 1. CARGAR CATÁLOGOS AL ABRIR ---
     useEffect(() => {
         if (isOpen) {
             resetErrors();
-            loadCatalogs(); 
+            unidadTransporteService.getFormDropdowns().then(res => {
+                if (res.isSuccess) setCatalogs(res.data);
+            });
+        }
+    }, [isOpen]);
 
+    // --- 2. INICIALIZAR DATOS CUANDO LOS CATÁLOGOS ESTÁN LISTOS ---
+    useEffect(() => {
+        if (isOpen && catalogs) {
             if (unitToEdit) {
+                // Seteamos todos los datos, incluyendo el modeloId que viene en la raíz
                 setFormData(unitToEdit);
+                
+                // Extraemos la marca anidada para disparar el filtrado de modelos
                 if (unitToEdit.modelo?.marcaId) {
                     setSelectedMarca(String(unitToEdit.modelo.marcaId));
+                } else {
+                    setSelectedMarca("");
                 }
             } else {
                 setFormData(initialState);
                 setSelectedMarca("");
             }
         }
-    }, [isOpen, unitToEdit]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, unitToEdit, catalogs]); // Dependemos de catalogs para asegurar que existan antes de bindear data
 
-    // Función para recargar catálogos completos
-    const loadCatalogs = () => {
-        unidadTransporteService.getFormDropdowns().then(res => {
-            if (res.isSuccess) setCatalogs(res.data);
-        });
-    };
-
-    // 2. FILTRADO DE MODELOS
+    // --- 3. FILTRAR MODELOS CUANDO CAMBIA LA MARCA ---
     useEffect(() => {
         if (selectedMarca && catalogs?.modelo) {
             const filtrados = catalogs.modelo.filter(
                 (m: any) => String(m.groupKey || m.marcaId) === String(selectedMarca)
             );
             setFilteredModelos(filtrados);
+            
+            // Si el modeloId actual NO está en la nueva lista filtrada, lo limpiamos.
+            // Esto es crucial para cuando el usuario cambia manualmente la marca.
+            // PERO no lo limpiamos si estamos inicializando la edición.
+            setFormData(prev => {
+                if (prev.modeloId && !filtrados.some(f => String(f.key) === String(prev.modeloId))) {
+                    // Si el modelo actual es del unitToEdit original y coincide con la marca, no lo borres.
+                    // Si el usuario cambió la marca, entonces sí borra el modelo.
+                    if (unitToEdit && String(unitToEdit.modelo?.marcaId) === String(selectedMarca)) {
+                        return prev; // Mantenemos el modelo original
+                    }
+                    return { ...prev, modeloId: '' }; // Limpiamos porque la marca cambió
+                }
+                return prev;
+            });
+            
         } else {
             setFilteredModelos([]);
         }
-    }, [selectedMarca, catalogs]);
+    }, [selectedMarca, catalogs, unitToEdit]);
 
     const handleMarcaChange = (e: any) => {
         const newMarcaId = e.target.value;
         setSelectedMarca(newMarcaId);
-        setFormData(prev => ({ ...prev, modeloId: '' })); 
+        // La limpieza de modeloId se maneja en el useEffect de arriba
     };
 
     const handleChange = (e: any) => {
@@ -100,31 +118,30 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
         if(hasError(name)) clearError(name);
     };
 
-    // --- MANEJO DE CRUD MARCA/MODELO (Solo Add/Edit) ---
+    // --- CRUD MODALS ---
     const handleOpenCrud = (type: 'MARCA' | 'MODELO', action: 'ADD' | 'EDIT') => {
         if (action === 'EDIT') {
             if (type === 'MARCA' && !selectedMarca) return toast.warning("Seleccione una marca para editar");
             if (type === 'MODELO' && !formData.modeloId) return toast.warning("Seleccione un modelo para editar");
             
             const idToEdit = type === 'MARCA' ? Number(selectedMarca) : Number(formData.modeloId);
-            
-            // Buscar la descripción actual en los catálogos para precargar el modal
             const list = type === 'MARCA' ? catalogs?.marca : catalogs?.modelo;
             const item = list?.find((x: any) => Number(x.key) === idToEdit);
             
             setCrudModal({ type, action, data: { id: idToEdit, descripcion: item?.value } });
         } else {
-            // ADD
             if (type === 'MODELO' && !selectedMarca) return toast.warning("Seleccione una marca primero");
             setCrudModal({ type, action, data: null });
         }
     };
 
     const handleCrudSuccess = () => {
-        loadCatalogs(); // Recargar dropdowns para ver los cambios
+        unidadTransporteService.getFormDropdowns().then(res => {
+            if (res.isSuccess) setCatalogs(res.data);
+        });
     };
 
-    // --- LÓGICA DE BÚSQUEDA DE PLACA (Igual que antes) ---
+    // --- BÚSQUEDA EXTERNA DE PLACA ---
     const handlePlacaFound = (data: PlacaVehiculoResponse) => {
         let foundMarcaId = "";
         if (data.marca && catalogs?.marca) {
@@ -170,14 +187,19 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
 
         if(!selectedMarca) return toast.error("Seleccione una marca");
         if (!validate(rules)) return toast.error("Complete los campos obligatorios");
+        
+        const pesoMaximoNum = Number(formData.peso_maximo ?? 0);
+        if (!Number.isFinite(pesoMaximoNum)) return toast.error("El peso máximo debe ser un número válido");
+        if (pesoMaximoNum < 0) return toast.error("El peso máximo no puede ser negativo");
 
         setLoading(true);
         try {
+            const payload = { ...formData, peso_maximo: pesoMaximoNum };
             if (unitToEdit?.unidadtransporteId) {
-                await unidadTransporteService.update(unitToEdit.unidadtransporteId, formData);
+                await unidadTransporteService.update(unitToEdit.unidadtransporteId, payload);
                 toast.success("Vehículo actualizado");
             } else {
-                await unidadTransporteService.create(formData);
+                await unidadTransporteService.create(payload);
                 toast.success("Vehículo registrado");
             }
             onSuccess();
@@ -189,7 +211,6 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
         }
     };
 
-    // --- RENDERIZADO DE BOTONES CRUD (SIN DELETE) ---
     const renderCrudButtons = (type: 'MARCA' | 'MODELO', disabled: boolean) => (
         <div className="flex gap-1 items-end pb-1">
             <button type="button" disabled={disabled} onClick={() => handleOpenCrud(type, 'ADD')} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 disabled:opacity-30 transition-colors" title={`Agregar ${type.toLowerCase()}`}>
@@ -227,7 +248,6 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                             />
                         </div>
 
-                        {/* --- SECCIÓN MARCA (CON CRUD: ADD/EDIT) --- */}
                         <div className="flex gap-2 items-start">
                             <div className="flex-1">
                                 <SearchableSelect 
@@ -238,7 +258,6 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                             {!isReadOnly && renderCrudButtons('MARCA', false)}
                         </div>
 
-                        {/* --- SECCIÓN MODELO (CON CRUD: ADD/EDIT) --- */}
                         <div className="flex gap-2 items-start">
                             <div className="flex-1">
                                 <SearchableSelect 
@@ -251,7 +270,7 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                             {!isReadOnly && renderCrudButtons('MODELO', !selectedMarca)}
                         </div>
 
-                        <ValidatedFormInput label="Peso Máximo (KG)" name="peso_maximo" type="number" value={formData.peso_maximo || 0} onChange={handleChange} disabled={isReadOnly} />
+                        <ValidatedFormInput label="Peso Máximo (T)" name="peso_maximo" type="number" value={formData.peso_maximo || 0} onChange={handleChange} disabled={isReadOnly} />
                         <ValidatedFormInput label="Cert. Inscripción" name="certificado_inscripcion" value={formData.certificado_inscripcion || ''} onChange={handleChange} disabled={isReadOnly} />
                         <ValidatedFormInput label="Placa Carreta 1" name="nro_matricula_carrosa1" value={formData.nro_matricula_carrosa1 || ''} onChange={handleChange} disabled={isReadOnly} />
                         <ValidatedFormInput label="Placa Carreta 2" name="nro_matricula_carrosa2" value={formData.nro_matricula_carrosa2 || ''} onChange={handleChange} disabled={isReadOnly} />
@@ -273,7 +292,6 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                 </form>
             </Modal>
 
-            {/* --- MODAL AUXILIAR PARA CRUD --- */}
             {crudModal.type && (
                 <SimpleCrudModal 
                     isOpen={!!crudModal.type}

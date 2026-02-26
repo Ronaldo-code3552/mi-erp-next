@@ -47,6 +47,22 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
 
     const [formData, setFormData] = useState<Partial<Transportista>>(initialState);
 
+    const mapToFormData = (source: any): Partial<Transportista> => {
+        const docidentValue = source?.docidentId ?? source?.docIdentId ?? '6';
+        const numeroDocValue = source?.numero_doc ?? source?.numeroDoc ?? '';
+        const descripcionValue = source?.descripcion ?? source?.razonSocial ?? '';
+        const direccionValue = source?.direccion ?? '';
+
+        return {
+            ...source,
+            descripcion: descripcionValue,
+            direccion: direccionValue,
+            docidentId: docidentValue,
+            numero_doc: numeroDocValue,
+            empresaId: EMPRESA_ID
+        };
+    };
+
     // 1. Cargar Datos y Catálogos
     useEffect(() => {
         if (isOpen) {
@@ -55,20 +71,47 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
             });
 
             if (transportistaToEdit) {
-                setFormData({
-                    ...transportistaToEdit,
-                    // Aseguramos que los campos obligatorios tengan valor para no romper inputs controlados
-                    descripcion: transportistaToEdit.descripcion || '',
-                    direccion: transportistaToEdit.direccion || '',
-                    docidentId: transportistaToEdit.docidentId || '6',
-                    numero_doc: transportistaToEdit.numero_doc || '',
-                    empresaId: EMPRESA_ID
-                });
+                // 1) Pintado rápido con lo recibido por props
+                setFormData(mapToFormData(transportistaToEdit));
+
+                // 2) Fuente de verdad: refrescar por ID para asegurar autocompletado
+                if (transportistaToEdit.transportistaId) {
+                    transportistaService.getById(transportistaToEdit.transportistaId)
+                        .then((res) => {
+                            if (res?.isSuccess && res?.data) {
+                                setFormData(mapToFormData(res.data));
+                            }
+                        })
+                        .catch(() => {
+                            // si falla, mantenemos el prellenado por props
+                        });
+                }
             } else {
                 setFormData(initialState);
             }
         }
     }, [isOpen, transportistaToEdit]);
+
+    useEffect(() => {
+        const currentDocId = formData.docidentId;
+        const docOptions = catalogs?.documento_identidad;
+        if (!isOpen || !currentDocId || !Array.isArray(docOptions) || docOptions.length === 0) return;
+
+        const existsByKey = docOptions.some((opt: any) => String(opt.key) === String(currentDocId));
+        if (existsByKey) return;
+
+        const currentUpper = String(currentDocId).toUpperCase();
+        const matched = docOptions.find((opt: any) => {
+            const keyU = String(opt.key || '').toUpperCase();
+            const valueU = String(opt.value || '').toUpperCase();
+            const auxU = String(opt.aux || '').toUpperCase();
+            return keyU === currentUpper || valueU === currentUpper || auxU === currentUpper;
+        });
+
+        if (matched?.key) {
+            setFormData((prev) => ({ ...prev, docidentId: String(matched.key) }));
+        }
+    }, [isOpen, catalogs, formData.docidentId]);
 
     // 2. Manejo de cambios en inputs normales
     const handleChange = (e: any) => {

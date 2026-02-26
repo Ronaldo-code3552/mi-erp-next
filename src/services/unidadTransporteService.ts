@@ -1,3 +1,4 @@
+// src/services/unidadTransporteService.ts
 import apiClient from '../api/apiCliente';
 import { UnidadTransporte } from '../types/unidadTransporte.types';
 import { ApiResponse } from '../types';
@@ -28,9 +29,16 @@ export const unidadTransporteService = {
         return response.data;
     },
 
+    // ---> NUEVO MÉTODO AGREGADO AQUÍ <---
+    getById: async (id: string): Promise<ApiResponse<UnidadTransporte>> => {
+        const response = await apiClient.get(`/UnidadTransporte/detalle/${id}`);
+        return response.data;
+    },
+
     create: async (data: Partial<UnidadTransporte>) => {
         return (await apiClient.post(`/UnidadTransporte`, data)).data;
     },
+
     delete: async (id: string): Promise<ApiResponse<any>> => {
         const response = await apiClient.delete(`/UnidadTransporte/${id}`);
         return response.data;

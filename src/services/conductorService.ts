@@ -1,3 +1,4 @@
+// src/services/conductorService.ts
 import apiClient from '../api/apiCliente';
 import { Conductor } from '../types/conductor.types';
 import { ApiResponse } from '../types';
@@ -28,6 +29,12 @@ export const conductorService = {
         return response.data;
     },
 
+    // ---> NUEVO MÉTODO AGREGADO AQUÍ <---
+    getById: async (id: string): Promise<ApiResponse<Conductor>> => {
+        const response = await apiClient.get(`/ConductorTransporte/${id}`);
+        return response.data;
+    },
+
     create: async (data: Partial<Conductor>): Promise<ApiResponse<Conductor>> => {
         const response = await apiClient.post('/ConductorTransporte', data);
         return response.data;
@@ -37,6 +44,7 @@ export const conductorService = {
         const response = await apiClient.put(`/ConductorTransporte/${id}`, data);
         return response.data;
     },
+
     delete: async (id: string): Promise<ApiResponse<any>> => {
         const response = await apiClient.delete(`/ConductorTransporte/${id}`);
         return response.data;
