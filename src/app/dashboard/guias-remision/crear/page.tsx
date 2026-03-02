@@ -29,7 +29,7 @@ import Modal from '@/components/ui/Modal';
 import { 
     IconDeviceFloppy, IconSend, IconPlus, IconTrash, IconArrowLeft,
     IconMapPin, IconTruck, IconPackage, IconFileDescription, IconFileInvoice,
-    IconAlertCircle, IconBarcode, IconEdit, IconSearch, IconLoader
+    IconAlertCircle, IconBarcode, IconEdit, IconSearch, IconLoader, IconX
 } from '@tabler/icons-react';
 
 // --- COMPONENTE AUXILIAR ---
@@ -89,7 +89,8 @@ export default function CrearGuiaPage() {
         correlativo: '',            
         fecha_emision: todayStr, 
         fecha_traslado: todayStr,
-        fecha_doc: todayStr, 
+        fecha_doc: todayStr,
+        doc_referencia:'', 
         doc_referencia_numero: '',
         documentoReferencia: '',
         documentoReferenciaTipo: '', 
@@ -97,7 +98,7 @@ export default function CrearGuiaPage() {
         monedaId: '001', 
         tipo_cambio: 1.0,
         estado: 'REGISTRADO',
-        estado_documento_sunat: '0',
+        estado_documento_sunat: 'PENDIENTEXML',
         incluye_igv: true,
         
         clienteId: '',
@@ -147,6 +148,10 @@ export default function CrearGuiaPage() {
         totalRecords: 0
     });
     const [docSearchHasSearched, setDocSearchHasSearched] = useState(false);
+    const [importedReferenceDoc, setImportedReferenceDoc] = useState<{
+        id: string;
+        type: 'COMPRA' | 'VENTA';
+    } | null>(null);
 
     const [items, setItems] = useState<GuiaRemisionDetalle[]>([]);
 
@@ -279,8 +284,9 @@ export default function CrearGuiaPage() {
         return (selectedSerie?.aux || '').toUpperCase() === 'SI';
     }, [filteredSeries, formData.serie]);
 
-    const VALID_MOTIVOS_SEARCH = ['MT00001', 'MT00002', 'MT00003', 'MT00004', 'MT00013'];
-    const canSearchDocument = VALID_MOTIVOS_SEARCH.includes(formData.motivotrasladoId || '');
+    const REFERENCE_REQUIRED_MOTIVOS = ['MT00001', 'MT00002', 'MT00003', 'MT00004', 'MT00013'];
+    const requiresDocumentReference = REFERENCE_REQUIRED_MOTIVOS.includes(formData.motivotrasladoId || '');
+    const canSearchDocument = requiresDocumentReference;
 
     useEffect(() => {
         if (!formData.motivotrasladoId) return;
@@ -332,14 +338,25 @@ export default function CrearGuiaPage() {
             setFormData(prev => ({ ...prev, [name]: value, fecha_doc: value }));
         } 
         else if (name === 'motivotrasladoId') {
+            const requiresReference = REFERENCE_REQUIRED_MOTIVOS.includes(value);
             setFormData(prev => ({ 
                 ...prev, 
                 [name]: value,
                 clienteId: '',
                 proveedorId: '',
                 id_almacen_destino: '',
-                otro_motivo_traslado: ''
+                otro_motivo_traslado: '',
+                ...(requiresReference ? {} : {
+                    documentoReferencia: '',
+                    documentoReferenciaTipo: '',
+                    doc_referencia: '',
+                    doc_referencia_numero: ''
+                })
             }));
+            if (!requiresReference) {
+                setDocRefComponents({ serie: '', numero: '' });
+                setImportedReferenceDoc(null);
+            }
         }
         else if (name === 'documentoReferenciaTipo') {
             const selectedOption = catalogs.documentoReferenciaTipoJSON?.find((t: any) => t.codSunat === value);
@@ -575,6 +592,7 @@ export default function CrearGuiaPage() {
                 setItems(mappedItems);
             }
 
+            setImportedReferenceDoc({ id: compra.documentocompraId, type: 'COMPRA' });
             setShowDocModal(false);
             toast.success('Documento de compra importado correctamente');
         } catch (error: any) {
@@ -624,6 +642,7 @@ export default function CrearGuiaPage() {
                 setItems(mappedItems);
             }
 
+            setImportedReferenceDoc({ id: venta.documentoventaId, type: 'VENTA' });
             setShowDocModal(false);
             toast.success('Documento de venta importado correctamente');
         } catch (error: any) {
@@ -634,6 +653,68 @@ export default function CrearGuiaPage() {
         }
     };
 
+    const handleClearImportedReference = () => {
+        if (!importedReferenceDoc) return;
+
+        const defaultTipoDoc = docTypeOptions?.[0]?.key || '';
+        const defaultDocRefTipo = '';
+        const resetFormData: Partial<GuiaRemisionPayload> = {
+            empresaId: EMPRESA_ID,
+            cuentausuarioId: USER_ID,
+            tipodoccomercialId: defaultTipoDoc,
+            tipomovimientoId: 'S',
+            serie: '',
+            correlativo: '',
+            fecha_emision: todayStr,
+            fecha_traslado: todayStr,
+            fecha_doc: todayStr,
+            doc_referencia: '',
+            doc_referencia_numero: '',
+            documentoReferencia: '',
+            documentoReferenciaTipo: defaultDocRefTipo,
+            foto_guiaremision: '',
+            monedaId: '001',
+            tipo_cambio: 1.0,
+            estado: 'REGISTRADO',
+            estado_documento_sunat: 'PENDIENTEXML',
+            incluye_igv: true,
+            clienteId: '',
+            proveedorId: '',
+            puntoventaId: '',
+            trabajadorId: '',
+            id_almacen_inicio: ALMACEN_ID,
+            id_almacen_destino: '',
+            motivotrasladoId: '',
+            otro_motivo_traslado: '',
+            transportistaId: '',
+            conductorId: '',
+            unidadTransporteId: '',
+            punto_partida: '',
+            punto_llegada: '',
+            observacion: ''
+        };
+
+        setDocRefComponents({ serie: '', numero: '' });
+        setIsManualCorrelativo(false);
+        setItems([]);
+        setImportedReferenceDoc(null);
+        setDocSearchResults([]);
+        setDocSearchPage(1);
+        setDocSearchMeta({ currentPage: 1, totalPages: 1, totalRecords: 0 });
+        setDocSearchHasSearched(false);
+        setDocSearchFilters({
+            tipoDocId: '',
+            entidadId: '',
+            numero: '',
+            monedaId: '001',
+            fechaIni: thirtyDaysAgoStr,
+            fechaFin: todayStr
+        });
+        setFormData(resetFormData);
+
+        toast.success('Importación y formulario limpiados al estado inicial.');
+    };
+
     const handleSubmit = async (enviarSunat: boolean) => {
         if (!formData.serie || !formData.correlativo) return toast.error("Falta Serie o Correlativo");
         if (!formData.motivotrasladoId) return toast.error("Seleccione un Motivo de Traslado");
@@ -641,6 +722,13 @@ export default function CrearGuiaPage() {
         
         if (currentRules.showCli && !formData.clienteId) return toast.error("Seleccione un Cliente");
         if (currentRules.showProv && !formData.proveedorId) return toast.error("Seleccione un Proveedor");
+        if (requiresDocumentReference) {
+            const hasTipoRef = !!(formData.documentoReferenciaTipo && String(formData.documentoReferenciaTipo).trim());
+            const hasNumeroRef = !!(formData.documentoReferencia && String(formData.documentoReferencia).replace('-', '').trim());
+            if (!hasTipoRef || !hasNumeroRef) {
+                return toast.error("Para este motivo, complete obligatoriamente el Documento Referencia.");
+            }
+        }
 
         setLoading(true);
         try {
@@ -648,27 +736,37 @@ export default function CrearGuiaPage() {
                 ...formData as GuiaRemisionPayload,
                 puntoventaId: '',
                 trabajadorId: '',
+                ...(requiresDocumentReference ? {} : {
+                    documentoReferencia: '',
+                    documentoReferenciaTipo: '',
+                    doc_referencia: '',
+                    doc_referencia_numero: ''
+                }),
                 detalles: items.map((item, idx) => {
                     const cantidadNum = Number(item.cantidad) || 0;
                     const selectedUM = item.unidades_opciones?.find((u: any) => u.key === item.unidad_aux);
                     const idPresentacion = selectedUM?.presentacionId || null;
+                    const rawAfecto = (item as any).afecto_inafecto;
+                    const afectoInafectoBool =
+                        typeof rawAfecto === 'boolean'
+                            ? rawAfecto
+                            : rawAfecto === 1 || rawAfecto === '1' || rawAfecto === 'true';
 
                     return {
-                        ...item, 
                         bienId: item.bienId,
                         presentacionId: idPresentacion,
                         item: idx + 1,
                         cantidad: cantidadNum,
-                        conversion_total: 100, 
-                        precio: 100,  
-                        costo: 100, 
-                        importe: 100, 
-                        Saldo_cantidad: cantidadNum, 
-                        descuento_producto: null,  
-                        afecto_inafecto: 0, 
-                        observacion: 'KG', 
-                        documentoId: null, 
-                        tabla_documento: 'GUIAS_REMISION', 
+                        conversion_total: 100,
+                        precio: 100,
+                        costo: 100,
+                        importe: 100,
+                        Saldo_cantidad: cantidadNum,
+                        descuento_producto: Number((item as any).descuento_producto ?? 0),
+                        afecto_inafecto: afectoInafectoBool,
+                        observacion: (item as any).observacion ?? 'KG',
+                        documentoId: null,
+                        tabla_documento: 'GUIAS_REMISION',
                         saldo_temporal: cantidadNum
                     };
                 })
@@ -752,6 +850,11 @@ export default function CrearGuiaPage() {
 
     // --- LÓGICA: BÚSQUEDA DE DOCUMENTOS DE REFERENCIA ---
     const handleOpenDocSearch = () => {
+        if (importedReferenceDoc) {
+            toast.warning("Primero limpie la importación actual antes de importar otro documento.");
+            return;
+        }
+
         setDocSearchFilters(prev => ({
             ...prev,
             entidadId: currentRules.showProv ? (formData.proveedorId || '') : (formData.clienteId || '')
@@ -829,10 +932,12 @@ export default function CrearGuiaPage() {
 
             const filtersObj: any = {};
 
-            if (docSearchFilters.tipoDocId) filtersObj.tipodoccomercialIds = [docSearchFilters.tipoDocId];
-            if (docSearchFilters.monedaId) filtersObj.monedaIds = [docSearchFilters.monedaId];
-            if (docSearchFilters.fechaIni) filtersObj.fechaDesde = docSearchFilters.fechaIni;
-            if (docSearchFilters.fechaFin) filtersObj.fechaHasta = docSearchFilters.fechaFin;
+            // IMPORTANTE: claves alineadas con parser de filtros del backend DocumentoVenta
+            if (docSearchFilters.tipoDocId) filtersObj.tipo_documento = [docSearchFilters.tipoDocId];
+            if (docSearchFilters.monedaId) filtersObj.moneda = [docSearchFilters.monedaId];
+            if (docSearchFilters.fechaIni) filtersObj.fecha_inicio = docSearchFilters.fechaIni;
+            if (docSearchFilters.fechaFin) filtersObj.fecha_fin = docSearchFilters.fechaFin;
+            if (docSearchFilters.entidadId) filtersObj.cliente = [docSearchFilters.entidadId];
 
             const res = await documentoVentaService.getByEmpresa(
                 EMPRESA_ID,
@@ -934,7 +1039,29 @@ export default function CrearGuiaPage() {
                         <p className="text-xs text-slate-500">Gestión de Traslados y Salidas</p>
                     </div>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex gap-3 items-center">
+                    {canSearchDocument && (
+                        <div className="flex items-center gap-2">
+                            <button 
+                                type="button" 
+                                onClick={handleOpenDocSearch}
+                                disabled={!!importedReferenceDoc}
+                                className="px-4 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 shadow-sm border border-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <IconSearch size={18} /> Importar Doc.
+                            </button>
+                            {importedReferenceDoc && (
+                                <button
+                                    type="button"
+                                    onClick={handleClearImportedReference}
+                                    className="px-3 py-2.5 rounded-xl bg-rose-50 text-rose-700 font-bold hover:bg-rose-100 shadow-sm border border-rose-100 flex items-center justify-center transition-all active:scale-95"
+                                    title="Limpiar importación"
+                                >
+                                    <IconX size={16} />
+                                </button>
+                            )}
+                        </div>
+                    )}
                     <button 
                         onClick={() => handleSubmit(shouldSendToSunat)} 
                         disabled={loading}
@@ -1117,6 +1244,7 @@ export default function CrearGuiaPage() {
                     </div>
 
                     {/* 3. REFERENCIAS */}
+                    {requiresDocumentReference && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <SectionTitle title="Documento Referencia" icon={IconFileInvoice} />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1144,20 +1272,11 @@ export default function CrearGuiaPage() {
                             </div>
                             
                             <div className="space-y-3 p-3">
-                                {/* BOTÓN DE BÚSQUEDA DE DOCUMENTOS */}
-                                {canSearchDocument && (
-                                    <button 
-                                        type="button" 
-                                        onClick={handleOpenDocSearch} 
-                                        className="text-xs bg-indigo-50 text-indigo-700 px-3 py-1.5 rounded-lg font-bold flex items-center gap-1 hover:bg-indigo-100 transition-colors border border-indigo-100"
-                                    >
-                                        <IconSearch size={14} /> Importar Doc.
-                                    </button>
-                                )}
                                 <FormInput label="Otro Doc (Opcional)" name="doc_referencia_numero" value={formData.doc_referencia_numero} onChange={handleChange} placeholder="Ej: Pedido 123" />
                             </div>
                         </div>
                     </div>
+                    )}
 
                     {/* 4. ITEMS */}
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
