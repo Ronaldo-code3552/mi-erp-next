@@ -24,12 +24,7 @@ export const unidadTransporteService = {
         return response.data;
     },
 
-    getFormDropdowns: async (): Promise<ApiResponse<any>> => {
-        const response = await apiClient.get(`/UnidadTransporte/form-dropdowns`);
-        return response.data;
-    },
 
-    // ---> NUEVO MÉTODO AGREGADO AQUÍ <---
     getById: async (id: string): Promise<ApiResponse<UnidadTransporte>> => {
         const response = await apiClient.get(`/UnidadTransporte/detalle/${id}`);
         return response.data;

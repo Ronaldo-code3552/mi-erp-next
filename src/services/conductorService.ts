@@ -24,12 +24,8 @@ export const conductorService = {
         return response.data;
     },
 
-    getFormDropdowns: async (): Promise<ApiResponse<any>> => {
-        const response = await apiClient.get('/ConductorTransporte/form-dropdowns');
-        return response.data;
-    },
+    // 🧹 ELIMINADO: getFormDropdowns
 
-    // ---> NUEVO MÉTODO AGREGADO AQUÍ <---
     getById: async (id: string): Promise<ApiResponse<Conductor>> => {
         const response = await apiClient.get(`/ConductorTransporte/${id}`);
         return response.data;

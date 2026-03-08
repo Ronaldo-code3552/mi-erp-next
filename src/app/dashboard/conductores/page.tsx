@@ -4,10 +4,11 @@ import { useState, useEffect } from "react";
 import { useCrud } from "@/hooks/useCrud";
 import { useDebounce } from "@/hooks/useDebounce";
 import { conductorService } from "@/services/conductorService";
+import { useCatalogs } from "@/hooks/useCatalogs"; // 🚀 NUEVO HOOK
 import { Conductor } from "@/types/conductor.types";
 
 import DataTable from "@/components/shared/DataTable";
-import SidebarFiltros from "@/components/filter/FiltrosAvanzados"; // Asegúrate de que la ruta sea correcta según tu estructura
+import SidebarFiltros from "@/components/filter/FiltrosAvanzados"; 
 import MultiSelect from "@/components/forms/MultiSelect";
 import ConductorFormModal from "./components/ConductorFormModal";
 
@@ -26,28 +27,20 @@ export default function ConductoresPage() {
         filters, setFilters, fetchData, handleAction 
     } = useCrud<Conductor>(conductorService, EMPRESA_ID, initialFilters);
 
-    // Estados Locales
     const [tempFilters, setTempFilters] = useState<any>(initialFilters);
     const [showFilters, setShowFilters] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [selected, setSelected] = useState<Conductor | null>(null);
-    const [catalogs, setCatalogs] = useState<any>(null);
 
     const debouncedSearch = useDebounce(searchTerm, 500);
 
-    // Cargar catálogos al inicio
-    useEffect(() => {
-        conductorService.getFormDropdowns().then(res => {
-            if (res.isSuccess) setCatalogs(res.data);
-        });
-    }, []);
+    // 🚀 MAGIA: Cargamos el catálogo de documentos (se comparte caché con Transportistas)
+    const { catalogs, loadingCatalogs } = useCatalogs(['DocumentoIdentidadXcore']);
 
-    // Fetch data cuando cambian búsqueda o filtros
     useEffect(() => {
         fetchData(1, debouncedSearch, filters);
     }, [debouncedSearch, filters, fetchData]);
 
-    // Manejadores de Filtros
     const handleOpenSidebar = () => {
         setTempFilters(filters);
         setShowFilters(true);
@@ -62,7 +55,6 @@ export default function ConductoresPage() {
         setTempFilters(initialFilters);
         setFilters(initialFilters);
     };
-
     // Definición de Columnas (Idéntica a React)
     const columns = [
         { 
@@ -193,21 +185,24 @@ export default function ConductoresPage() {
                 onClear={handleClearFilters}
                 totalActive={Object.values(tempFilters).flat().length}
             >
-                {catalogs ? (
+                {loadingCatalogs ? (
+                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando catálogos...</div>
+                ) : (
                     <div className="flex flex-col gap-5">
                         <MultiSelect 
                             label="Tipo de Documento" 
-                            options={catalogs.documento_identidad?.map((t: any) => ({ label: t.aux || t.value, value: t.key }))}
+                            // 🚀 Usamos el estándar: label y value
+                            options={(catalogs['DocumentoIdentidadXcore'] || []).map((t: any) => ({ 
+                                label: t.aux || t.label, // Mostramos la descripción corta si existe
+                                value: t.value 
+                            }))}
                             value={tempFilters.documento_identidad}
                             onChange={(vals) => setTempFilters({...tempFilters, documento_identidad: vals})}
                         />
                     </div>
-                ) : (
-                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando catálogos...</div>
                 )}
             </SidebarFiltros>
 
-            {/* Modal Formulario */}
             <ConductorFormModal 
                 isOpen={showForm} 
                 onClose={() => setShowForm(false)} 

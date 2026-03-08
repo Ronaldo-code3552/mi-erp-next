@@ -1,52 +1,322 @@
+PREGUNTAS PARA CHRISTIAN 
+ENCABEZADO:
+1. Como consigo  el 'doc_referencia_numero'
+2. el doc_referencia lo estoy relacionando con el tipodoccomercialId esta bien?
+3. estado_documento_sunat cual es el por defecto?
+DETALLE:
+1. item : secuencia de numeros enteros consecutivos de la lista del detalle, 1...n;
+2. conversion_total =  presentacionId.cantidad * cantidad? en la BD
+3. PRECIO= como lo consigo?? (puse null por defecto).
+4. costo, importe= como los calculo? (puse 100 por defecto).
+5. Saldo_cantidad, saldo_temporal = cantidad? (en la bd me intuye a eso)
+6. documentoId =??
+7. afecto_inafecto= 0 o 1, pero como se cual? (puse 0 por defecto)
+8. tabla_documento = 'GUIAS_REMISION' pero cambia?
+
 { 
- doc_referencia = ///PREGUNTA CHRISTIAN,
- doc_referencia_numero ={
-    <asp:Label runat="server" Style="font-weight: 600;">NUMERO:</asp:Label>
-    <asp:TextBox runat="server" ID="TXTNUMDOCREF" CssClass="form-control" placeholder="Numero"></asp:TextBox>
- }
- fecha_doc = {
-    <div class="form-group">
-    <label style="font-weight: 600">FECHA DOC:</label>
-    <asp:TextBox runat="server" ID="TXTFECHA_DOC" TextMode="Date" CssClass="form-control"></asp:TextBox>
-    </div>
- }
- correlativo = {
-    <label style="font-weight: 600">N° GUIA:</label>
-    <label style="font-weight: 600; float: right;" for="chkManual"># manual</label>
-    <div class="input-group">
-        <asp:TextBox runat="server" ID="TXTNUMERO_VAL" CssClass="form-control" MaxLength="7" Enabled="true" Style="text-transform: uppercase"></asp:TextBox>
-        <span class="input-group-addon">
-            <asp:CheckBox runat="server" ID="chkManual" ClientIDMode="Static" AutoPostBack="true" OnCheckedChanged="chkManual_CheckedChanged" />
-        </span>
-    </div>
-    ------------------------------------------
-    var numero = TXTNUMERO_VAL.Text;
-    ENTGUIA.Correlativo = Convert.ToInt32(numero).ToString("0000000");
- }
- otro_motivo_traslado = {
-    <asp:Label runat="server" ID="lblOtroMotivo" Style="font-weight: 600;">OTRO MOTIVO TRASLADO:</asp:Label>
-<asp:TextBox runat="server" ID="TXTOTROMOTIVO" CssClass="form-control" Type="Search" Style="text-transform: uppercase; margin-top: 4px;"></asp:TextBox>
-<asp:DropDownList runat="server" ID="cboAlmacenesMotivo" CssClass="form-control" AutoPostBack="true" Style="text-transform: uppercase; margin-top: 4px;" Visible="false" OnSelectedIndexChanged="cboAlmacenesMotivo_SelectedIndexChanged"></asp:DropDownList>
- }
- movilidadId = ,///PREGUNTA CHRISTIAN
- guia_remision_remitente = ,///PREGUNTA CHRISTIAN
- foto_guiaremision = ,--EL XCORE LO MANDA COMO VACIO POR DEFECTO
- estado_documento_sunat = 0, --PREGUNTARLE A CHRISTIAN
- documentoReferencia = {
-    <asp:Label runat="server" Style="font-weight: 600;">SERIE:</asp:Label>
-    <asp:TextBox ID="TXTSERIEDOCREF" runat="server" CssClass="form-control" placeholder="Serie"></asp:TextBox>
+  (✓)  guiasremisionId = ,  
+  (✓)  empresaId = 005, 
+  (✓)  tipomovimientoId = S,
+  (✓)  tipodoccomercialId = X029,
+  (-)  doc_referencia = , // DOCUMENTO_VENTA - traido de  tipodoccomercialId -> solo guardar con encabezado 
+  (-)  doc_referencia_numero = ,//PREGUNTAR A CHRISTIAN COMO SE TRAE, de seguro con el boton de referencia "Otro Doc (Opcional)" ->022600000072
+  (✓)  fecha_emision = 20/02/2026 00:00:00,
+  (✓)  fecha_doc = 20/02/2026 00:00:00,
+  (✓)  fecha_traslado = 20/02/2026 00:00:00,
+  (✓)  serie = 0016,
+  (✓)  correlativo = 0005137,
+  (✓)  clienteId = 01393,
+  (✓)  proveedorId = ,
+  (✓)  id_almacen_inicio = 001,
+  (✓)  id_almacen_destino = ,
+  (✓)  punto_partida = PROLONGACIÓN FRANCIA 1813 LA VICTORIA - LIMA,
+  (✓)  punto_llegada = AV. CIRCUNVALACION DEL CLUB GOLF LOS INCAS-BLOCK A NRO. 170 DPTO. 1502 LIMA - LIMA - SANTIAGO DE SURCO,
+  (✓)  monedaId = PEN, // DEBE SER EL ID
+  (✓)  tipo_cambio = 1,
+  (✓)  motivotrasladoId = MT00001,
+  (✓)  otro_motivo_traslado = ,
+  (✓)  observacion = KF DKFNG,
+  (✓)  movilidadId = ,
+  (✓)  guia_remision_remitente = ,
+  (✓)  trabajadorId = ,
+  (✓)  foto_guiaremision = ,
+  (✓)  cuentausuarioId = CU0001,
+  (✓)  estado = REGISTRADO, //no es necesario
+  (✓)  puntoventaId = ,
+  (✓)  transportistaId = TR000001,
+  (✓)  unidadTransporteId = UT001230,
+  (✓)  conductorId = CT000097,
+  (-)  incluye_igv = True, // no necesario
+  (✓)  estado_documento_sunat = , //PREGUNTAR A CHRISTIAN
+  (✓)  documentoReferencia = F002 - 0005589,
+  (✓)  documentoReferenciaTipo = 03,
 
-    <div class="col-xs-6">
-        <asp:Label runat="server" Style="font-weight: 600;">NUMERO:</asp:Label>
-        <asp:TextBox runat="server" ID="TXTNUMDOCREF" CssClass="form-control" placeholder="Numero"></asp:TextBox>
-    </div>
-
-    ENTGUIA.documentoReferencia = TXTSERIEDOCREF.Text + " - " + TXTNUMDOCREF.Text;
-},
- documentoReferenciaTipo ={
-    <asp:DropDownList ID="DDLTIPODOCREF" runat="server" CssClass="form-control">
-    <asp:ListItem Text="" Value="00"></asp:ListItem>
-    <asp:ListItem Text="" Value="01">FACTURA</asp:ListItem>
-</asp:DropDownList>
- }
 }
+
+" 
+NOTAS: 
+    + item : secuencia de numeros enteros consecutivos de la lista del detalle, 1...n;
+    - falta agregar presentacionId (unidad Minima del producto (bienId)).
+
+
+detalle 1:{ 
+  (✓) guiasremisionId = ,
+  (✓) bienId = 00001378,
+     = ,
+  (✓) item = 1,
+  (✓) cantidad = 1,
+  (✓) conversion_total = , // presentacionId.cantidad * cantidad
+  (✓) precio = , // NULL (preguntar) 
+  (✓) costo = , //numero por defecto (preguntar) 
+  (✓) importe = , //numero por defecto (preguntar) 
+  Saldo_cantidad = , // Saldo_cantidad = cantidad
+  descuento_producto = , //NULL 
+  afecto_inafecto = , //0 por defecto (preguntar)
+  observacion = , //bienId.unidadMedidaId (KG)
+  documentoId = , // (preguntar)
+  tabla_documento = , // GUIAS_REMISION (POR DEFECTO)
+  saldo_temporal =  //saldo_temporal = cantidad. 
+  }"
+
+
+{ 
+   guiasremisionId = ,
+   bienId = 00001378,
+   presentacionId  = 'PR0001' (obtenido del id de la unidadMinima),
+   item = 1,
+   cantidad = 10,
+   conversion_total = 100, 
+   precio = 100,  
+   costo = 100, 
+   importe = 100, 
+   Saldo_cantidad = 10, 
+   descuento_producto = null,  
+   afecto_inafecto = 0, 
+   observacion = 'KG', 
+   documentoId = NULL, 
+   tabla_documento = 'GUIAS_REMISION', 
+   saldo_temporal = 10  
+  }
+
+
+
+
+
+
+
+
+
+
+
+
+-----------
+
+{
+ doc_referencia_numero = OtroDoc Opcional,
+ fecha_emision = 22/02/2026 00:00:00,
+ fecha_doc = 22/02/2026 00:00:00,
+ fecha_traslado = 22/02/2026 00:00:00,
+ serie = 0016,
+ correlativo = 0005137,
+ clienteId = 00966,
+ proveedorId = ,
+ id_almacen_inicio = 001,
+ id_almacen_destino = ,
+ punto_partida = PROLONGACIÓN FRANCIA 1813 LA VICTORIA - LIMA,
+ punto_llegada = AV. DOS DE MAYO Nº 700 HUACHO,
+ monedaId = 001,
+ tipo_cambio = 1,
+ motivotrasladoId = MT00001,
+ otro_motivo_traslado = ,
+ observacion = Observaciones,
+ movilidadId = ,
+ guia_remision_remitente = ,
+ trabajadorId = ,
+ foto_guiaremision = ,
+ cuentausuarioId = CU0001,
+ estado = REGISTRADO,
+ puntoventaId = ,
+ transportistaId = TR000001,
+ unidadTransporteId = UT000001,
+ conductorId = CT000001,
+ incluye_igv = False,
+ estado_documento_sunat = ,
+ documentoReferencia = F002 - 00005555,
+ documentoReferenciaTipo = 01,
+ }
+
+
+
+"GuiaRemisionDetalle { guiasremisionId = ,
+ bienId = 00001378,
+ presentacionId = PR1631,
+ item = 1,
+ cantidad = 10,
+ conversion_total = 100,
+ precio = 100,
+ costo = 100,
+ importe = 100,
+ Saldo_cantidad = 10,
+ descuento_producto = ,
+ afecto_inafecto = False,
+ observacion = KG,
+ documentoId = ,
+ tabla_documento = GUIAS_REMISION,
+ saldo_temporal = 10 }"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//PROCESO PARA REFERENCIA DOCUMENTO_COMPRA, DOCUMENTO_VENTA.
+
+
+
+<div class="col-md-1">
+    <div class="form-group">
+        <asp:Label runat="server" ID="LBLNUMDOCREF" Style="font-weight: 600;">REFERENCIA:</asp:Label>
+        <asp:LinkButton runat="server" CssClass="form-control btn btn-warning fa fa-download" ID="LinkButton1" OnClick="LinkButton1_Click" Height="30">
+            &nbsp; Agregar</asp:LinkButton>
+        <asp:LinkButton runat="server" CssClass="form-control btn btn-danger fa fa-remove" ID="LinkButton2" OnClick="LinkButton2_Click" Visible="false" Height="30">
+            &nbsp; Quitar</asp:LinkButton>
+    </div>
+</div>
+
+
+
+backend:
+LinkButton1_Click(){
+
+}
+LinkButton2_Click(){
+  
+}
+
+
+
+
+
+-------------
+ guiasremisionId = ,
+  empresaId = 005,
+  tipomovimientoId = S,
+  tipodoccomercialId = X029,
+  doc_referencia = DOCUMENTO_VENTA,
+  doc_referencia_numero = 112500000001,
+  fecha_emision = 27/02/2026 00:00:00,
+  fecha_doc = 27/02/2026 00:00:00,
+  fecha_traslado = 1/03/2026 00:00:00,
+  serie = T002,
+  correlativo = 0000832,
+  clienteId = ,
+  proveedorId = 00047,
+  id_almacen_inicio = 001,
+  id_almacen_destino = ,
+  punto_partida = AV. MEXICO NRO. 1898 LA VICTORIA - LIMA - LIMA,
+  punto_llegada = PROLONGACIÓN FRANCIA 1813 LA VICTORIA - LIMA,
+  monedaId = 001,
+  tipo_cambio = 1,
+  motivotrasladoId = MT00003,
+  otro_motivo_traslado = ,
+  observacion = ,
+  movilidadId = ,
+  guia_remision_remitente = ,
+  trabajadorId = ,
+  foto_guiaremision = ,
+  cuentausuarioId = CU0001,
+  estado = REGISTRADO,
+  puntoventaId = ,
+  transportistaId = TR000001,
+  unidadTransporteId = UT000001,
+  conductorId = CT000001,
+  incluye_igv = True,
+  estado_documento_sunat = 0,
+  documentoReferencia = E006 - 00067321,
+  documentoReferenciaTipo = 01,
+  detalles = System.Collections.Generic.List`1[Backend_GestionXcore.Models.GuiaRemisionDetalle] 
+
+
+
+
+
+
+
+
+
+  {
+  "docs_referenciado": [
+    {
+      "COD_TIP_DOC_REF": "01",
+      "NUM_DOC_REF": "FR98 - 0089786"
+    }
+  ],
+  "items": [
+    {
+      "CANT_ITEM": "1000.00",
+      "COD_ITEM": "100218",
+      "DESC_ITEM": "AVENA NEGRA",
+      "PESO_ITEM": "100.000",
+      "COD_UND_MEDIDA_ITEM": "BG",
+      "NUM_LINEA": "1"
+    }
+  ],
+  "TOKEN": "gN8zNRBV+/FVxTLwdaZx0w==",
+  "INDICADOR_M1_L": "0",
+  "INDICADOR_TRASLADO_TOTAL_DAM_DS": "0",
+  "NRO_LINCENCIA_CONDUCT": "E-31672578",
+  "PESO_TRASLADADO_PARCIAL_DAM_DS": "100.000",
+  "NUM_NIF_LLEGADO_PARTIDA": "20555700785",
+  "NOM_RZN_SOC_CONDUCT": "TEODOMIRO TORRES VASQUEZ",
+  "TXT_VERS_UBL": "2.1",
+  "TXT_VERS_ESTRUCT_UBL": "2.0",
+  "RETORNA_XML_ENVIO": "true",
+  "RETORNA_XML_CDR": "true",
+  "RETORNA_PDF": "true",
+  "COD_TIP_NIF_EMIS": "6",
+  "NUM_NIF_EMIS": "20100100100",
+  "NOM_COMER_EMIS": "INTERCOMPANY Y SR. DE HUANCA S.A.C.",
+  "TXT_DMCL_FISC_EMIS": "AV. Circunvalacion del Club Golf Los Incas - Block A Nro. 170 Dpto. 1502 Santiago de Surco Lima - Li",
+  "NOM_RZN_SOC_EMIS": "INTERCOMPANY Y SR. DE HUANCA S.A.C.",
+  "COD_UBI_EMIS": "150115",
+  "COD_TIP_GUR": "09",
+  "NUM_SERIE_GUR": "T002",
+  "NUM_CORRE_GUR": "0000832",
+  "ENVIAR_A_SUNAT": "true",
+  "COD_PRCD_CARGA": "001",
+  "FEC_EMIS_GUR": "2026-02-27",
+  "COD_TIP_NIF_DEST": "6",
+  "NUM_NIF_DEST": "20602782086",
+  "NOM_RZN_SOC_DEST": "SEÑALES BRUNELLA S.A.C.",
+  "DIR_LLEGADA": "PROLONGACIÓN FRANCIA 1813 LA VICTORIA - LIMA",
+  "UBI_LLEGADA": "150132",
+  "MOT_TRASLADO": "02",
+  "TXT_MOT_TRASLADO": "COMPRA",
+  "IND_TRANSBORDO": "false",
+  "MOD_TRASLADO": "02",
+  "FEC_TRASLADO": "2026-03-01",
+  "DIR_PARTIDA": "AV. FRANKLIN ROOSEVELT 247 CERCADO LIMA INT. 71 7",
+  "UBI_PARTIDA": "150101",
+  "UND_MEDIDA": "KGM",
+  "PESO_BRUTO": "100.000",
+  "PLACA": "AEC234",
+  "NUM_NIF_CONDUCT": "31672578",
+  "COD_TIP_NIF_CONDUCT": "1"
+}
+
+
+
+{GuiaRemision { guiasremisionId = , empresaId = 005, tipomovimientoId = S, tipodoccomercialId = X029, doc_referencia = DOCUMENTO_COMPRA, doc_referencia_numero = 112500000001, fecha_emision = 27/02/2026 00:00:00, fecha_doc = 27/02/2026 00:00:00, fecha_traslado = 1/03/2026 00:00:00, serie = T002, correlativo = 0000834, clienteId = , proveedorId = 00047, id_almacen_inicio = 001, id_almacen_destino = , punto_partida = AV. MEXICO NRO. 1898 LA VICTORIA - LIMA - LIMA, punto_llegada = PROLONGACIÓN FRANCIA 1813 LA VICTORIA - LIMA, monedaId = 001, tipo_cambio = 1, motivotrasladoId = MT00003, otro_motivo_traslado = , observacion = , movilidadId = , guia_remision_remitente = , trabajadorId = , foto_guiaremision = , cuentausuarioId = CU0001, estado = REGISTRADO, puntoventaId = , transportistaId = TR000001, unidadTransporteId = UT000002, conductorId = CT000002, incluye_igv = True, estado_documento_sunat = 0, documentoReferencia = E006 - 00067321, documentoReferenciaTipo = 01, detalles = System.Collections.Generic.List`1[Backend_GestionXcore.Models.GuiaRemisionDetalle] }}

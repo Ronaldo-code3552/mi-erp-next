@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useCrud } from "@/hooks/useCrud";
 import { useDebounce } from "@/hooks/useDebounce";
 import { productoService } from "@/services/productoService";
+import { useCatalogs } from "@/hooks/useCatalogs"; // <-- NUEVO HOOK IMPORTADO
 import { Producto } from "@/types/producto.types";
 
 import DataTable from "@/components/shared/DataTable";
@@ -17,10 +18,15 @@ import {
     IconEdit, IconTrash, IconBan, IconEye, IconStack2 
 } from '@tabler/icons-react';
 
+// Constante para los estados (reemplaza el hardcodeo del SP anterior)
+const CONDICION_ESTADO_OPTIONS = [
+    { label: 'STOCK', value: 'STOCK' },
+    { label: 'LIBRE', value: 'LIBRE' }
+];
+
 export default function ProductosPage() {
     const EMPRESA_ID = "005";
     
-    // Filtros iniciales
     const initialFilters = {
         tipo_bien: [],
         sub_clase_bien: [],
@@ -34,25 +40,26 @@ export default function ProductosPage() {
         filters, setFilters, fetchData, handleAction 
     } = useCrud<Producto>(productoService, EMPRESA_ID, initialFilters);
 
-    // Estados
     const [tempFilters, setTempFilters] = useState<any>(initialFilters);
     const [showFilters, setShowFilters] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [showPresentaciones, setShowPresentaciones] = useState(false);
     const [productToEdit, setProductToEdit] = useState<Producto | null>(null);
-    const [catalogs, setCatalogs] = useState<any>(null);
 
     const debouncedSearch = useDebounce(searchTerm, 500);
+
+    // 🚀 MAGIA AQUÍ: Llamamos a los catálogos de forma limpia y cacheadas
+    // Usamos los nombres exactos de los Controladores de C#
+    const { catalogs, loadingCatalogs } = useCatalogs([
+        'TipoBien', 
+        'SubClaseBien', 
+        'UnidadMedida', 
+        'DetraccionBien'
+    ]);
 
     useEffect(() => {
         fetchData(1, debouncedSearch, filters);
     }, [debouncedSearch, filters, fetchData]);
-
-    useEffect(() => {
-        productoService.getFormDropdowns().then(res => {
-            if (res.isSuccess) setCatalogs(res.data);
-        });
-    }, []);
 
     const handleOpenSidebar = () => {
         setTempFilters(filters);
@@ -164,52 +171,54 @@ export default function ProductosPage() {
             <FiltrosAvanzados 
                 isOpen={showFilters} 
                 onClose={() => setShowFilters(false)}
-                onApply={handleApplyFilters}
+                onApply={() => { setFilters(tempFilters); setShowFilters(false); }}
                 onClear={() => {
-                    const reset = { tipo_bien: [], sub_clase_bien: [], unidad_medida: [], detraccion_bien_service: [], condicion_estado: [] };
-                    setTempFilters(reset);
-                    setFilters(reset);
+                    setTempFilters(initialFilters);
+                    setFilters(initialFilters);
                 }}
                 totalActive={Object.values(tempFilters).flat().length}
             >
-                {catalogs ? (
+                {loadingCatalogs ? (
+                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando catálogos...</div>
+                ) : (
                     <div className="flex flex-col gap-5">
                         <MultiSelect 
                             label="Tipo de Bien" 
-                            options={catalogs.tipo_bien?.map((t:any) => ({ label: t.value, value: t.key }))}
+                            // Ahora usamos catalogs['TipoBien'] que generó el hook
+                            options={(catalogs['TipoBien'] || []).map(t => ({ label: t.label, value: t.value }))}
                             value={tempFilters.tipo_bien}
                             onChange={(vals) => setTempFilters({...tempFilters, tipo_bien: vals})}
                         />
                         <MultiSelect 
                             label="SubClase / Categoría" 
-                            options={catalogs.sub_clase_bien?.map((t:any) => ({ label: t.value, value: t.key }))}
+                            options={(catalogs['SubClaseBien'] || []).map(t => ({ label: t.label, value: t.value }))}
                             value={tempFilters.sub_clase_bien}
                             onChange={(vals) => setTempFilters({...tempFilters, sub_clase_bien: vals})}
                         />
                         <MultiSelect 
                             label="Unidad de Medida" 
-                            options={catalogs.unidad_medida?.map((t:any) => ({ label: `${t.value} (${t.aux})`, value: t.key }))}
+                            // Agregamos el 'aux' (abreviatura) que mapeamos en catalogService
+                            options={(catalogs['UnidadMedida'] || []).map(t => ({ label: `${t.label} (${t.aux})`, value: t.value }))}
                             value={tempFilters.unidad_medida}
                             onChange={(vals) => setTempFilters({...tempFilters, unidad_medida: vals})}
                         />
                         <MultiSelect 
                             label="Tipo de Detracción" 
-                            options={catalogs.detraccion_bien_service?.map((t:any) => ({ label: t.value, value: t.key }))}
+                            options={(catalogs['DetraccionBien'] || []).map(t => ({ label: t.label, value: t.value }))}
                             value={tempFilters.detraccion_bien_service}
                             onChange={(vals) => setTempFilters({...tempFilters, detraccion_bien_service: vals})}
                         />
                         <MultiSelect 
                             label="Condición del Stock" 
-                            options={catalogs.condicion_estado?.map((t:any) => ({ label: t.value, value: t.key }))}
+                            options={CONDICION_ESTADO_OPTIONS} // Usamos la constante local
                             value={tempFilters.condicion_estado}
                             onChange={(vals) => setTempFilters({...tempFilters, condicion_estado: vals})}
                         />
                     </div>
-                ) : (
-                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando catálogos...</div>
                 )}
             </FiltrosAvanzados>
 
+            {/* Modales */}
             <ProductFormModal 
                 isOpen={showForm} 
                 onClose={() => setShowForm(false)} 

@@ -2,13 +2,13 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { transportistaService } from '@/services/transportistaService';
+import { useCatalogs } from '@/hooks/useCatalogs'; // Nuevo hook importado
 import Modal from '@/components/ui/Modal';
 import SearchableSelect from '@/components/forms/SearchableSelect';
 import ExternalSearchInput from '@/components/forms/ExternalSearchInput'; 
 import { IconDeviceFloppy, IconLoader } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { Transportista } from '@/types/transportista.types';
-// Importamos tus nuevos tipos para usarlos en la respuesta
 import { RucResponse, DniResponse } from '@/types/apiExternal.types';
 
 interface Props {
@@ -18,7 +18,7 @@ interface Props {
     transportistaToEdit?: Transportista | null;
 }
 
-// --- COMPONENTE AUXILIAR (DEFINIDO AFUERA PARA EVITAR EL BUG DE FOCO) ---
+// --- COMPONENTE AUXILIAR ---
 const FormInput = ({ label, className, ...props }: any) => (
     <div className="flex flex-col gap-1.5 text-left w-full">
         <label className="text-xs font-bold text-slate-500 uppercase">{label}</label>
@@ -32,7 +32,6 @@ const FormInput = ({ label, className, ...props }: any) => (
 // --- COMPONENTE PRINCIPAL ---
 export default function TransportistaFormModal({ isOpen, onClose, onSuccess, transportistaToEdit }: Props) {
     const [loading, setLoading] = useState(false);
-    const [catalogs, setCatalogs] = useState<any>(null);
 
     const EMPRESA_ID = "005"; 
     const isReadOnly = !!(transportistaToEdit && transportistaToEdit.estado === false);
@@ -40,12 +39,15 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
     const initialState: Partial<Transportista> = {
         descripcion: '', 
         direccion: '', 
-        docidentId: '6', // '6' = RUC por defecto
+        docidentId: '6', // '6' = RUC por defecto (o '06' dependiendo de tu BD)
         numero_doc: '',
         empresaId: EMPRESA_ID
     };
 
     const [formData, setFormData] = useState<Partial<Transportista>>(initialState);
+
+    // Cargar Catálogos dinámicamente solo si el modal está abierto
+    const { catalogs, loadingCatalogs } = useCatalogs(isOpen ? ['DocumentoIdentidadXcore'] : []);
 
     const mapToFormData = (source: any): Partial<Transportista> => {
         const docidentValue = source?.docidentId ?? source?.docIdentId ?? '6';
@@ -57,24 +59,18 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
             ...source,
             descripcion: descripcionValue,
             direccion: direccionValue,
-            docidentId: docidentValue,
+            docidentId: String(docidentValue).trim(),
             numero_doc: numeroDocValue,
             empresaId: EMPRESA_ID
         };
     };
 
-    // 1. Cargar Datos y Catálogos
+    // 1. Cargar Datos del Transportista a Editar
     useEffect(() => {
         if (isOpen) {
-            transportistaService.getFormDropdowns().then(res => {
-                if (res.isSuccess) setCatalogs(res.data);
-            });
-
             if (transportistaToEdit) {
-                // 1) Pintado rápido con lo recibido por props
                 setFormData(mapToFormData(transportistaToEdit));
 
-                // 2) Fuente de verdad: refrescar por ID para asegurar autocompletado
                 if (transportistaToEdit.transportistaId) {
                     transportistaService.getById(transportistaToEdit.transportistaId)
                         .then((res) => {
@@ -83,7 +79,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                             }
                         })
                         .catch(() => {
-                            // si falla, mantenemos el prellenado por props
+                            // Mantiene el prellenado por props si falla
                         });
                 }
             } else {
@@ -92,24 +88,26 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
         }
     }, [isOpen, transportistaToEdit]);
 
+    // Lógica para auto-seleccionar el tipo de documento si no coincide exactamente por key
     useEffect(() => {
         const currentDocId = formData.docidentId;
-        const docOptions = catalogs?.documento_identidad;
+        const docOptions = catalogs['DocumentoIdentidadXcore'];
+        
         if (!isOpen || !currentDocId || !Array.isArray(docOptions) || docOptions.length === 0) return;
 
-        const existsByKey = docOptions.some((opt: any) => String(opt.key) === String(currentDocId));
+        const existsByKey = docOptions.some(opt => String(opt.value).trim() === String(currentDocId).trim());
         if (existsByKey) return;
 
-        const currentUpper = String(currentDocId).toUpperCase();
-        const matched = docOptions.find((opt: any) => {
-            const keyU = String(opt.key || '').toUpperCase();
-            const valueU = String(opt.value || '').toUpperCase();
-            const auxU = String(opt.aux || '').toUpperCase();
-            return keyU === currentUpper || valueU === currentUpper || auxU === currentUpper;
+        const currentUpper = String(currentDocId).toUpperCase().trim();
+        const matched = docOptions.find(opt => {
+            const keyU = String(opt.value || '').toUpperCase().trim();
+            const labelU = String(opt.label || '').toUpperCase().trim();
+            const auxU = String(opt.aux || '').toUpperCase().trim();
+            return keyU === currentUpper || labelU === currentUpper || auxU === currentUpper;
         });
 
-        if (matched?.key) {
-            setFormData((prev) => ({ ...prev, docidentId: String(matched.key) }));
+        if (matched?.value) {
+            setFormData(prev => ({ ...prev, docidentId: String(matched.value).trim() }));
         }
     }, [isOpen, catalogs, formData.docidentId]);
 
@@ -121,9 +119,6 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
 
     // 3. Lógica inteligente al encontrar datos en SUNAT/RENIEC
     const handleDataFound = (data: any) => {
-        // TypeScript: Verificamos propiedades para saber si es RUC o DNI
-        
-        // CASO RUC (RucResponse)
         if ('nombreORazonSocial' in data) {
             const rucData = data as RucResponse;
             setFormData(prev => ({
@@ -132,13 +127,12 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                 direccion: rucData.direccionCompleta || rucData.direccion || ''
             }));
         } 
-        // CASO DNI (DniResponse)
         else if ('nombreCompleto' in data) {
             const dniData = data as DniResponse;
             setFormData(prev => ({
                 ...prev,
                 descripcion: dniData.nombreCompleto,
-                direccion: dniData.direccion || '' // DNI a veces no trae dirección
+                direccion: dniData.direccion || '' 
             }));
         }
     };
@@ -164,6 +158,17 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
         }
     };
 
+    // Helper para determinar el tipo de búsqueda (DNI, RUC, CARNET) según la abreviatura (aux) del catálogo
+    const getSearchType = () => {
+        const docOptions = catalogs['DocumentoIdentidadXcore'] || [];
+        const selectedDoc = docOptions.find(opt => String(opt.value).trim() === String(formData.docidentId).trim());
+        const auxValue = String(selectedDoc?.aux || '').toUpperCase();
+
+        if (auxValue.includes('DNI') || formData.docidentId === '1') return 'DNI';
+        if (auxValue.includes('CEX') || auxValue.includes('CARNET') || formData.docidentId === '4') return 'CARNET';
+        return 'RUC'; // Por defecto
+    };
+
     return (
         <Modal 
             isOpen={isOpen} 
@@ -178,10 +183,15 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                     <SearchableSelect 
                         label="Tipo Doc." 
                         name="docidentId" 
-                        options={catalogs?.documento_identidad} 
+                        options={(catalogs['DocumentoIdentidadXcore'] || []).map((opt: any) => ({
+                            key: String(opt.value),
+                            value: opt.value,
+                            label: opt.label,
+                            aux: opt.aux
+                        }))} 
                         value={formData.docidentId || ''} 
                         onChange={handleChange} 
-                        disabled={isReadOnly}
+                        disabled={isReadOnly || loadingCatalogs}
                     />
 
                     {/* INPUT INTELIGENTE DE BÚSQUEDA */}
@@ -192,20 +202,13 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                         onChange={handleChange}
                         onSuccess={handleDataFound}
                         empresaId={EMPRESA_ID}
-                        
-                        // Usamos las keys exactas de tu JSON: "DNI", "CEX", "RUC"
-                        type={
-                            (formData.docidentId === 'DNI') ? 'DNI' : 
-                            (formData.docidentId === 'CEX') ? 'CARNET' : 
-                            'RUC' // Por defecto para "RUC" u otros
-                        }
-
-                        disabled={isReadOnly}
+                        type={getSearchType()}
+                        disabled={isReadOnly || loadingCatalogs || !formData.docidentId}
                         required
                         className="font-mono" 
                     />
 
-                    {/* RAZÓN SOCIAL (Se llena solo) */}
+                    {/* RAZÓN SOCIAL */}
                     <div className="md:col-span-2">
                         <FormInput 
                             label="Razón Social / Nombre" 
@@ -218,7 +221,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                         />
                     </div>
                     
-                    {/* DIRECCIÓN (Se llena solo con RUC) */}
+                    {/* DIRECCIÓN */}
                     <div className="md:col-span-2">
                         <FormInput 
                             label="Dirección Legal" 
@@ -234,7 +237,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                 {!isReadOnly && (
                     <div className="flex justify-end gap-3 pt-4 border-t mt-4">
                         <button type="button" onClick={onClose} className="px-6 py-2 text-slate-500 font-bold hover:bg-slate-50 rounded-lg transition-colors">Cancelar</button>
-                        <button type="submit" disabled={loading} className="bg-blue-600 text-white px-8 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50">
+                        <button type="submit" disabled={loading || loadingCatalogs} className="bg-blue-600 text-white px-8 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50">
                             {loading ? <IconLoader className="animate-spin" size={20}/> : <IconDeviceFloppy size={20}/>}
                             {transportistaToEdit ? 'Guardar Cambios' : 'Registrar'}
                         </button>

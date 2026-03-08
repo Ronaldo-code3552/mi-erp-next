@@ -91,24 +91,28 @@ export default function MultiSelect({
                     {/* LISTA DE OPCIONES */}
                     <div className="max-h-60 overflow-y-auto custom-scrollbar">
                         {filteredOptions.length > 0 ? (
-                            filteredOptions.map((option) => (
-                                <div
-                                    key={option.value}
-                                    onClick={() => toggleOption(option.value)}
-                                    className="flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 cursor-pointer transition-colors group"
-                                >
-                                    <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all
-                                        ${value.includes(option.value) 
-                                            ? 'bg-blue-600 border-blue-600' 
-                                            : 'border-slate-300 group-hover:border-blue-400'}`}
+                            filteredOptions.map((option, index) => {
+                                const hasValidValue = String(option.value ?? '').trim() !== '';
+                                return (
+                                    <div
+                                        key={`${option.value}-${index}`}
+                                        onClick={() => hasValidValue && toggleOption(option.value)}
+                                        className={`flex items-center gap-3 px-3 py-2.5 transition-colors group
+                                            ${hasValidValue ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/60 cursor-not-allowed opacity-60'}`}
                                     >
-                                        {value.includes(option.value) && <IconCheck size={12} className="text-white" stroke={4} />}
+                                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all
+                                            ${value.includes(option.value) 
+                                                ? 'bg-blue-600 border-blue-600' 
+                                                : 'border-slate-300 group-hover:border-blue-400'}`}
+                                        >
+                                            {value.includes(option.value) && <IconCheck size={12} className="text-white" stroke={4} />}
+                                        </div>
+                                        <span className={`text-sm truncate ${value.includes(option.value) ? 'text-blue-700 font-semibold' : 'text-slate-600'}`}>
+                                            {option.label}
+                                        </span>
                                     </div>
-                                    <span className={`text-sm truncate ${value.includes(option.value) ? 'text-blue-700 font-semibold' : 'text-slate-600'}`}>
-                                        {option.label}
-                                    </span>
-                                </div>
-                            ))
+                                );
+                            })
                         ) : (
                             <div className="p-4 text-center text-xs text-slate-400 italic">Sin resultados</div>
                         )}

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useCrud } from "@/hooks/useCrud";
 import { useDebounce } from "@/hooks/useDebounce";
 import { unidadTransporteService } from "@/services/unidadTransporteService";
+import { useCatalogs } from "@/hooks/useCatalogs";
 import { UnidadTransporte } from "@/types/unidadTransporte.types";
 
 import DataTable from "@/components/shared/DataTable";
@@ -18,8 +19,6 @@ import {
 
 export default function UnidadTransportePage() {
     const EMPRESA_ID = "005";
-
-    // Filtros oficiales para el Hook
     const initialFilters = { marca: [], modelo: [] };
 
     const { 
@@ -27,30 +26,21 @@ export default function UnidadTransportePage() {
         filters, setFilters, fetchData, handleAction 
     } = useCrud<UnidadTransporte>(unidadTransporteService, EMPRESA_ID, initialFilters);
 
-    // Estados para el Sidebar (Temporales)
     const [tempFilters, setTempFilters] = useState<any>(initialFilters);
     const [showFilters, setShowFilters] = useState(false);
     
-    // Estados para el Formulario
     const [showForm, setShowForm] = useState(false);
     const [selected, setSelected] = useState<UnidadTransporte | null>(null);
-    const [catalogs, setCatalogs] = useState<any>(null);
 
     const debouncedSearch = useDebounce(searchTerm, 500);
 
-    // Cargar Catálogos
-    useEffect(() => {
-        unidadTransporteService.getFormDropdowns().then(res => {
-            if (res.isSuccess) setCatalogs(res.data);
-        });
-    }, []);
+    // 1. Usar el nuevo sistema de Catálogos (Llama a tus APIs C# directamente)
+    const { catalogs, loadingCatalogs } = useCatalogs(['Marca', 'Modelo']);
 
-    // Fetch Data
     useEffect(() => { 
         fetchData(1, debouncedSearch, filters); 
     }, [debouncedSearch, filters, fetchData]);
 
-    // --- LÓGICA DEL SIDEBAR ---
     const handleOpenSidebar = () => {
         setTempFilters(filters);
         setShowFilters(true);
@@ -61,12 +51,11 @@ export default function UnidadTransportePage() {
         setShowFilters(false);
     };
 
-    // Filtro inteligente: Solo mostrar modelos de las marcas seleccionadas en el filtro
-    const modelosDisponiblesParaFiltro = catalogs?.modelo?.filter((mod: any) => 
-        tempFilters.marca.length === 0 || tempFilters.marca.includes(String(mod.groupKey || mod.marcaId))
+    // Filtro inteligente: Solo mostrar modelos de las marcas seleccionadas
+    const modelosDisponiblesParaFiltro = catalogs['Modelo']?.filter((mod) => 
+        tempFilters.marca.length === 0 || tempFilters.marca.includes(String(mod.groupKey))
     ) || [];
 
-    // --- COLUMNAS (Estilo React Restaurado) ---
     const columns = [
         { 
             header: 'Placa', 
@@ -118,7 +107,6 @@ export default function UnidadTransportePage() {
                     >
                         {row.estado === "1" ? <IconEdit size={18} /> : <IconEye size={18} />}
                     </button>
-
                     <button 
                         onClick={() => row.unidadtransporteId && handleAction(row.unidadtransporteId, 'anular')} 
                         disabled={row.estado === "0"} 
@@ -127,7 +115,6 @@ export default function UnidadTransportePage() {
                     >
                         <IconBan size={18} />
                     </button>
-
                     <button 
                         onClick={() => row.unidadtransporteId && handleAction(row.unidadtransporteId, 'delete')} 
                         className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded transition-colors"
@@ -142,7 +129,6 @@ export default function UnidadTransportePage() {
 
     return (
         <div className="p-6 animate-fade-in-up">
-            {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <div>
                     <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Unidades de Transporte</h1>
@@ -158,24 +144,20 @@ export default function UnidadTransportePage() {
                 </div>
             </div>
 
-            {/* Buscador y Botón Filtros */}
             <div className="flex gap-4 mb-4">
                 <div className="relative flex-1">
                     <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
                     <input 
-                        type="text" 
-                        placeholder="Buscar por placa, descripción o marca..." 
+                        type="text" placeholder="Buscar por placa, descripción o marca..." 
                         className="w-full pl-10 pr-4 py-2.5 bg-white border border-slate-300 rounded-xl outline-none focus:border-blue-500 transition-all shadow-sm" 
-                        value={searchTerm} 
-                        onChange={(e) => setSearchTerm(e.target.value)} 
+                        value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} 
                     />
                 </div>
                 <button 
                     onClick={handleOpenSidebar} 
                     className={`px-4 py-2.5 rounded-xl font-semibold flex items-center gap-2 border transition-all ${
                         Object.values(filters).flat().length > 0 
-                        ? 'bg-blue-50 text-blue-700 border-blue-200' 
-                        : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                        ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                     }`}
                 >
                     <IconFilter size={20} /> 
@@ -183,48 +165,36 @@ export default function UnidadTransportePage() {
                 </button>
             </div>
 
-            {/* Tabla */}
             <DataTable columns={columns} data={data} loading={loading} meta={meta} onPageChange={fetchData} />
 
-            {/* Sidebar de Filtros */}
             <SidebarFiltros 
-                isOpen={showFilters} 
-                onClose={() => setShowFilters(false)} 
-                onApply={handleApplyFilters} 
-                onClear={() => {
-                    const reset = { marca: [], modelo: [] };
-                    setTempFilters(reset);
-                    setFilters(reset);
-                }}
+                isOpen={showFilters} onClose={() => setShowFilters(false)} onApply={handleApplyFilters} 
+                onClear={() => { const reset = { marca: [], modelo: [] }; setTempFilters(reset); setFilters(reset); }}
                 totalActive={Object.values(tempFilters).flat().length}
             >
-                {catalogs ? (
+                {loadingCatalogs ? (
+                    <div className="text-center py-10 text-slate-400 italic">Cargando catálogos...</div>
+                ) : (
                     <div className="flex flex-col gap-5">
                         <MultiSelect 
                             label="Marcas" 
-                            options={catalogs.marca?.map((m: any) => ({ label: m.value, value: String(m.key) }))} 
+                            options={(catalogs['Marca'] || []).map(opt => ({ label: opt.label, value: opt.value }))} 
                             value={tempFilters.marca} 
                             onChange={(v) => setTempFilters({...tempFilters, marca: v, modelo: []})} 
                         />
-
                         <MultiSelect 
                             label="Modelos" 
-                            options={modelosDisponiblesParaFiltro.map((m: any) => ({ label: m.value, value: String(m.key) }))} 
+                            options={modelosDisponiblesParaFiltro.map(opt => ({ label: opt.label, value: opt.value }))} 
                             value={tempFilters.modelo} 
                             onChange={(v) => setTempFilters({...tempFilters, modelo: v})}
                             placeholder={tempFilters.marca.length === 0 ? "Seleccione marcas primero" : "Todos los modelos"}
                         />
                     </div>
-                ) : (
-                    <div className="text-center py-10 text-slate-400 italic">Cargando catálogos...</div>
                 )}
             </SidebarFiltros>
 
-            {/* Modal */}
             <UnidadFormModal 
-                isOpen={showForm} 
-                onClose={() => setShowForm(false)} 
-                unitToEdit={selected} 
+                isOpen={showForm} onClose={() => setShowForm(false)} unitToEdit={selected} 
                 onSuccess={() => fetchData(meta.currentPage)} 
             />
         </div>

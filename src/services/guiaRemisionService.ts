@@ -4,11 +4,11 @@ import { GuiaRemisionPayload, GuiaRemisionResponse } from '../types/guiaRemision
 import { ApiResponse } from '../types';
 
 export const guiaRemisionService = {
+
     // 1. Obtener listado paginado
     getByEmpresa: async (empresaId: string, page = 1, pageSize = 20, term = "", filters: any = null): Promise<ApiResponse<GuiaRemisionResponse[]>> => {
         let filtersToSend = null;
         if (filters) {
-            // Lógica para limpiar filtros vacíos
             const cleaned: any = {};
             let hasData = false;
             Object.keys(filters).forEach(key => {
@@ -26,9 +26,11 @@ export const guiaRemisionService = {
         return response.data;
     },
 
-    // 2. Obtener Dropdowns gigantes
-    getFormDropdowns: async (empresaId: string,almacenId:string): Promise<ApiResponse<any>> => {
-        const response = await apiClient.get(`/GuiaRemision/form-dropdowns/${empresaId}/${almacenId}`);
+    // 🚀 NUEVO: Obtener el correlativo dinámico y seguro
+    getSiguienteCorrelativo: async (tipoDocId: string, serie: string): Promise<ApiResponse<{ correlativo: string }>> => {
+        const response = await apiClient.get(`/GuiaRemision/siguiente-correlativo`, {
+            params: { tipoDocId, serie }
+        });
         return response.data;
     },
 
@@ -61,8 +63,14 @@ export const guiaRemisionService = {
         const response = await apiClient.patch(`/GuiaRemision/anular/${id}`);
         return response.data;
     },
+    
+    // 8. Imprimir PDF
+    imprimir: async (id: string): Promise<ApiResponse<any>> => {
+        const response = await apiClient.get(`/GuiaRemision/${id}/imprimir`);
+        return response.data;
+    },
 
-    // 8. Eliminar (Físico)
+    // 9. Eliminar (Físico)
     delete: async (id: string): Promise<ApiResponse<any>> => {
         const response = await apiClient.delete(`/GuiaRemision/${id}`);
         return response.data;

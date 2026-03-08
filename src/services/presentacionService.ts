@@ -1,3 +1,4 @@
+// src/services/presentacionService.ts
 import apiClient from '../api/apiCliente';
 import { ApiResponse } from '../types';
 
@@ -25,12 +26,9 @@ export const presentacionService = {
     update: async (id: string, data: Presentacion) => {
         return (await apiClient.put(`/Presentaciones/${id}`, data)).data;
     },
+    
     delete: async (id: string): Promise<ApiResponse<any>> => {
         const response = await apiClient.delete(`/Presentaciones/${id}`);
         return response.data;
-    },
-
-    getFormDropdowns: async () => {
-        return (await apiClient.get('/Presentaciones/form-dropdowns')).data;
     }
 };

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useCrud } from "@/hooks/useCrud";
 import { useDebounce } from "@/hooks/useDebounce";
 import { transportistaService } from "@/services/transportistaService";
+import { useCatalogs } from "@/hooks/useCatalogs"; // Nuevo hook importado
 import { Transportista } from "@/types/transportista.types";
 
 import DataTable from "@/components/shared/DataTable";
@@ -32,16 +33,11 @@ export default function TransportistasPage() {
     const [showFilters, setShowFilters] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [selected, setSelected] = useState<Transportista | null>(null);
-    const [catalogs, setCatalogs] = useState<any>(null);
 
     const debouncedSearch = useDebounce(searchTerm, 500);
 
-    // Cargar catálogos al montar
-    useEffect(() => {
-        transportistaService.getFormDropdowns().then(res => {
-            if (res.isSuccess) setCatalogs(res.data);
-        });
-    }, []);
+    // Cargar catálogos usando el nuevo hook
+    const { catalogs, loadingCatalogs } = useCatalogs(['DocumentoIdentidadXcore']);
 
     // Actualizar datos al buscar o filtrar
     useEffect(() => {
@@ -64,7 +60,7 @@ export default function TransportistasPage() {
         setFilters(initialFilters);
     };
 
-    // --- DEFINICIÓN DE COLUMNAS (Estilo React Restaurado) ---
+    // --- DEFINICIÓN DE COLUMNAS ---
     const columns = [
         { 
             header: 'Documento', 
@@ -194,17 +190,21 @@ export default function TransportistasPage() {
                 onClear={handleClearFilters}
                 totalActive={Object.values(tempFilters).flat().length}
             >
-                {catalogs ? (
+                {loadingCatalogs ? (
+                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando catálogos...</div>
+                ) : (
                     <div className="flex flex-col gap-5">
                         <MultiSelect 
                             label="Tipo de Documento" 
-                            options={catalogs.documento_identidad?.map((t: any) => ({ label: t.aux || t.value, value: t.key }))}
+                            // Mapeamos para que el label sea la descripción corta (aux) o la larga
+                            options={(catalogs['DocumentoIdentidadXcore'] || []).map(opt => ({
+                                label: opt.aux || opt.label,
+                                value: opt.value
+                            }))}
                             value={tempFilters.documento_identidad}
                             onChange={(vals) => setTempFilters({...tempFilters, documento_identidad: vals})}
                         />
                     </div>
-                ) : (
-                    <div className="text-center py-10 text-slate-400 italic text-sm">Cargando catálogos...</div>
                 )}
             </SidebarFiltros>
 

@@ -99,7 +99,11 @@ export default function TransaccionFormModal({ isOpen, onClose, onSuccess, dataT
     };
 
     // Helper seguro para opciones
-    const getOpts = (key: string) => catalogs?.[key]?.map((x: any) => ({ key: x.key, value: x.value })) || [];
+    const getOpts = (key: string) => catalogs?.[key]?.map((x: any) => ({
+        key: x.key,
+        value: x.value,
+        label: x.label || x.descripcion || x.aux || x.value
+    })) || [];
 
     return (
         <Modal 
