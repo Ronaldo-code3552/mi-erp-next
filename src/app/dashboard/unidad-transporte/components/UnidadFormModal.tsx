@@ -38,11 +38,12 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
     const [crudModal, setCrudModal] = useState<{ type: 'MARCA' | 'MODELO' | null, action: 'ADD' | 'EDIT' | null, data?: any }>({ type: null, action: null });
 
     const isReadOnly = !!(unitToEdit && unitToEdit.estado === "0");
-    const { hasError, clearError, validate, resetErrors } = useValidation();
+    const isEditing = !!unitToEdit;
+    const { hasError, addError, clearError, resetErrors } = useValidation();
 
     const initialState: Partial<UnidadTransporte> = {
         descripcion: '', nro_matricula_cabina: '', modeloId: '', peso_maximo: 0,
-        certificado_inscripcion: '', nro_matricula_carrosa1: '', nro_matricula_carrosa2: '',
+        certificado_inscripcion: '', nro_matricula_carrosa1: '', nro_matricula_carrosa2: '', nro_matricula_carrosa3: '',
         observaciones: '', empresaId: EMPRESA_ID, estado: '1'
     };
 
@@ -116,8 +117,24 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
     const handleChange = (e: any) => {
         const { name, value } = e.target;
         let finalValue = value;
-        if (name === 'nro_matricula_cabina') finalValue = value.toUpperCase();
+        if (
+            name === 'nro_matricula_cabina' ||
+            name === 'descripcion' ||
+            name === 'certificado_inscripcion' ||
+            name === 'nro_matricula_carrosa1' ||
+            name === 'nro_matricula_carrosa2' ||
+            name === 'nro_matricula_carrosa3'
+        ) {
+            finalValue = String(value || '').toUpperCase();
+        }
         if (name === 'modeloId') finalValue = String(normalizeId(value) || '');
+        if (name === 'peso_maximo') {
+            if (value === '') finalValue = '';
+            else {
+                const numericValue = Number(value);
+                if (Number.isFinite(numericValue) && numericValue < 0) return;
+            }
+        }
         
         setFormData(prev => ({ ...prev, [name]: finalValue }));
         if(hasError(name)) clearError(name);
@@ -168,8 +185,8 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
         
         setFormData(prev => ({
             ...prev,
-            nro_matricula_cabina: data.placa || prev.nro_matricula_cabina,
-            descripcion: prev.descripcion || descAuto,
+            nro_matricula_cabina: String(data.placa || prev.nro_matricula_cabina || '').toUpperCase(),
+            descripcion: String(prev.descripcion || descAuto || '').toUpperCase(),
             modeloId: foundModeloId,
             observaciones: `COLOR: ${data.color || '-'} | MOTOR: ${data.motor || '-'} | VIN: ${data.vin || '-'}`
         }));
@@ -180,16 +197,49 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        const rules = { descripcion: formData.descripcion, nro_matricula_cabina: formData.nro_matricula_cabina, modeloId: formData.modeloId };
-        if(!selectedMarca) return toast.error("Seleccione una marca");
-        if (!validate(rules)) return toast.error("Complete los campos obligatorios");
-        
-        const pesoMaximoNum = Number(formData.peso_maximo ?? 0);
-        if (!Number.isFinite(pesoMaximoNum) || pesoMaximoNum < 0) return toast.error("El peso máximo debe ser un número válido y positivo");
+        resetErrors();
+
+        if (!String(formData.nro_matricula_cabina || '').trim()) {
+            addError('nro_matricula_cabina');
+            return toast.error("Placa cabina es obligatoria.");
+        }
+        if (!String(formData.descripcion || '').trim()) {
+            addError('descripcion');
+            return toast.error("Descripción / nombre es obligatorio.");
+        }
+        if (!String(selectedMarca || '').trim()) {
+            return toast.error("Marca es obligatoria.");
+        }
+        if (!String(formData.modeloId || '').trim()) {
+            addError('modeloId');
+            return toast.error("Modelo es obligatorio.");
+        }
+
+        const pesoValue = String(formData.peso_maximo ?? '').trim();
+        if (!pesoValue) {
+            addError('peso_maximo');
+            return toast.error("Peso máximo es obligatorio.");
+        }
+
+        const pesoMaximoNum = Number(formData.peso_maximo);
+        if (!Number.isFinite(pesoMaximoNum) || pesoMaximoNum < 0) {
+            addError('peso_maximo');
+            return toast.error("El peso máximo no puede ser negativo.");
+        }
 
         setLoading(true);
         try {
-            const payload = { ...formData, peso_maximo: pesoMaximoNum };
+            const payload = {
+                ...formData,
+                descripcion: String(formData.descripcion || '').trim().toUpperCase(),
+                nro_matricula_cabina: String(formData.nro_matricula_cabina || '').trim().toUpperCase(),
+                certificado_inscripcion: String(formData.certificado_inscripcion || '').trim().toUpperCase() || null,
+                nro_matricula_carrosa1: String(formData.nro_matricula_carrosa1 || '').trim().toUpperCase() || null,
+                nro_matricula_carrosa2: String(formData.nro_matricula_carrosa2 || '').trim().toUpperCase() || null,
+                nro_matricula_carrosa3: String(formData.nro_matricula_carrosa3 || '').trim().toUpperCase() || null,
+                modeloId: String(normalizeId(formData.modeloId) || ''),
+                peso_maximo: pesoMaximoNum
+            };
             if (unitToEdit?.unidadtransporteId) {
                 await unidadTransporteService.update(unitToEdit.unidadtransporteId, payload);
                 toast.success("Vehículo actualizado");
@@ -199,8 +249,8 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
             }
             onSuccess();
             onClose();
-        } catch (error) {
-            toast.error("Error al procesar");
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || "Error al procesar");
         } finally {
             setLoading(false);
         }
@@ -223,10 +273,10 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                 <form onSubmit={handleSubmit} className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         <div className="md:col-span-1">
-                             <ExternalSearchInput label="Placa Cabina" name="nro_matricula_cabina" value={formData.nro_matricula_cabina || ''} onChange={handleChange} onSuccess={handlePlacaFound} empresaId={EMPRESA_ID} type="PLACA" disabled={isReadOnly || loadingCatalogs} required placeholder="ABC-123" className="font-mono font-bold" error={hasError('nro_matricula_cabina')} />
+                             <ExternalSearchInput label="Placa Cabina" name="nro_matricula_cabina" value={formData.nro_matricula_cabina || ''} onChange={handleChange} onSuccess={handlePlacaFound} empresaId={EMPRESA_ID} type="PLACA" disabled={isReadOnly || isEditing || loadingCatalogs} placeholder="ABC-123" className="font-mono font-bold" error={hasError('nro_matricula_cabina')} />
                         </div>
                         <div className="md:col-span-2">
-                            <ValidatedFormInput label="Descripción / Nombre" name="descripcion" value={formData.descripcion || ''} onChange={handleChange} required disabled={isReadOnly} placeholder="Ej: VOLVO FH 500 BLANCO" error={hasError('descripcion')} />
+                            <ValidatedFormInput label="Descripción / Nombre" name="descripcion" value={formData.descripcion || ''} onChange={handleChange} disabled={isReadOnly} placeholder="Ej: VOLVO FH 500 BLANCO" error={hasError('descripcion')} />
                         </div>
                         <div className="flex gap-2 items-start">
                             <div className="flex-1">
@@ -240,10 +290,11 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                             </div>
                             {!isReadOnly && renderCrudButtons('MODELO', !selectedMarca)}
                         </div>
-                        <ValidatedFormInput label="Peso Máximo (T)" name="peso_maximo" type="number" value={formData.peso_maximo || 0} onChange={handleChange} disabled={isReadOnly} />
+                        <ValidatedFormInput label="Peso Máximo (T)" name="peso_maximo" type="number" min="0" step="0.01" value={formData.peso_maximo ?? ''} onChange={handleChange} disabled={isReadOnly} error={hasError('peso_maximo')} />
                         <ValidatedFormInput label="Cert. Inscripción" name="certificado_inscripcion" value={formData.certificado_inscripcion || ''} onChange={handleChange} disabled={isReadOnly} />
                         <ValidatedFormInput label="Placa Carreta 1" name="nro_matricula_carrosa1" value={formData.nro_matricula_carrosa1 || ''} onChange={handleChange} disabled={isReadOnly} />
                         <ValidatedFormInput label="Placa Carreta 2" name="nro_matricula_carrosa2" value={formData.nro_matricula_carrosa2 || ''} onChange={handleChange} disabled={isReadOnly} />
+                        <ValidatedFormInput label="Placa Carreta 3" name="nro_matricula_carrosa3" value={formData.nro_matricula_carrosa3 || ''} onChange={handleChange} disabled={isReadOnly} />
                         <div className="md:col-span-3">
                              <ValidatedFormInput label="Observaciones" name="observaciones" value={formData.observaciones || ''} onChange={handleChange} disabled={isReadOnly} />
                         </div>

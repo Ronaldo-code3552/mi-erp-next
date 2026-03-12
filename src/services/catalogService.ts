@@ -42,7 +42,8 @@ export const catalogService = {
                     'Trabajador',
                     'Transportista',
                     'UnidadTransporte',
-                    'ConductorTransporte'
+                    'ConductorTransporte',
+                    'TablaTransacciones'
                 ]);
 
                 const empresaId = getParamString(queryParams.empresaId);
@@ -102,6 +103,7 @@ export const catalogService = {
                         : endpointName === 'AlmacenSerie' ? item.serie
                         : endpointName === 'Cliente' ? item.clienteId
                         : endpointName === 'Proveedor' ? item.proveedorId
+                        : endpointName === 'TablaTransacciones' ? item.transaccionId
                         : undefined;
 
                     // 1. CAPTURAR EL ID EXACTO (Agregamos los de Producto)

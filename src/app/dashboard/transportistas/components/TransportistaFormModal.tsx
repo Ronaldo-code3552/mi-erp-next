@@ -35,6 +35,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
 
     const EMPRESA_ID = "005"; 
     const isReadOnly = !!(transportistaToEdit && transportistaToEdit.estado === false);
+    const isEditing = !!transportistaToEdit;
 
     const initialState: Partial<Transportista> = {
         descripcion: '', 
@@ -88,6 +89,28 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
         }
     }, [isOpen, transportistaToEdit]);
 
+    useEffect(() => {
+        if (!isOpen || isEditing) return;
+
+        const docOptions = catalogs['DocumentoIdentidadXcore'] || [];
+        if (docOptions.length === 0) return;
+
+        const currentValue = String(formData.docidentId || '').trim();
+        const exists = docOptions.some((opt: any) => String(opt.value).trim() === currentValue);
+        if (exists) return;
+
+        const preferredOption =
+            docOptions.find((opt: any) => {
+                const aux = String(opt.aux || '').toUpperCase().trim();
+                const label = String(opt.label || '').toUpperCase().trim();
+                return aux.includes('RUC') || label.includes('RUC');
+            }) || docOptions[0];
+
+        if (preferredOption?.value) {
+            setFormData(prev => ({ ...prev, docidentId: String(preferredOption.value).trim() }));
+        }
+    }, [isOpen, isEditing, catalogs, formData.docidentId]);
+
     // Lógica para auto-seleccionar el tipo de documento si no coincide exactamente por key
     useEffect(() => {
         const currentDocId = formData.docidentId;
@@ -114,7 +137,12 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
     // 2. Manejo de cambios en inputs normales
     const handleChange = (e: any) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const normalizedValue =
+            name === 'descripcion' || name === 'direccion'
+                ? String(value || '').toUpperCase()
+                : value;
+
+        setFormData(prev => ({ ...prev, [name]: normalizedValue }));
     };
 
     // 3. Lógica inteligente al encontrar datos en SUNAT/RENIEC
@@ -140,19 +168,47 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
     // 4. Guardar
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        const docOptions = catalogs['DocumentoIdentidadXcore'] || [];
+        const normalizedDocidentId = String(formData.docidentId || '').trim();
+        const selectedDocExists = docOptions.some((opt: any) => String(opt.value).trim() === normalizedDocidentId);
+
+        if (!normalizedDocidentId || !selectedDocExists) {
+            return toast.error("Tipo de documento es obligatorio.");
+        }
+        if (!String(formData.numero_doc || '').trim()) {
+            return toast.error("Número de documento es obligatorio.");
+        }
+        if (!String(formData.descripcion || '').trim()) {
+            return toast.error("Razón social / nombre es obligatorio.");
+        }
+
         setLoading(true);
         try {
+            const payload = {
+                ...formData,
+                descripcion: String(formData.descripcion || '').trim().toUpperCase(),
+                direccion: String(formData.direccion || '').trim().toUpperCase(),
+                docidentId: normalizedDocidentId,
+                numero_doc: String(formData.numero_doc || '').trim(),
+                empresaId: EMPRESA_ID
+            };
+
             if (transportistaToEdit?.transportistaId) {
-                await transportistaService.update(transportistaToEdit.transportistaId, formData);
+                await transportistaService.update(transportistaToEdit.transportistaId, payload);
                 toast.success("Transportista actualizado correctamente");
             } else {
-                await transportistaService.create(formData);
+                await transportistaService.create(payload);
                 toast.success("Transportista registrado correctamente");
             }
             onSuccess();
             onClose();
-        } catch (error) {
-            toast.error("Error al procesar la solicitud");
+        } catch (error: any) {
+            const rawMessage = String(error?.response?.data?.message || '');
+            const message = rawMessage.toLowerCase().includes('número de documento ya se encuentra registrado para un transportista')
+                ? 'El número de documento ya está registrado para un transportista.'
+                : rawMessage || "Error al procesar la solicitud";
+            toast.error(message);
         } finally {
             setLoading(false);
         }
@@ -191,7 +247,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                         }))} 
                         value={formData.docidentId || ''} 
                         onChange={handleChange} 
-                        disabled={isReadOnly || loadingCatalogs}
+                        disabled={isReadOnly || isEditing || loadingCatalogs}
                     />
 
                     {/* INPUT INTELIGENTE DE BÚSQUEDA */}
@@ -203,7 +259,7 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                         onSuccess={handleDataFound}
                         empresaId={EMPRESA_ID}
                         type={getSearchType()}
-                        disabled={isReadOnly || loadingCatalogs || !formData.docidentId}
+                        disabled={isReadOnly || isEditing || loadingCatalogs || !formData.docidentId}
                         required
                         className="font-mono" 
                     />

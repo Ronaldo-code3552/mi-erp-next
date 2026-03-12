@@ -1611,8 +1611,8 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                         <SectionTitle title="Transporte" icon={IconTruck} />
                         <div className="space-y-4">
                             
-                            <div className="flex gap-2 items-start">
-                                <div className="flex-1">
+                            <div className="flex gap-2 items-start min-w-0">
+                                <div className="flex-1 min-w-0">
                                     <SearchableSelect 
                                         label="Empresa Transporte" name="transportistaId" 
                                         options={transportistaOptions}
@@ -1620,7 +1620,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                         onSearchChange={handleTransportistaSearch}
                                     />
                                 </div>
-                                <div className="flex gap-1 items-end pb-0.5 mt-5">
+                                <div className="flex gap-1 items-end pb-0.5 mt-5 shrink-0">
                                     <button type="button" onClick={() => handleOpenTransportista('ADD')} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors" title="Agregar Transportista">
                                         <IconPlus size={16} />
                                     </button>
@@ -1630,8 +1630,8 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                 </div>
                             </div>
                             
-                            <div className="flex gap-2 items-start">
-                                <div className="flex-1">
+                            <div className="flex gap-2 items-start min-w-0">
+                                <div className="flex-1 min-w-0">
                                     <SearchableSelect 
                                         label="Vehículo / Placa" name="unidadTransporteId" 
                                         options={unidadTransporteOptions}
@@ -1639,7 +1639,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                         onSearchChange={handleUnidadTransporteSearch}
                                     />
                                 </div>
-                                <div className="flex gap-1 items-end pb-0.5 mt-5">
+                                <div className="flex gap-1 items-end pb-0.5 mt-5 shrink-0">
                                     <button type="button" onClick={() => handleOpenUnidad('ADD')} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors" title="Agregar Vehículo">
                                         <IconPlus size={16} />
                                     </button>
@@ -1649,8 +1649,8 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 items-start">
-                                <div className="flex-1">
+                            <div className="flex gap-2 items-start min-w-0">
+                                <div className="flex-1 min-w-0">
                                     <SearchableSelect 
                                         label="Conductor" name="conductorId" 
                                         options={conductorOptions}
@@ -1658,7 +1658,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                         onSearchChange={handleConductorSearch}
                                     />
                                 </div>
-                                <div className="flex gap-1 items-end pb-0.5 mt-5">
+                                <div className="flex gap-1 items-end pb-0.5 mt-5 shrink-0">
                                     <button type="button" onClick={() => handleOpenConductor('ADD')} className="p-1.5 bg-blue-50 text-blue-600 rounded hover:bg-blue-100 transition-colors" title="Agregar Conductor">
                                         <IconPlus size={16} />
                                     </button>

@@ -10,7 +10,7 @@ import ValidatedFormInput from '@/components/forms/ValidatedFormInput';
 import { IconDeviceFloppy, IconLoader, IconX } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { Conductor } from '@/types/conductor.types';
-import { Licencia, LicenciaConducirResponse, RucResponse } from '@/types/apiExternal.types';
+import { DniResponse, Licencia, LicenciaConducirResponse, RucResponse } from '@/types/apiExternal.types';
 import { useValidation } from '@/hooks/useValidation';
 import { getInputClasses } from '@/utils/formStyles';
 
@@ -29,7 +29,7 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
     const isReadOnly = conductorToEdit?.estado === false;
     const isEditing = !!conductorToEdit;
 
-    const { hasError, clearError, validate, resetErrors } = useValidation();
+    const { hasError, addError, clearError, resetErrors } = useValidation();
 
     // 🚀 Lazy Load del catálogo de Documentos
     const { catalogs, loadingCatalogs } = useCatalogs(isOpen ? ['DocumentoIdentidadXcore'] : []);
@@ -50,7 +50,13 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
             // 🧹 ELIMINADO: conductorService.getFormDropdowns()
 
             if (conductorToEdit) {
-                setFormData({ ...initialState, ...conductorToEdit });
+                setFormData({
+                    ...initialState,
+                    ...conductorToEdit,
+                    nombres: String(conductorToEdit.nombres || '').toUpperCase(),
+                    apellidos: String(conductorToEdit.apellidos || '').toUpperCase(),
+                    telefono_movil: String(conductorToEdit.telefono_movil || '').replace(/\D/g, ''),
+                });
             } else {
                 setFormData(initialState);
             }
@@ -82,13 +88,167 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
 
     const handleChange = (e: any) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        let nextValue = value;
+
+        if (name === 'nombres' || name === 'apellidos') {
+            nextValue = String(value || '').toUpperCase();
+        }
+
+        if (name === 'telefono_movil') {
+            nextValue = String(value || '').replace(/\D/g, '');
+        }
+
+        if (name === 'telefono_fijo') {
+            nextValue = String(value || '').replace(/\D/g, '');
+        }
+
+        setFormData(prev => ({ ...prev, [name]: nextValue }));
         if (hasError(name)) clearError(name);
     };
 
-    const parseNombreCompleto = (nombreCompleto: string) => { /* Igual */ };
-    const handleSearchSuccess = (data: any) => { /* Igual, lógica muy buena */ };
-    const handleSubmit = async (e: React.FormEvent) => { /* Igual */ };
+    const parseNombreCompleto = (nombreCompleto: string) => {
+        const limpio = String(nombreCompleto || '').trim().replace(/\s+/g, ' ');
+        if (!limpio) return { nombres: '', apellidos: '' };
+
+        const partes = limpio.split(' ');
+        if (partes.length === 1) {
+            return { nombres: partes[0].toUpperCase(), apellidos: '' };
+        }
+
+        if (partes.length === 2) {
+            return {
+                nombres: partes[0].toUpperCase(),
+                apellidos: partes[1].toUpperCase()
+            };
+        }
+
+        return {
+            nombres: partes.slice(0, -2).join(' ').toUpperCase(),
+            apellidos: partes.slice(-2).join(' ').toUpperCase()
+        };
+    };
+
+    const handleSearchSuccess = (data: DniResponse | RucResponse | LicenciaConducirResponse) => {
+        const clearedFields = {
+            nombres: '',
+            apellidos: '',
+            licencia_conducir: '',
+            telefono_fijo: '',
+            telefono_movil: '',
+            correo: '',
+            direccion: ''
+        };
+
+        if ('licencia' in data) {
+            const licenciaData = data as LicenciaConducirResponse;
+            const parsed = parseNombreCompleto(licenciaData.nombreCompleto);
+            const licencias = licenciaData.licencia ? [licenciaData.licencia] : [];
+
+            setLicenciasEncontradas(licencias);
+            setFormData(prev => ({
+                ...prev,
+                ...clearedFields,
+                nombres: parsed.nombres,
+                apellidos: parsed.apellidos,
+                licencia_conducir: licenciaData.licencia?.numero || ''
+            }));
+            return;
+        }
+
+        if ('nombreCompleto' in data) {
+            const dniData = data as DniResponse;
+            const parsed = parseNombreCompleto(dniData.nombreCompleto);
+
+            setFormData(prev => ({
+                ...prev,
+                ...clearedFields,
+                nombres: parsed.nombres,
+                apellidos: parsed.apellidos,
+                direccion: dniData.direccionCompleta || dniData.direccion || ''
+            }));
+            return;
+        }
+
+        if ('nombreORazonSocial' in data) {
+            const rucData = data as RucResponse;
+            const parsed = parseNombreCompleto(rucData.nombreORazonSocial);
+
+            setFormData(prev => ({
+                ...prev,
+                ...clearedFields,
+                nombres: parsed.nombres,
+                apellidos: parsed.apellidos,
+                direccion: rucData.direccionCompleta || rucData.direccion || ''
+            }));
+        }
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+
+        const payload: Partial<Conductor> = {
+            ...formData,
+            nombres: String(formData.nombres || '').trim().toUpperCase(),
+            apellidos: String(formData.apellidos || '').trim().toUpperCase(),
+            docidentId: String(formData.docidentId || '').trim(),
+            nro_documento: String(formData.nro_documento || '').trim(),
+            direccion: String(formData.direccion || '').trim(),
+            correo: String(formData.correo || '').trim() || null as any,
+            ubidst: null as any,
+            telefono_fijo: String(formData.telefono_fijo || '').replace(/\D/g, '') || null as any,
+            telefono_movil: String(formData.telefono_movil || '').replace(/\D/g, '') || null as any,
+            licencia_conducir: String(formData.licencia_conducir || '').trim(),
+            empresaId: EMPRESA_ID
+        };
+
+        resetErrors();
+
+        if (!String(payload.docidentId || '').trim()) {
+            addError('docidentId');
+            return toast.error('Tipo de documento es obligatorio.');
+        }
+        if (!String(payload.nro_documento || '').trim()) {
+            addError('nro_documento');
+            return toast.error('Número de documento es obligatorio.');
+        }
+        if (!String(payload.nombres || '').trim()) {
+            addError('nombres');
+            return toast.error('Nombres es obligatorio.');
+        }
+        if (!String(payload.apellidos || '').trim()) {
+            addError('apellidos');
+            return toast.error('Apellidos es obligatorio.');
+        }
+        if (!String(payload.licencia_conducir || '').trim()) {
+            addError('licencia_conducir');
+            return toast.error('Licencia de conducir es obligatoria.');
+        }
+        if (!String(payload.direccion || '').trim()) {
+            addError('direccion');
+            return toast.error('Dirección es obligatoria.');
+        }
+
+        setLoading(true);
+        try {
+            if (conductorToEdit?.conductortransporteId) {
+                await conductorService.update(conductorToEdit.conductortransporteId, payload);
+                toast.success('Conductor actualizado correctamente');
+            } else {
+                await conductorService.create(payload);
+                toast.success('Conductor registrado correctamente');
+            }
+            onSuccess();
+            onClose();
+        } catch (error: any) {
+            const rawMessage = String(error?.response?.data?.message || '');
+            const message = rawMessage.toLowerCase().includes('número de documento ya se encuentra registrado')
+                ? 'El número de documento ya está registrado.'
+                : rawMessage || 'Error al procesar la solicitud';
+            toast.error(message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // 🚀 Determinamos qué API buscar basándonos en el catálogo, igual que en Transportistas
     const getSearchType = () => {
@@ -118,6 +278,7 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
                             disabled={isReadOnly || isEditing || loadingCatalogs} // Protegemos mientras carga
                             className={getInputClasses(hasError('docidentId'), isReadOnly || isEditing || loadingCatalogs)}
                         >
+                            <option value="">-- SELECCIONE --</option>
                             {/* 🚀 Usamos el catálogo estándar */}
                             {(catalogs['DocumentoIdentidadXcore'] || []).map((opt: any) => (
                                 <option key={opt.value} value={opt.value}>{opt.label}</option>
@@ -136,22 +297,22 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
                             empresaId={EMPRESA_ID}
                             type={getSearchType()} // 🚀 Tipo dinámico
                             disabled={isReadOnly || isEditing || loadingCatalogs || !formData.docidentId}
-                            required
                             error={hasError('nro_documento')}
-                            errorText="Completa este campo"
                         /> 
                     </div>
 
                     <ValidatedFormInput 
                         label="Nombres" name="nombres" 
                         value={formData.nombres || ''} onChange={handleChange} 
-                        required disabled={isReadOnly} error={hasError('nombres')}
+                        disabled={isReadOnly} error={hasError('nombres')}
+                        className="uppercase"
                     />
                     
                     <ValidatedFormInput 
                         label="Apellidos" name="apellidos" 
                         value={formData.apellidos || ''} onChange={handleChange} 
-                        required disabled={isReadOnly} error={hasError('apellidos')}
+                        disabled={isReadOnly} error={hasError('apellidos')}
+                        className="uppercase"
                     />
                     
                     <div className="flex flex-col gap-1.5 w-full">
@@ -192,7 +353,6 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
                                 placeholder="Ej: Q12345678"
                                 className="font-mono"
                                 error={hasError('licencia_conducir')}
-                                errorText="Completa este campo"
                             />
                         )}
                     </div>
@@ -200,7 +360,29 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
                     <ValidatedFormInput 
                         label="Teléfono Móvil" name="telefono_movil" 
                         value={formData.telefono_movil || ''} onChange={handleChange} 
-                        disabled={isReadOnly} 
+                        disabled={isReadOnly}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                    />
+
+                    <ValidatedFormInput
+                        label="Teléfono Fijo"
+                        name="telefono_fijo"
+                        value={formData.telefono_fijo || ''}
+                        onChange={handleChange}
+                        disabled={isReadOnly}
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                    />
+
+                    <ValidatedFormInput
+                        label="Correo"
+                        name="correo"
+                        type="email"
+                        value={formData.correo || ''}
+                        onChange={handleChange}
+                        disabled={isReadOnly}
+                        placeholder="ejemplo@correo.com"
                     />
                     
                     <div className="md:col-span-2">

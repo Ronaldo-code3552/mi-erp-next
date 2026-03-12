@@ -33,6 +33,20 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
     
     const { hasError, clearError, validate, resetErrors, errors } = useValidation();
     const normalizeId = (value: unknown) => (typeof value === 'string' ? value.trim() : value);
+    const getBackendErrorMessage = (error: any, fallback: string) => {
+        const rawMessage =
+            error?.response?.data?.message ||
+            error?.response?.data?.title ||
+            error?.message ||
+            '';
+        const normalized = String(rawMessage).toLowerCase();
+
+        if (normalized.includes('no se puede eliminar')) {
+            return 'No se puede eliminar esta presentación.';
+        }
+
+        return rawMessage || fallback;
+    };
 
     // 🚀 MAGIA: Usamos el caché global. Solo se descargará si no está en memoria.
     const { catalogs, loadingCatalogs } = useCatalogs(isOpen ? ['UnidadMedida'] : []);
@@ -163,8 +177,8 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                 } else {
                     toast.error(res.message || "No se pudo eliminar");
                 }
-            } catch (error) {
-                toast.error("Error al conectar con el servidor");
+            } catch (error: any) {
+                toast.error(getBackendErrorMessage(error, "No se pudo eliminar la presentación."));
             }
         }
     };
@@ -201,14 +215,14 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                     } else {
                         await presentacionService.create(payload);
                     }
-                } catch (err) {
-                    toast.error(`Error guardando: ${row.descripcion}`);
+                } catch (err: any) {
+                    toast.error(getBackendErrorMessage(err, `Error guardando: ${row.descripcion}`));
                 }
             }
             toast.success("Presentaciones actualizadas correctamente");
             onClose();
-        } catch (error) {
-            toast.error("Error crítico al guardar");
+        } catch (error: any) {
+            toast.error(getBackendErrorMessage(error, "Error crítico al guardar"));
         } finally {
             setLoading(false);
         }

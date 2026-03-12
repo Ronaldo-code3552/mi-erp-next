@@ -84,6 +84,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
             if (productToEdit) {
                 setFormData({
                     ...productToEdit,
+                    descripcion: String(productToEdit.descripcion || '').toUpperCase(),
+                    marca: String(productToEdit.marca || '').toUpperCase(),
                     tipobienId: productToEdit.tipobienId, 
                     subclasebienId: normalizeId(productToEdit.subclasebienId) || '', 
                     unidadmedidaId: normalizeId(productToEdit.unidadmedidaId) || '',
@@ -98,7 +100,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                     codigo_osce: '', imagen: '', 
                     precio: '' as any, costo: '' as any, 
                     detraccionbienserviceId: '000', 
-                    detraccion_porcentaje: '' as any,
+                    detraccion_porcentaje: 0,
                     cuenta_contable: '', operacionesItemId: '',
                     tipobienId: 0, unidadmedidaId: '', subclasebienId: '', 
                     condicion_estado: 'STOCK', observacion: '',
@@ -112,9 +114,24 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
     const handleInputChange = (e: any) => {
         if (isReadOnly) return;
         const { name, value, type, checked } = e.target;
+
+        if (name === 'precio' || name === 'costo' || name === 'detraccion_porcentaje') {
+            if (value === '') {
+                setFormData(prev => ({ ...prev, [name]: value }));
+                return;
+            }
+            const numericValue = Number(value);
+            if (Number.isFinite(numericValue) && numericValue < 0) return;
+        }
+
+        const normalizedValue =
+            name === 'descripcion' || name === 'marca'
+                ? String(value || '').toUpperCase()
+                : value;
+
         setFormData(prev => ({
             ...prev,
-            [name]: type === 'checkbox' ? checked : value
+            [name]: type === 'checkbox' ? checked : normalizedValue
         }));
     };
 
@@ -136,19 +153,75 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        const descripcion = String(formData.descripcion || '').trim();
+        if (!descripcion) {
+            setActiveTab('general');
+            return toast.error("La descripción del producto es obligatoria.");
+        }
+        const precioStr = String(formData.precio ?? '').trim();
+        if (!precioStr) {
+            setActiveTab('economico');
+            return toast.error("Precio venta es obligatorio.");
+        }
+        const costoStr = String(formData.costo ?? '').trim();
+        if (!costoStr) {
+            setActiveTab('economico');
+            return toast.error("Costo compra es obligatorio.");
+        }
+        const detraccionStr = String(formData.detraccion_porcentaje ?? '').trim();
+        if (!detraccionStr) {
+            setActiveTab('economico');
+            return toast.error("% detracción es obligatorio.");
+        }
+        if (!String(formData.detraccionbienserviceId || '').trim()) {
+            setActiveTab('economico');
+            return toast.error("Tipo de detracción es obligatorio.");
+        }
+        if (!String(formData.operacionesItemId || '').trim()) {
+            setActiveTab('economico');
+            return toast.error("Tipo de afectación es obligatorio.");
+        }
+        const tipobienNum = Number(formData.tipobienId || 0);
+        if (!Number.isFinite(tipobienNum) || tipobienNum <= 0) {
+            setActiveTab('clasificacion');
+            return toast.error("Tipo de bien es obligatorio.");
+        }
+        if (!String(formData.unidadmedidaId || '').trim()) {
+            setActiveTab('clasificacion');
+            return toast.error("Unidad de medida es obligatoria.");
+        }
+        if (!String(formData.subclasebienId || '').trim()) {
+            setActiveTab('clasificacion');
+            return toast.error("Subclase es obligatoria.");
+        }
+        if (!String(formData.condicion_estado || '').trim()) {
+            setActiveTab('otros');
+            return toast.error("Condición del stock es obligatoria.");
+        }
+
+        const precioNum = parseFloat(String(formData.precio || 0));
+        const costoNum = parseFloat(String(formData.costo || 0));
+        const detraccionNum = parseFloat(String(formData.detraccion_porcentaje || 0));
+        if (precioNum < 0 || costoNum < 0 || detraccionNum < 0) {
+            toast.error("Precio venta, costo compra y % detracción no pueden ser negativos.");
+            return;
+        }
+
         setLoading(true);
         try {
             const payload = {
                 ...formData,
+                descripcion: String(formData.descripcion || '').toUpperCase(),
+                marca: String(formData.marca || '').toUpperCase(),
                 empresaId: '005',
                 cuentausuarioId: 'CU0001',
                 afecto_inafecto: true,
                 ubidst: '000000',
                 emite_ticket: false,
                 cod_admin: 100001,
-                precio: parseFloat(String(formData.precio || 0)),
-                costo: parseFloat(String(formData.costo || 0)),
-                detraccion_porcentaje: parseFloat(String(formData.detraccion_porcentaje || 0))
+                precio: precioNum,
+                costo: costoNum,
+                detraccion_porcentaje: detraccionNum
             };
 
             const res = productToEdit 
@@ -175,7 +248,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
             isOpen={isOpen} 
             onClose={onClose} 
             title={isReadOnly ? "Detalle de Producto (Bloqueado)" : productToEdit ? `Editando: ${productToEdit.descripcion}` : "Registrar Nuevo Producto"} 
-            size="lg"
+            size="xl"
         >
             <div className="flex border-b mb-6 -mx-6 px-6 bg-white sticky top-0 z-10 overflow-x-auto">
                 <TabButton id="general" label="GENERALES" icon={IconInfoCircle} activeTab={activeTab} onClick={setActiveTab} />
@@ -184,8 +257,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 <TabButton id="otros" label="CONFIGURACIÓN" icon={IconSettings} activeTab={activeTab} onClick={setActiveTab} />
             </div>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-                
+            <form onSubmit={handleSubmit} className="h-[68vh] flex flex-col">
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-6 pb-6">
                 {/* --- PESTAÑA GENERAL (Mismo código, no toca catálogos) --- */}
                 {activeTab === 'general' && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -211,14 +284,14 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                         {/* ... (Inputs de Precio y Costo intactos) ... */}
                         <div className={`p-4 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-emerald-50/40 border-emerald-100'}`}>
                             <label className="text-[10px] font-black text-emerald-700 uppercase">Precio Venta (S/)</label>
-                            <input type="number" step="0.01" name="precio" className="w-full bg-transparent text-2xl font-black text-emerald-900 outline-none" value={formData.precio} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
+                            <input type="number" min="0" step="0.01" name="precio" className="w-full bg-transparent text-2xl font-black text-emerald-900 outline-none" value={formData.precio} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
                         </div>
                         <div className={`p-4 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-rose-50/40 border-rose-100'}`}>
                             <label className="text-[10px] font-black text-rose-700 uppercase">Costo Compra (S/)</label>
-                            <input type="number" step="0.01" name="costo" className="w-full bg-transparent text-2xl font-black text-rose-900 outline-none" value={formData.costo} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
+                            <input type="number" min="0" step="0.01" name="costo" className="w-full bg-transparent text-2xl font-black text-rose-900 outline-none" value={formData.costo} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
                         </div>
                         <div className="md:col-span-1">
-                            <FormInput label="% Detracción" name="detraccion_porcentaje" type="number" value={formData.detraccion_porcentaje} onChange={handleInputChange} disabled={isReadOnly} />
+                            <FormInput label="% Detracción" name="detraccion_porcentaje" type="number" min="0" step="0.01" value={formData.detraccion_porcentaje} onChange={handleInputChange} disabled={isReadOnly} />
                         </div>
                         
                         <div className="md:col-span-2">
@@ -332,10 +405,12 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                         </div>
                     </div>
                 )}
+                </div>
 
                 {/* --- FOOTER --- */}
                 {!isReadOnly && (
-                    <div className="flex justify-end gap-3 pt-6 border-t mt-4">
+                    <div className="border-t pt-4 mt-2 bg-white">
+                        <div className="flex justify-end gap-3">
                         <button type="button" onClick={onClose} className="px-6 py-2.5 text-xs font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest">
                             Cancelar
                         </button>
@@ -343,6 +418,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                             {loading ? <IconLoader className="animate-spin" size={18}/> : <IconDeviceFloppy size={18}/>}
                             {productToEdit ? "GUARDAR CAMBIOS" : "REGISTRAR PRODUCTO"}
                         </button>
+                        </div>
                     </div>
                 )}
             </form>

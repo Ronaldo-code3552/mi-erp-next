@@ -78,8 +78,8 @@ export default function ProductosPage() {
             header: 'Descripción / Marca', 
             render: (row: Producto) => (
                 <div>
-                    <p className="font-semibold text-slate-800">{row.descripcion}</p>
-                    {row.marca && <span className="text-[10px] text-slate-500 uppercase">Marca: {row.marca}</span>}
+                    <p className="font-semibold text-slate-800 uppercase">{String(row.descripcion || '').toUpperCase()}</p>
+                    {row.marca && <span className="text-[10px] text-slate-500 uppercase">Marca: {String(row.marca || '').toUpperCase()}</span>}
                 </div>
             )
         },

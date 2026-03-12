@@ -1,13 +1,14 @@
+// src/hooks/useCrud.ts
 "use client";
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
 import Swal from 'sweetalert2';
 import { ApiResponse } from '@/types';
 
-// Cambio 1: empresaId ahora acepta string, null o undefined
+// contextId puede ser empresaId o almacenId dependiendo de la pantalla
 export function useCrud<T>(
   service: any, 
-  empresaId: string | null | undefined, 
+  contextId: string | null | undefined, 
   initialFilters: any = {}
 ) {
   const [data, setData] = useState<T[]>([]);
@@ -21,15 +22,19 @@ export function useCrud<T>(
     try {
       let response: ApiResponse<T[]>;
 
-      // Cambio 2: Lógica condicional para llamar al servicio
-      if (empresaId) {
-        // CASO A: Entidades dependientes de una empresa (Productos, Conductores)
-        // Firma: (empresaId, page, pageSize, term, filters)
-        response = await service.getByEmpresa(empresaId, page, 20, term, activeFilters);
+      if (contextId) {
+        // 🚀 EVOLUCIÓN: Detectar inteligentemente el método del servicio
+        if (typeof service.getByAlmacen === 'function') {
+            // CASO C: Entidades dependientes de un almacén (Ej: Notas de Ingreso)
+            response = await service.getByAlmacen(contextId, page, 20, term, activeFilters);
+        } else if (typeof service.getByEmpresa === 'function') {
+            // CASO A: Entidades dependientes de una empresa (Ej: Productos, Conductores)
+            response = await service.getByEmpresa(contextId, page, 20, term, activeFilters);
+        } else {
+            throw new Error("El servicio no implementa getByEmpresa ni getByAlmacen");
+        }
       } else {
         // CASO B: Entidades globales (Motivos, Tablas Maestras)
-        // Intentamos llamar a 'getAll' si existe, sino 'getByEmpresa' pero sin el ID
-        // Firma: (page, pageSize, term, filters)
         const method = service.getAll ? service.getAll : service.getByEmpresa;
         response = await method(page, 20, term, activeFilters);
       }
@@ -47,7 +52,7 @@ export function useCrud<T>(
     } finally {
       setLoading(false);
     }
-  }, [service, empresaId, searchTerm, filters]);
+  }, [service, contextId, searchTerm, filters]);
 
   const handleAction = async (id: string | number, actionType: 'delete' | 'anular' = 'delete') => {
     const isDelete = actionType === 'delete';
