@@ -1,4 +1,4 @@
-// src/services/DocumentoventaService.ts
+// src/services/documentoVentaService.ts
 
 import apiClient from '../api/apiCliente';
 import type {
@@ -8,139 +8,169 @@ import type {
   CreateDocumentoVentaDTO,
   DocumentoVentaResponse,
   AnularDocumentoResponse,
-  SerieGrupo,
-  SiguienteNumeroItem,
   BienOption,
 } from '@/types/documentoVenta.types';
+
+const buildFiltersString = (filtros: FiltrosDocumentoVenta | null | undefined): string | null => {
+    if (!filtros) return null;
+
+    const cleaned: any = {};
+    let hasData = false;
+
+    Object.keys(filtros).forEach(key => {
+        // Ignoramos estos booleanos aquí para no enviarlos dentro del JSON
+        if (key === 'RequiereSaldoPendiente' || key === 'SoloNotasCreditoPendientes') return;
+
+        const value = (filtros as any)[key];
+        if (value !== undefined && value !== null && value !== '') {
+            if (Array.isArray(value)) {
+                if (value.length > 0) {
+                    cleaned[key] = value;
+                    hasData = true;
+                }
+            } else {
+                cleaned[key] = value;
+                hasData = true;
+            }
+        }
+    });
+
+    return hasData ? JSON.stringify(cleaned) : null;
+};
 
 class DocumentoVentaService {
   private readonly baseURL = '/DocumentoVenta';
 
-  async getAll(
-    empresaId: string,
-    page: number = 1,
-    pageSize: number = 20,
-    search?: string,
-    filters?: FiltrosDocumentoVenta
-  ) {
-    return this.getByEmpresa(empresaId, page, pageSize, search, filters);
+  private normalizeResponsePayload(payload: any) {
+    if (typeof payload !== 'string') return payload;
+
+    const trimmedPayload = payload.trim();
+    if (!trimmedPayload) return payload;
+
+    try {
+      return JSON.parse(trimmedPayload);
+    } catch {
+      return payload;
+    }
   }
 
-  async getByEmpresa(
-    empresaId: string,
-    page: number = 1,
-    pageSize: number = 20,
-    search?: string,
-    filters?: FiltrosDocumentoVenta
-  ) {
+  private unwrapResponseValue(payload: any) {
+    const normalizedPayload = this.normalizeResponsePayload(payload);
+    return normalizedPayload?.value ?? normalizedPayload;
+  }
+
+  async getAll(empresaId: string, page = 1, pageSize = 20, search?: string, filters?: FiltrosDocumentoVenta, soloStock: boolean = false) {
+    return this.getByEmpresa(empresaId, page, pageSize, search, filters, soloStock);
+  }
+
+  // 🚀 1. VENTAS NORMALES
+  async getByEmpresa(empresaId: string, page = 1, pageSize = 20, search?: string, filters?: FiltrosDocumentoVenta, soloStock: boolean = false) {
     try {
-      const params: any = { page, pageSize };
-      if (search && search.trim()) params.search = search.trim();
-      if (filters) {
-        const cleaned: any = {};
-        let hasData = false;
-        Object.keys(filters).forEach((key) => {
-          const value = (filters as any)[key];
-          if (Array.isArray(value) && value.length > 0) {
-            cleaned[key] = value;
-            hasData = true;
-          } else if (typeof value === 'string' && value.trim() !== '') {
-            cleaned[key] = value;
-            hasData = true;
-          } else if (typeof value === 'number' || typeof value === 'boolean') {
-            cleaned[key] = value;
-            hasData = true;
-          }
-        });
-        if (hasData) params.filters = JSON.stringify(cleaned);
-      }
+      const filtersToSend = buildFiltersString(filters);
+      const requiereSaldoPendiente = filters?.RequiereSaldoPendiente ?? false;
+      const esSalidaConsignacion = filters?.EsSalidaConsignacion ?? false;
+
+      const params = { 
+          page, 
+          pageSize, 
+          search, 
+          filters: filtersToSend, 
+          soloStock,
+          requiereSaldoPendiente,
+          esSalidaConsignacion // 🚀 LO ENVIAMOS AL C#
+      };
 
       const response = await apiClient.get(`${this.baseURL}/empresa/${empresaId}`, { params });
-      const apiResponse = response.data;
+      const apiResponse = this.unwrapResponseValue(response.data);
 
       return {
         data: apiResponse.data || [],
-        meta: {
-          totalRecords: apiResponse.meta?.totalRecords || 0,
-          totalPages:   apiResponse.meta?.totalPages   || 1,
-          currentPage:  apiResponse.meta?.currentPage  || page,
-          pageSize:     apiResponse.meta?.pageSize      || pageSize,
-        },
+        meta: apiResponse.meta || { totalRecords: 0, totalPages: 1, currentPage: page, pageSize }
       };
     } catch (error: any) {
-      console.error('Error al obtener documentos de venta por empresa:', error);
       throw new Error(error.response?.data?.message || 'Error al cargar los documentos de venta');
     }
   }
 
-  async getByPuntoVenta(
-    puntoventaId: string,
-    page: number = 1,
-    pageSize: number = 20,
-    search?: string,
-    filters?: FiltrosDocumentoVenta
-  ) {
+  // 🚀 2. BONIFICACIONES (NUEVO ENDPOINT)
+  async getBonificacionesByEmpresa(empresaId: string, page = 1, pageSize = 20, search?: string, filters?: FiltrosDocumentoVenta, soloStock: boolean = false) {
     try {
-      const params: any = { page, pageSize };
-      if (search && search.trim()) params.search = search.trim();
-      if (filters) {
-        const cleaned: any = {};
-        let hasData = false;
-        Object.keys(filters).forEach((key) => {
-          const value = (filters as any)[key];
-          if (Array.isArray(value) && value.length > 0) {
-            cleaned[key] = value;
-            hasData = true;
-          } else if (typeof value === 'string' && value.trim() !== '') {
-            cleaned[key] = value;
-            hasData = true;
-          } else if (typeof value === 'number' || typeof value === 'boolean') {
-            cleaned[key] = value;
-            hasData = true;
-          }
-        });
-        if (hasData) params.filters = JSON.stringify(cleaned);
-      }
+      const filtersToSend = buildFiltersString(filters);
+      const requiereSaldoPendiente = filters?.RequiereSaldoPendiente ?? false;
 
-      const response = await apiClient.get(`${this.baseURL}/puntoventa/${puntoventaId}`, { params });
-      const apiResponse = response.data;
+      const params = { 
+          page, 
+          pageSize, 
+          search, 
+          filters: filtersToSend, 
+          soloStock,
+          requiereSaldoPendiente // 🚀 Pasamos el nuevo Query Param
+      };
+
+      const response = await apiClient.get(`${this.baseURL}/empresa/${empresaId}/bonificaciones`, { params });
+      const apiResponse = this.unwrapResponseValue(response.data);
 
       return {
         data: apiResponse.data || [],
-        meta: {
-          totalRecords: apiResponse.meta?.totalRecords || 0,
-          totalPages:   apiResponse.meta?.totalPages   || 1,
-          currentPage:  apiResponse.meta?.currentPage  || page,
-          pageSize:     apiResponse.meta?.pageSize      || pageSize,
-        },
+        meta: apiResponse.meta || { totalRecords: 0, totalPages: 1, currentPage: page, pageSize }
       };
     } catch (error: any) {
-      console.error('Error al obtener documentos de venta por punto de venta:', error);
-      throw new Error(error.response?.data?.message || 'Error al cargar los documentos de venta');
+      throw new Error(error.response?.data?.message || 'Error al cargar las bonificaciones');
+    }
+  }
+
+  // 🚀 3. NOTAS DE CRÉDITO PENDIENTES
+  async getNotasCreditoPendientes(
+    empresaId: string,
+    page: number = 1,
+    pageSize: number = 20,
+    search: string = "",
+    filters: FiltrosDocumentoVenta | null = null,
+    soloStock: boolean = false
+  ) {
+    try {
+      const filtersToSend = buildFiltersString(filters);
+      
+      const response = await apiClient.get(`${this.baseURL}/empresa/${empresaId}/notas-credito-pendientes`, { 
+        params: {
+          page,
+          pageSize,
+          search,
+          filters: filtersToSend,
+          soloStock
+        }
+      });
+
+      const payload = this.unwrapResponseValue(response.data);
+      return {
+        ...payload,
+        data: payload?.data || [],
+        meta: payload?.meta || { totalRecords: 0, totalPages: 1, currentPage: page, pageSize }
+      };
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || 'Error al cargar notas de crédito pendientes');
     }
   }
 
   async getById(documentoventaId: string): Promise<DocumentoVenta> {
     try {
       const safeId = documentoventaId?.trim();
-      if (!safeId) {
-        throw new Error('El ID del documento de venta es requerido');
-      }
+      if (!safeId) throw new Error('El ID del documento de venta es requerido');
 
       const response = await apiClient.get(`${this.baseURL}/${safeId}`);
-      const payload = response.data;
+      const payload = this.normalizeResponsePayload(response.data);
 
       if (payload && typeof payload === 'object' && 'isSuccess' in payload && !payload.isSuccess) {
         throw new Error(payload.message || 'No se pudo obtener el documento de venta');
       }
 
-      return payload?.data ?? payload;
+      const normalizedData = this.normalizeResponsePayload(payload?.data ?? payload);
+
+      return normalizedData;
     } catch (error: any) {
-      console.error('Error al obtener documento de venta:', error);
       throw new Error(error.response?.data?.message || 'Error al cargar el documento de venta');
     }
   }
-
   async create(documento: CreateDocumentoVentaDTO): Promise<DocumentoVentaResponse> {
     try {
       const response = await apiClient.post(this.baseURL, documento);

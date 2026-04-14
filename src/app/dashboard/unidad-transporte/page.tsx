@@ -81,7 +81,7 @@ export default function UnidadTransportePage() {
             header: 'Capacidad', 
             width: '120px',
             render: (row: UnidadTransporte) => (
-                <span className="font-semibold text-slate-600 text-sm">{row.peso_maximo} KG</span>
+                <span className="font-semibold text-slate-600 text-sm">{row.peso_maximo} T</span>
             )
         },
         { 
@@ -176,15 +176,16 @@ export default function UnidadTransportePage() {
                     <div className="text-center py-10 text-slate-400 italic">Cargando catálogos...</div>
                 ) : (
                     <div className="flex flex-col gap-5">
+                        {/* 🚀 MODO ESTÁTICO ESTABLE */}
                         <MultiSelect 
                             label="Marcas" 
-                            options={(catalogs['Marca'] || []).map(opt => ({ label: opt.label, value: opt.value }))} 
+                            options={(catalogs['Marca'] || []).map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))} 
                             value={tempFilters.marca} 
                             onChange={(v) => setTempFilters({...tempFilters, marca: v, modelo: []})} 
                         />
                         <MultiSelect 
                             label="Modelos" 
-                            options={modelosDisponiblesParaFiltro.map(opt => ({ label: opt.label, value: opt.value }))} 
+                            options={modelosDisponiblesParaFiltro.map((opt: any) => ({ label: opt.label || opt.value, value: opt.value }))} 
                             value={tempFilters.modelo} 
                             onChange={(v) => setTempFilters({...tempFilters, modelo: v})}
                             placeholder={tempFilters.marca.length === 0 ? "Seleccione marcas primero" : "Todos los modelos"}

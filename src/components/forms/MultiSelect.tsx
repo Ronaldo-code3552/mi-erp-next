@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from 'react';
-import { IconChevronDown, IconCheck, IconSearch } from '@tabler/icons-react';
+import { IconChevronDown, IconCheck, IconSearch, IconLoader } from '@tabler/icons-react';
+import { catalogService } from '@/services/catalogService';
 
 interface Option {
     label: string;
@@ -9,10 +10,14 @@ interface Option {
 
 interface MultiSelectProps {
     label?: string;
-    options: Option[];
+    options?: Option[]; // Ahora es opcional
     value: (string | number)[];
     onChange: (newValue: (string | number)[]) => void;
     placeholder?: string;
+    // 🚀 Nuevas Props para Modo Asíncrono
+    endpoint?: string;
+    fetchParams?: Record<string, any>;
+    searchDebounceMs?: number;
 }
 
 export default function MultiSelect({ 
@@ -20,16 +25,57 @@ export default function MultiSelect({
     options = [], 
     value = [], 
     onChange, 
-    placeholder = "Todos" 
+    placeholder = "Todos",
+    endpoint,
+    fetchParams,
+    searchDebounceMs = 400
 }: MultiSelectProps) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const dropdownRef = useRef<HTMLDivElement>(null);
 
-    // Filtrar opciones por el buscador interno
-    const filteredOptions = options.filter(opt => 
-        String(opt.label || "").toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    // 🚀 Estados para Modo Asíncrono
+    const [asyncOptions, setAsyncOptions] = useState<Option[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const isAsync = !!endpoint;
+
+    // Efecto para búsquedas al backend
+    useEffect(() => {
+        if (!isAsync) return;
+
+        const fetchAsync = async () => {
+            setIsLoading(true);
+            try {
+                const res = await catalogService.getDynamicCatalog(endpoint, {
+                    ...fetchParams,
+                    search: searchTerm
+                });
+                
+                // Mapear la respuesta de SelectOption a nuestro formato interno Option
+                const mappedOptions = res.map((opt: any) => ({
+                    label: opt.label || opt.value || String(opt.key),
+                    value: opt.value || opt.key
+                }));
+                
+                setAsyncOptions(mappedOptions);
+            } catch (error) {
+                console.error("Error en MultiSelect Async:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const timer = window.setTimeout(fetchAsync, searchDebounceMs);
+        return () => window.clearTimeout(timer);
+    }, [endpoint, searchTerm, JSON.stringify(fetchParams), isAsync, searchDebounceMs]);
+
+    // Qué opciones procesamos
+    const activeOptions = isAsync ? asyncOptions : options;
+
+    // Filtrar opciones por el buscador interno (Solo en modo estático)
+    const filteredOptions = isAsync 
+        ? activeOptions 
+        : activeOptions.filter(opt => String(opt.label || "").toLowerCase().includes(searchTerm.toLowerCase()));
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -44,7 +90,7 @@ export default function MultiSelect({
 
     const toggleOption = (optionValue: string | number) => {
         const newValue = value.includes(optionValue)
-            ? value.filter(v => v !== optionValue)
+            ? value.filter(v => String(v) !== String(optionValue))
             : [...value, optionValue];
         onChange(newValue);
     };
@@ -74,18 +120,17 @@ export default function MultiSelect({
                 <div className="absolute top-[calc(100%+4px)] z-[100] w-full bg-white border border-slate-200 rounded-xl shadow-xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
                     
                     {/* BUSCADOR INTERNO */}
-                    <div className="p-2 border-b border-slate-100 bg-slate-50">
-                        <div className="relative">
-                            <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input 
-                                autoFocus
-                                type="text"
-                                placeholder="Buscar filtro..."
-                                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-blue-400 bg-white"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
+                    <div className="p-2 border-b border-slate-100 bg-slate-50 relative">
+                        <IconSearch size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input 
+                            autoFocus
+                            type="text"
+                            placeholder="Buscar filtro..."
+                            className="w-full pl-8 pr-8 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-blue-400 bg-white"
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        {isLoading && <IconLoader size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500 animate-spin" />}
                     </div>
 
                     {/* LISTA DE OPCIONES */}
@@ -93,6 +138,8 @@ export default function MultiSelect({
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((option, index) => {
                                 const hasValidValue = String(option.value ?? '').trim() !== '';
+                                const isSelected = value.some(v => String(v) === String(option.value));
+                                
                                 return (
                                     <div
                                         key={`${option.value}-${index}`}
@@ -101,20 +148,22 @@ export default function MultiSelect({
                                             ${hasValidValue ? 'hover:bg-slate-50 cursor-pointer' : 'bg-slate-50/60 cursor-not-allowed opacity-60'}`}
                                     >
                                         <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all
-                                            ${value.includes(option.value) 
+                                            ${isSelected 
                                                 ? 'bg-blue-600 border-blue-600' 
                                                 : 'border-slate-300 group-hover:border-blue-400'}`}
                                         >
-                                            {value.includes(option.value) && <IconCheck size={12} className="text-white" stroke={4} />}
+                                            {isSelected && <IconCheck size={12} className="text-white" stroke={4} />}
                                         </div>
-                                        <span className={`text-sm truncate ${value.includes(option.value) ? 'text-blue-700 font-semibold' : 'text-slate-600'}`}>
+                                        <span className={`text-sm truncate ${isSelected ? 'text-blue-700 font-semibold' : 'text-slate-600'}`}>
                                             {option.label}
                                         </span>
                                     </div>
                                 );
                             })
                         ) : (
-                            <div className="p-4 text-center text-xs text-slate-400 italic">Sin resultados</div>
+                            <div className="p-4 text-center text-xs text-slate-400 italic">
+                                {isLoading ? 'Buscando...' : 'Sin resultados'}
+                            </div>
                         )}
                     </div>
                 </div>

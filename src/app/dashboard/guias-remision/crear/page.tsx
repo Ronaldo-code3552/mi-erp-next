@@ -3,14 +3,12 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { format, isBefore, parseISO, subDays } from 'date-fns';
+import { format, isBefore, parseISO } from 'date-fns';
 
 // Servicios y Tipos
 import { guiaRemisionService } from '@/services/guiaRemisionService';
 import { productoService } from '@/services/productoService';
 import { presentacionService } from '@/services/presentacionService'; 
-import { documentoCompraService } from '@/services/documentoCompraService'; 
-import documentoVentaService from '@/services/documentoVentaService';
 import { catalogService } from '@/services/catalogService';
 import { useCatalogs } from '@/hooks/useCatalogs'; 
 import { GuiaRemisionPayload, GuiaRemisionDetalle } from '@/types/guiaRemision.types';
@@ -25,6 +23,7 @@ import { conductorService } from '@/services/conductorService';
 import { transportistaService } from '@/services/transportistaService';
 
 import SearchableSelect from '@/components/forms/SearchableSelect';
+import ImportarDocumentoModal from '@/components/forms/ImportarDocumentoModal';
 import Modal from '@/components/ui/Modal'; 
 import { 
     IconDeviceFloppy, IconSend, IconPlus, IconTrash, IconArrowLeft,
@@ -60,7 +59,7 @@ export default function CrearGuiaPage() {
     const ALMACEN_ID = "001"; 
     const USER_ID = "CU0001";
     const TENANT_ID = 1; 
-    const ruc = "20100100100";
+    const EMPRESA_RUC_CLIENTE = "20100100100";
 
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState<any[]>([]);
@@ -72,8 +71,8 @@ export default function CrearGuiaPage() {
     const [docRefParts, setDocRefComponents] = useState({ serie: '', numero: '' });
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const thirtyDaysAgoStr = format(subDays(new Date(), 30), 'yyyy-MM-dd');
 
+    // 🚀 CATÁLOGOS BASE (Sin Cliente ni Proveedor para no saturar memoria)
     const { catalogs, loadingCatalogs, refreshCatalogs } = useCatalogs([
         'TipoDocumentoComercial',
         'Moneda',
@@ -81,8 +80,6 @@ export default function CrearGuiaPage() {
         'UnidadMedida',
         { endpoint: 'AlmacenSerie', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'Almacen', params: { empresaId: EMPRESA_ID } },
-        { endpoint: 'Cliente', params: { tenantId: TENANT_ID, pageSize: 5000 } },
-        { endpoint: 'Proveedor', params: { tenantId: TENANT_ID, pageSize: 5000 } },
         { endpoint: 'Transportista', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'UnidadTransporte', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'ConductorTransporte', params: { empresaId: EMPRESA_ID } }
@@ -110,29 +107,20 @@ export default function CrearGuiaPage() {
     const [transportistaToEdit, setTransportistaToEdit] = useState<any>(null);
 
     const [showDocModal, setShowDocModal] = useState(false);
-    const [isSearchingDocs, setIsSearchingDocs] = useState(false);
-    const initialDocSearchFilters = { tipoDocId: '', entidadId: '', numero: '', monedaId: '001', fechaIni: thirtyDaysAgoStr, fechaFin: todayStr };
-    const [docSearchFilters, setDocSearchFilters] = useState(initialDocSearchFilters);
-    const [docSearchResults, setDocSearchResults] = useState<any[]>([]);
-    const DOC_SEARCH_PAGE_SIZE = 20;
-    const [docSearchPage, setDocSearchPage] = useState(1);
-    const [docSearchMeta, setDocSearchMeta] = useState({ currentPage: 1, totalPages: 1, totalRecords: 0 });
-    const [docSearchHasSearched, setDocSearchHasSearched] = useState(false);
     const [importedReferenceDoc, setImportedReferenceDoc] = useState<{ id: string; type: 'COMPRA' | 'VENTA'; } | null>(null);
-    const [forcedMt00006Client, setForcedMt00006Client] = useState<any | null>(null);
-    const [forcedImportedClient, setForcedImportedClient] = useState<any | null>(null);
-    const [clienteOptionsRemote, setClienteOptionsRemote] = useState<any[]>([]);
-    const [clienteSearchTerm, setClienteSearchTerm] = useState('');
-    const [providerOptions, setProviderOptions] = useState<any[]>([]);
-    const [providerSearchTerm, setProviderSearchTerm] = useState('');
+    
+    // 🚀 ESTADOS FALLBACK Y DICCIONARIO DE DIRECCIONES
+    const [proveedorNombreImportado, setProveedorNombreImportado] = useState<string>('');
+    const [clienteNombreImportado, setClienteNombreImportado] = useState<string>('');
+    const [addressDictionary, setAddressDictionary] = useState<Record<string, string>>({});
+
     const [transportistaOptions, setTransportistaOptions] = useState<any[]>([]);
     const [transportistaSearchTerm, setTransportistaSearchTerm] = useState('');
     const [unidadTransporteOptions, setUnidadTransporteOptions] = useState<any[]>([]);
     const [unidadTransporteSearchTerm, setUnidadTransporteSearchTerm] = useState('');
     const [conductorOptions, setConductorOptions] = useState<any[]>([]);
     const [conductorSearchTerm, setConductorSearchTerm] = useState('');
-    const clienteCatalog = useMemo(() => catalogs['Cliente'] || [], [catalogs]);
-    const proveedorCatalog = useMemo(() => catalogs['Proveedor'] || [], [catalogs]);
+    
     const transportistaCatalog = useMemo(() => catalogs['Transportista'] || [], [catalogs]);
     const unidadTransporteCatalog = useMemo(() => catalogs['UnidadTransporte'] || [], [catalogs]);
     const conductorCatalog = useMemo(() => catalogs['ConductorTransporte'] || [], [catalogs]);
@@ -140,10 +128,10 @@ export default function CrearGuiaPage() {
     const [items, setItems] = useState<GuiaRemisionDetalle[]>([]);
 
     const mapProductToOption = (p: any) => ({
-        key: String(p.bienId || '').trim(), // ID real para grabar en detalle
-        value: String(p.bienId || '').trim(), // Valor técnico: debe ser ID para que funcione U.M./presentaciones
-        label: String(p.descripcion || '').trim(), // Texto visible principal
-        aux: String(p.codigo_existencia || '').trim(), // Código de existencia visible como secundario
+        key: String(p.bienId || '').trim(), 
+        value: String(p.bienId || '').trim(), 
+        label: String(p.descripcion || '').trim(), 
+        aux: String(p.codigo_existencia || '').trim(), 
         raw: p
     });
 
@@ -154,11 +142,12 @@ export default function CrearGuiaPage() {
     }, [catalogs]);
 
     const filteredSeries = useMemo(() => {
+        const selectedAlmacenId = String(formData.id_almacen_inicio || ALMACEN_ID).trim();
         return catalogs['AlmacenSerie']?.filter((s: any) => 
-            String(s.originalData?.almacenId).trim() === ALMACEN_ID && 
+            String(s.originalData?.almacenId).trim() === selectedAlmacenId && 
             String(s.originalData?.tipodoccomercialId).trim() === formData.tipodoccomercialId
         ) || [];
-    }, [catalogs, formData.tipodoccomercialId]);
+    }, [catalogs, formData.id_almacen_inicio, formData.tipodoccomercialId]);
 
     const documentoReferenciaTipoJSON = useMemo(() => {
         return catalogs['TipoDocumentoComercial']?.filter((t: any) => {
@@ -263,7 +252,6 @@ export default function CrearGuiaPage() {
 
         try {
             const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 100, normalizedTerm);
-            // Si llega una respuesta vieja, la ignoramos para no pisar la búsqueda actual.
             if (requestId !== productSearchReqIdRef.current) return;
             const remote = (res?.data || [])
                 .filter((p: any) => p.estado !== 0 && p.estado !== false && p.estado !== '0')
@@ -284,50 +272,37 @@ export default function CrearGuiaPage() {
                 );
                 return sameProductIds(prev, next) ? prev : next;
             });
-        } catch {
-            // No limpiamos el DDL por fallo puntual de red.
-        }
+        } catch {}
     };
 
-    const mergeProviderOptions = (...lists: any[][]) => {
-        const seen = new Set<string>();
-        const result: any[] = [];
-        lists.flat().forEach((opt: any) => {
-            const id = String(opt?.value || '').trim();
-            if (!id || seen.has(id)) return;
-            seen.add(id);
-            result.push(opt);
-        });
-        return result;
+    // 🚀 LÓGICA DE DICCIONARIO DE DIRECCIONES
+    const handleClienteSearch = async (term: string) => {
+        if (!term.trim()) return;
+        try {
+            const results = await catalogService.getDynamicCatalog('Cliente', { tenantId: TENANT_ID, search: term });
+            setAddressDictionary(prev => {
+                const next = { ...prev };
+                results.forEach((r: any) => {
+                    next[String(r.value)] = r.originalData?.direccion || r.originalData?.direccionCompleta || '';
+                });
+                return next;
+            });
+        } catch {}
     };
 
-    const sameProviderIds = (a: any[], b: any[]) => {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (String(a[i]?.value || '').trim() !== String(b[i]?.value || '').trim()) return false;
-        }
-        return true;
+    const handleProviderSearch = async (term: string) => {
+        if (!term.trim()) return;
+        try {
+            const results = await catalogService.getDynamicCatalog('Proveedor', { tenantId: TENANT_ID, search: term });
+            setAddressDictionary(prev => {
+                const next = { ...prev };
+                results.forEach((r: any) => {
+                    next[String(r.value)] = r.originalData?.direccion || r.originalData?.direccionCompleta || '';
+                });
+                return next;
+            });
+        } catch {}
     };
-
-    useEffect(() => {
-        // Cuando hay texto de búsqueda, no pisamos los resultados remotos.
-        if (providerSearchTerm.trim()) return;
-
-        const catalogProviders = proveedorCatalog as any[];
-        setProviderOptions(prev => {
-            const selectedId = String(formData.proveedorId || '').trim();
-            const selectedFromPrev = prev.find((x: any) => String(x.value || '').trim() === selectedId);
-            const selectedFromCatalog = catalogProviders.find((x: any) => String(x.value || '').trim() === selectedId);
-
-            const next = mergeProviderOptions(
-                selectedFromPrev ? [selectedFromPrev] : [],
-                selectedFromCatalog ? [selectedFromCatalog] : [],
-                catalogProviders
-            );
-
-            return sameProviderIds(prev, next) ? prev : next;
-        });
-    }, [proveedorCatalog, formData.proveedorId, providerSearchTerm]);
 
     useEffect(() => {
         if (filteredSeries.length > 0) {
@@ -358,7 +333,7 @@ export default function CrearGuiaPage() {
         switch (motivoId) {
             case 'MT00003': case 'MT00008': return { showProv: true, showCli: false, showDestAlmacen: false, start: 'PROV', end: 'ALM_ORIG', refType: 'COMPRA' };
             case 'MT00004': case 'MT00001': case 'MT00002': case 'MT00009': return { showProv: false, showCli: true, showDestAlmacen: false, start: 'ALM_ORIG', end: 'CLI', refType: 'VENTA' };
-            case 'MT00005': return { showProv: false, showCli: true, showDestAlmacen: false, start: 'CLI', end: 'ALM_ORIG', refType: 'VENTA' };
+            case 'MT00005': return { showProv: true, showCli: false, showDestAlmacen: false, start: 'ALM_ORIG', end: 'PROV', refType: 'COMPRA' };
             case 'MT00013': return { showProv: false, showCli: true, showDestAlmacen: false, start: 'ALM_ORIG', end: 'CLI', allowManual: true, refType: 'VENTA' };
             case 'MT00007': return { showProv: true, showCli: false, showDestAlmacen: false, start: 'ALM_ORIG', end: 'PROV', refType: 'COMPRA' };
             case 'MT00006': return { showProv: false, showCli: true, showDestAlmacen: true, start: 'ALM_ORIG', end: 'ALM_DEST', refType: 'VENTA' }; 
@@ -377,29 +352,74 @@ export default function CrearGuiaPage() {
     const canSearchDocument = requiresDocumentReference;
 
     useEffect(() => {
-        if (!formData.motivotrasladoId) return;
+        if (formData.motivotrasladoId !== 'MT00006') return;
 
-        const findProveedorById = (proveedorId: string) => {
-            const targetId = String(proveedorId || '').trim();
-            if (!targetId) return null;
-            const fromProviderOptions = providerOptions.find((x: any) => String(x.value || '').trim() === targetId);
-            if (fromProviderOptions) return fromProviderOptions;
-            return (catalogs['Proveedor'] || []).find((x: any) => String(x.value || '').trim() === targetId) || null;
+        let cancelled = false;
+
+        const fetchClienteEmpresa = async () => {
+            try {
+                const results = await catalogService.getDynamicCatalog('Cliente', {
+                    tenantId: TENANT_ID,
+                    search: EMPRESA_RUC_CLIENTE
+                });
+
+                if (cancelled) return;
+
+                const clienteEmpresa = results.find((item: any) => {
+                    const numeroDoc = String(
+                        item?.originalData?.num_docident ||
+                        item?.originalData?.numero_doc ||
+                        item?.aux ||
+                        ''
+                    ).trim();
+                    return numeroDoc === EMPRESA_RUC_CLIENTE;
+                });
+
+                if (!clienteEmpresa) {
+                    toast.error(`No se encontró el cliente con RUC ${EMPRESA_RUC_CLIENTE} para este traslado.`);
+                    return;
+                }
+
+                const clienteId = String(clienteEmpresa.value || '').trim();
+                const clienteLabel = String(clienteEmpresa.label || '').trim();
+                const clienteDireccion = String(
+                    clienteEmpresa.originalData?.direccion ||
+                    clienteEmpresa.originalData?.direccionCompleta ||
+                    ''
+                ).trim();
+
+                setClienteNombreImportado(clienteLabel);
+                if (clienteDireccion) {
+                    setAddressDictionary(prev => ({ ...prev, [clienteId]: clienteDireccion }));
+                }
+
+                setFormData(prev => {
+                    if (String(prev.clienteId || '').trim() === clienteId) return prev;
+                    return { ...prev, clienteId };
+                });
+            } catch {
+                if (!cancelled) {
+                    toast.error("No se pudo cargar el cliente correspondiente al traslado entre establecimientos.");
+                }
+            }
         };
+
+        fetchClienteEmpresa();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [formData.motivotrasladoId]);
+
+    // 🚀 LÓGICA DE DIRECCIONES ACTUALIZADA
+    useEffect(() => {
+        if (!formData.motivotrasladoId) return;
 
         const getAddress = (sourceType: string) => {
             if (sourceType === 'ALM_ORIG') return catalogs['Almacen']?.find((x:any) => x.value === formData.id_almacen_inicio)?.originalData?.direccion1 || '';
             if (sourceType === 'ALM_DEST') return catalogs['Almacen']?.find((x:any) => x.value === formData.id_almacen_destino)?.originalData?.direccion1 || '';
-            if (sourceType === 'CLI') {
-                const clienteId = String(formData.clienteId || '').trim();
-                const fromCatalog = catalogs['Cliente']?.find((x:any) => String(x.value || '').trim() === clienteId);
-                if (fromCatalog?.originalData?.direccion) return fromCatalog.originalData.direccion;
-                if (forcedImportedClient && String(forcedImportedClient.value || '').trim() === clienteId) {
-                    return forcedImportedClient.originalData?.direccion || '';
-                }
-                return '';
-            }
-            if (sourceType === 'PROV') return findProveedorById(String(formData.proveedorId || ''))?.originalData?.direccion || '';
+            if (sourceType === 'CLI') return addressDictionary[String(formData.clienteId || '')] || '';
+            if (sourceType === 'PROV') return addressDictionary[String(formData.proveedorId || '')] || '';
             return '';
         };
 
@@ -413,133 +433,19 @@ export default function CrearGuiaPage() {
             return prev;
         });
 
-    }, [formData.motivotrasladoId, formData.clienteId, formData.proveedorId, formData.id_almacen_inicio, formData.id_almacen_destino, currentRules, catalogs, forcedImportedClient, providerOptions]);
-
-    const normalizeDoc = (doc: unknown) => String(doc || '').replace(/\D/g, '').trim();
-    const targetRuc = normalizeDoc(ruc);
-    const getClienteDoc = (cliente: any) =>
-        normalizeDoc(
-            cliente?.originalData?.num_docident ||
-            cliente?.originalData?.numDocIdent ||
-            cliente?.originalData?.numero_doc ||
-            cliente?.originalData?.nro_documento ||
-            cliente?.num_docident ||
-            cliente?.numDocIdent ||
-            cliente?.numero_doc ||
-            cliente?.nro_documento ||
-            cliente?.aux ||
-            ''
-        );
-    const findCompanyClient = () => {
-        const inCatalog = (catalogs['Cliente'] || []).find((c: any) => getClienteDoc(c) === targetRuc);
-        if (inCatalog) return inCatalog;
-        return forcedMt00006Client;
-    };
-
-    const mergeClienteOptions = (...lists: any[][]) => {
-        const seen = new Set<string>();
-        const result: any[] = [];
-        lists.flat().forEach((opt: any) => {
-            const id = String(opt?.value || '').trim();
-            if (!id || seen.has(id)) return;
-            seen.add(id);
-            result.push(opt);
-        });
-        return result;
-    };
-
-    const sameClienteIds = (a: any[], b: any[]) => {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (String(a[i]?.value || '').trim() !== String(b[i]?.value || '').trim()) return false;
-        }
-        return true;
-    };
-
-    const clienteOptions = useMemo(() => {
-        let options = clienteSearchTerm.trim() ? clienteOptionsRemote : clienteCatalog;
-        if (formData.motivotrasladoId === 'MT00006') {
-            const inCatalog = options.filter((c:any) => getClienteDoc(c) === targetRuc);
-            if (inCatalog.length > 0) return inCatalog;
-            return forcedMt00006Client ? [forcedMt00006Client] : [];
-        }
-        if (forcedImportedClient) {
-            const exists = options.some((c: any) => String(c.value) === String(forcedImportedClient.value));
-            if (!exists) options = [...options, forcedImportedClient];
-        }
-        return options;
-    }, [clienteCatalog, clienteOptionsRemote, clienteSearchTerm, formData.motivotrasladoId, forcedMt00006Client, forcedImportedClient]);
-
-    const handleClienteSearch = async (term: string) => {
-        setClienteSearchTerm(term);
-        if (formData.motivotrasladoId === 'MT00006') return;
-
-        if (!term.trim()) {
-            setClienteOptionsRemote([]);
-            return;
-        }
-
-        try {
-            const results = await catalogService.getDynamicCatalog('Cliente', {
-                tenantId: String(TENANT_ID),
-                pageSize: 100,
-                search: term || undefined
-            });
-
-            setClienteOptionsRemote(prev => {
-                const selectedId = String(formData.clienteId || '').trim();
-                const selectedFromPrev = prev.find((x: any) => String(x.value || '').trim() === selectedId);
-                const selectedFromCatalog = (clienteCatalog || []).find((x: any) => String(x.value || '').trim() === selectedId);
-                const selectedImported =
-                    forcedImportedClient && String(forcedImportedClient.value || '').trim() === selectedId
-                        ? forcedImportedClient
-                        : null;
-
-                const next = mergeClienteOptions(
-                    selectedFromPrev ? [selectedFromPrev] : [],
-                    selectedFromCatalog ? [selectedFromCatalog] : [],
-                    selectedImported ? [selectedImported] : [],
-                    results as any[]
-                );
-                return sameClienteIds(prev, next) ? prev : next;
-            });
-        } catch {
-            // no-op para no limpiar el DDL si falla una búsqueda remota puntual
-        }
-    };
-
-    useEffect(() => {
-        const loadCompanyClientIfMissing = async () => {
-            if (formData.motivotrasladoId !== 'MT00006') return;
-            if (findCompanyClient()) return;
-            try {
-                const results = await catalogService.getDynamicCatalog('Cliente', {
-                    tenantId: String(TENANT_ID),
-                    search: ruc,
-                    pageSize: 50
-                });
-                const companyClient = results.find((c: any) => getClienteDoc(c) === targetRuc) || null;
-                if (companyClient) setForcedMt00006Client(companyClient);
-            } catch {
-                // no-op: evitamos romper UI por fallo de red puntual
-            }
-        };
-        loadCompanyClientIfMissing();
-    }, [formData.motivotrasladoId, catalogs, ruc, targetRuc, TENANT_ID]);
-
-    useEffect(() => {
-        if (formData.motivotrasladoId !== 'MT00006') return;
-        const companyClient = findCompanyClient() || clienteOptions[0];
-        const expectedClienteId = String(companyClient?.value || '').trim();
-        if (!expectedClienteId) return;
-        if (String(formData.clienteId || '').trim() === expectedClienteId) return;
-
-        setFormData(prev => ({ ...prev, clienteId: expectedClienteId }));
-    }, [formData.motivotrasladoId, formData.clienteId, clienteOptions, catalogs]);
+    }, [formData.motivotrasladoId, formData.id_almacen_inicio, formData.id_almacen_destino, formData.clienteId, formData.proveedorId, currentRules, catalogs, addressDictionary]);
 
     const handleChange = (e: any) => {
         const { name, value } = e.target;
-        
+        if ((name === 'clienteId' || name === 'proveedorId') && e.option) {
+            // 1. Guardamos la dirección
+            const dir = e.option.originalData?.direccion || e.option.originalData?.direccionCompleta || '';
+            setAddressDictionary(prev => ({ ...prev, [String(value)]: dir }));
+            
+            // 2. 🚀 Guardamos el texto visible en el Fallback para evitar que se ponga en "--SELECCIONE--"
+            if (name === 'clienteId') setClienteNombreImportado(e.option.label || '');
+            if (name === 'proveedorId') setProveedorNombreImportado(e.option.label || '');
+        }
         if (name === 'fecha_traslado') {
             const fEmision = parseISO(formData.fecha_emision!);
             const fTraslado = parseISO(value);
@@ -551,17 +457,11 @@ export default function CrearGuiaPage() {
         } 
         else if (name === 'motivotrasladoId') {
             const requiresReference = REFERENCE_REQUIRED_MOTIVOS.includes(value);
-            let autoClienteId = '';
             
-            if (value === 'MT00006' && catalogs['Cliente']) {
-                const clienteMismaEmpresa = findCompanyClient();
-                if (clienteMismaEmpresa) autoClienteId = String(clienteMismaEmpresa.value || '').trim();
-            }
-
             setFormData(prev => ({ 
                 ...prev, 
                 [name]: value,
-                clienteId: autoClienteId,
+                clienteId: '',
                 proveedorId: '', id_almacen_destino: '', otro_motivo_traslado: '',
                 ...(requiresReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '' })
             }));
@@ -675,14 +575,13 @@ export default function CrearGuiaPage() {
     const mapCompraDetallesToGuiaItems = (compra: DocumentoCompra): GuiaRemisionDetalle[] => {
         if (!Array.isArray(compra?.detalles)) return [];
         return compra.detalles.map((detalle: any, idx: number) => {
-            // 🚀 LIMPIEZA PROFUNDA DE IDs
             const bienIdLimpio = detalle?.bienId ? String(detalle.bienId).trim() : '';
             const presentacionIdLimpia = detalle?.presentacionId ? String(detalle.presentacionId).trim() : '';
             const cantidadNum = Number(detalle?.cantidad ?? 0) || 0;
             
             return {
                 item: idx + 1, 
-                bienId: bienIdLimpio, // Usamos el ID limpio
+                bienId: bienIdLimpio,
                 presentacionId: presentacionIdLimpia || null, 
                 cantidad: cantidadNum,
                 conversion_total: Number(detalle?.conversionTotal ?? 0) || 0, 
@@ -707,17 +606,16 @@ export default function CrearGuiaPage() {
         });
     };
 
-const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle[] => {
+    const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle[] => {
         if (!Array.isArray(venta?.detalles)) return [];
         return venta.detalles.map((detalle: any, idx: number) => {
-            // 🚀 LIMPIEZA PROFUNDA DE IDs
             const bienIdLimpio = detalle?.bienId ? String(detalle.bienId).trim() : '';
             const presentacionIdLimpia = detalle?.presentacionId ? String(detalle.presentacionId).trim() : '';
             const cantidadNum = Number(detalle?.cantidad ?? 0) || 0;
             
             return {
                 item: idx + 1, 
-                bienId: bienIdLimpio, // Usamos el ID limpio
+                bienId: bienIdLimpio,
                 presentacionId: presentacionIdLimpia || null, 
                 cantidad: cantidadNum,
                 conversion_total: Number(detalle?.conversionTotal ?? 0) || 0, 
@@ -742,110 +640,98 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
         });
     };
 
-    const handleSelectCompraDocument = async (documentocompraId: string) => {
-        if (!documentocompraId) return toast.error('Documento de compra inválido');
-        setIsSearchingDocs(true);
-        try {
-            const res = await documentoCompraService.getById(documentocompraId);
-            if (!res?.isSuccess || !res?.data) return toast.error(res?.message || 'No se pudo obtener el documento de compra');
-            
-            const compra = res.data;
-            const referencia = [(compra.serie || '').trim(), (compra.numero || '').trim()].filter(Boolean).join(' - ');
-            const refTypeOption = documentoReferenciaTipoJSON.find((t: any) => 
-                String(t.key).trim() === String(compra.tipodoccomercialId).trim() || 
-                String(t.value).trim().toUpperCase() === String(compra.tipoDocumentoComercial?.descripcion || '').trim().toUpperCase()
-            );
-            // 🚀 BÚSQUEDA Y FORMATEO SEGURO DEL ID DEL PROVEEDOR
-            const rawProveedorId = compra.proveedorId || compra.id_proveedor || compra.proveedor?.proveedorId || '';
-            const provIdSeguro = rawProveedorId 
-                ? (!isNaN(Number(rawProveedorId)) ? String(rawProveedorId).trim().padStart(5, '0') : String(rawProveedorId).trim()) 
-                : '';
+    const applyImportedCompraDocument = (compra: DocumentoCompra) => {
+        if (!compra?.documentocompraId) return toast.error('Documento de compra inválido');
 
-            setDocRefComponents({ serie: (compra.serie || '').trim(), numero: (compra.numero || '').trim() });
-            
-            setFormData((prev) => ({
-                ...prev, 
-                proveedorId: provIdSeguro || prev.proveedorId, 
-                monedaId: compra.monedaId ? String(compra.monedaId).trim() : prev.monedaId,
-                documentoReferencia: referencia || prev.documentoReferencia, 
-                documentoReferenciaTipo: refTypeOption?.codSunat || prev.documentoReferenciaTipo,
-                doc_referencia: refTypeOption?.aux || prev.doc_referencia, 
-                doc_referencia_numero: compra.documentocompraId || prev.doc_referencia_numero
-            }));
-            
-            const mappedItems = mapCompraDetallesToGuiaItems(compra);
-            if (mappedItems.length > 0) {
-                const allowedItems = filterImportableItems(mappedItems);
-                setItems(allowedItems);
-            }
-            
-            setImportedReferenceDoc({ id: compra.documentocompraId, type: 'COMPRA' });
-            setShowDocModal(false);
-            toast.success('Documento de compra importado');
-        } catch (error: any) { toast.error(error?.response?.data?.message || 'Error al importar documento'); } 
-        finally { setIsSearchingDocs(false); }
+        const referencia = [(compra.serie || '').trim(), (compra.numero || '').trim()].filter(Boolean).join(' - ');
+        const refTypeOption = documentoReferenciaTipoJSON.find((t: any) =>
+            String(t.key).trim() === String(compra.tipodoccomercialId).trim() ||
+            String(t.value).trim().toUpperCase() === String(compra.tipoDocumentoComercial?.descripcion || '').trim().toUpperCase()
+        );
+
+        const rawProveedorId = compra.proveedorId || (compra as any).id_proveedor || compra.proveedor?.proveedorId || '';
+        const provIdSeguro = rawProveedorId ? (!isNaN(Number(rawProveedorId)) ? String(rawProveedorId).trim().padStart(5, '0') : String(rawProveedorId).trim()) : '';
+        const provNombre = compra.proveedor?.descripcion || (compra as any).proveedornombre || '';
+        const provDireccion = (compra.proveedor as any)?.direccion || (compra.proveedor as any)?.direccionCompleta || '';
+
+        setProveedorNombreImportado(provNombre);
+        if (provDireccion) setAddressDictionary(prev => ({ ...prev, [provIdSeguro]: provDireccion }));
+
+        setDocRefComponents({ serie: (compra.serie || '').trim(), numero: (compra.numero || '').trim() });
+
+        setFormData((prev) => ({
+            ...prev,
+            proveedorId: provIdSeguro || prev.proveedorId,
+            monedaId: compra.monedaId ? String(compra.monedaId).trim() : prev.monedaId,
+            documentoReferencia: referencia || prev.documentoReferencia,
+            documentoReferenciaTipo: refTypeOption?.codSunat || prev.documentoReferenciaTipo,
+            doc_referencia: refTypeOption?.aux || prev.doc_referencia,
+            doc_referencia_numero: compra.documentocompraId || prev.doc_referencia_numero
+        }));
+
+        const mappedItems = mapCompraDetallesToGuiaItems(compra);
+        if (mappedItems.length > 0) {
+            const allowedItems = filterImportableItems(mappedItems);
+            setItems(allowedItems);
+        }
+
+        setImportedReferenceDoc({ id: compra.documentocompraId, type: 'COMPRA' });
+        setShowDocModal(false);
+        toast.success('Documento de compra importado');
     };
 
-    const handleSelectVentaDocument = async (documentoventaId: string) => {
-        if (!documentoventaId) return toast.error('Documento inválido');
-        setIsSearchingDocs(true);
-        try {
-            const venta = await documentoVentaService.getById(documentoventaId);
-            if (!venta?.documentoventaId) return toast.error('No se pudo obtener el documento');
+    const applyImportedVentaDocument = (venta: DocumentoVenta) => {
+        if (!venta?.documentoventaId) return toast.error('Documento inválido');
 
-            const referencia = [(venta.serie || '').trim(), (venta.numero || '').trim()].filter(Boolean).join(' - ');
-            const refTypeOption = documentoReferenciaTipoJSON.find((t: any) => 
-                String(t.key).trim() === String(venta.tipodoccomercialId).trim() || 
-                String(t.value).trim().toUpperCase() === String(venta.tipoDocumentoComercial?.descripcion || '').trim().toUpperCase()
-            );
+        const referencia = [(venta.serie || '').trim(), (venta.numero || '').trim()].filter(Boolean).join(' - ');
+        const refTypeOption = documentoReferenciaTipoJSON.find((t: any) =>
+            String(t.key).trim() === String(venta.tipodoccomercialId).trim() ||
+            String(t.value).trim().toUpperCase() === String(venta.tipoDocumentoComercial?.descripcion || '').trim().toUpperCase()
+        );
 
-            // 🚀 BÚSQUEDA Y FORMATEO SEGURO DEL ID DEL CLIENTE (Limpia espacios y rellena 0s si es numérico)
-            const rawClienteId = venta.clienteId || venta.id_cliente || venta.cliente?.clienteId || '';
-            const cliIdSeguro = rawClienteId 
-                ? (!isNaN(Number(rawClienteId)) ? String(rawClienteId).trim().padStart(5, '0') : String(rawClienteId).trim()) 
-                : '';
-            const clienteExisteEnCatalogo = (catalogs['Cliente'] || []).some(
-                (c: any) => String(c.value || '').trim() === cliIdSeguro
-            );
-            if (cliIdSeguro && !clienteExisteEnCatalogo) {
-                setForcedImportedClient({
-                    key: cliIdSeguro,
-                    value: cliIdSeguro,
-                    label: venta.cliente?.descripcion || `CLIENTE ${cliIdSeguro}`,
-                    aux: venta.cliente?.numDocIdent || '',
-                    originalData: {
-                        clienteId: cliIdSeguro,
-                        descripcion: venta.cliente?.descripcion || `CLIENTE ${cliIdSeguro}`,
-                        num_docident: venta.cliente?.numDocIdent || '',
-                        direccion: venta.cliente?.direccion || ''
-                    }
-                });
-                toast.warning(`Cliente importado fuera del catálogo actual: ${venta.cliente?.descripcion || cliIdSeguro}`);
-            }
+        const rawClienteId = venta.clienteId || (venta as any).id_cliente || (venta.cliente as any)?.clienteId || '';
+        const cliIdSeguro = rawClienteId ? (!isNaN(Number(rawClienteId)) ? String(rawClienteId).trim().padStart(5, '0') : String(rawClienteId).trim()) : '';
+        const cliNombre = venta.cliente?.descripcion || (venta as any).proveedor?.descripcion || '';
+        const cliDireccion = (venta.cliente as any)?.direccion || (venta.cliente as any)?.direccionCompleta || '';
 
-            setDocRefComponents({ serie: (venta.serie || '').trim(), numero: (venta.numero || '').trim() });
-            
-            setFormData((prev) => ({
-                ...prev, 
-                clienteId: cliIdSeguro || prev.clienteId, 
-                monedaId: venta.monedaId ? String(venta.monedaId).trim() : prev.monedaId,
-                documentoReferencia: referencia || prev.documentoReferencia, 
-                documentoReferenciaTipo: refTypeOption?.codSunat || prev.documentoReferenciaTipo,
-                doc_referencia: refTypeOption?.aux || prev.doc_referencia, 
-                doc_referencia_numero: venta.documentoventaId || prev.doc_referencia_numero
-            }));
+        setClienteNombreImportado(cliNombre);
+        if (cliDireccion) setAddressDictionary(prev => ({ ...prev, [cliIdSeguro]: cliDireccion }));
 
-            const mappedItems = mapVentaDetallesToGuiaItems(venta);
-            if (mappedItems.length > 0) {
-                const allowedItems = filterImportableItems(mappedItems);
-                setItems(allowedItems);
-            }
+        setDocRefComponents({ serie: (venta.serie || '').trim(), numero: (venta.numero || '').trim() });
 
-            setImportedReferenceDoc({ id: venta.documentoventaId, type: 'VENTA' });
-            setShowDocModal(false);
-            toast.success('Documento de venta importado');
-        } catch (error: any) { toast.error('Error al importar documento'); } 
-        finally { setIsSearchingDocs(false); }
+        setFormData((prev) => ({
+            ...prev,
+            clienteId: cliIdSeguro || prev.clienteId,
+            monedaId: venta.monedaId ? String(venta.monedaId).trim() : prev.monedaId,
+            documentoReferencia: referencia || prev.documentoReferencia,
+            documentoReferenciaTipo: refTypeOption?.codSunat || prev.documentoReferenciaTipo,
+            doc_referencia: refTypeOption?.aux || prev.doc_referencia,
+            doc_referencia_numero: venta.documentoventaId || prev.doc_referencia_numero
+        }));
+
+        const mappedItems = mapVentaDetallesToGuiaItems(venta);
+        if (mappedItems.length > 0) {
+            const allowedItems = filterImportableItems(mappedItems);
+            setItems(allowedItems);
+        }
+
+        setImportedReferenceDoc({ id: venta.documentoventaId, type: 'VENTA' });
+        setShowDocModal(false);
+        toast.success('Documento de venta importado');
+    };
+
+    const handleImportedReferenceDocument = (cabecera: any) => {
+        if (currentRules.refType === 'COMPRA') {
+            applyImportedCompraDocument(cabecera as DocumentoCompra);
+            return;
+        }
+
+        if (currentRules.refType === 'VENTA') {
+            applyImportedVentaDocument(cabecera as DocumentoVenta);
+            return;
+        }
+
+        toast.error('Este motivo no soporta importación de documentos.');
     };
 
     const handleClearImportedReference = () => {
@@ -858,46 +744,16 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
         setIsManualCorrelativo(modoManualActual);
         setItems([]);
         setImportedReferenceDoc(null);
-        setForcedImportedClient(null);
+        setProveedorNombreImportado('');
+        setClienteNombreImportado('');
         setFormData({
             ...initialFormData,
             tipodoccomercialId: tipoDocActual,
             serie: serieActual,
             correlativo: correlativoActual
         });
-        setDocSearchFilters(initialDocSearchFilters);
-        setDocSearchResults([]);
-        setDocSearchPage(1);
-        setDocSearchMeta({ currentPage: 1, totalPages: 1, totalRecords: 0 });
-        setDocSearchHasSearched(false);
         setShowDocModal(false);
         toast.success('Importación limpiada.');
-    };
-
-    const handleProviderSearch = async (term: string) => {
-        setProviderSearchTerm(term);
-        try {
-            const results = await catalogService.getDynamicCatalog('Proveedor', {
-                tenantId: String(TENANT_ID),
-                pageSize: 100,
-                search: term || undefined
-            });
-            setProviderOptions(prev => {
-                const selectedId = String(formData.proveedorId || '').trim();
-                const selectedFromPrev = prev.find((x: any) => String(x.value || '').trim() === selectedId);
-                const selectedFromCatalog = (proveedorCatalog || []).find((x: any) => String(x.value || '').trim() === selectedId);
-
-                const next = mergeProviderOptions(
-                    selectedFromPrev ? [selectedFromPrev] : [],
-                    selectedFromCatalog ? [selectedFromCatalog] : [],
-                    results as any[]
-                );
-
-                return sameProviderIds(prev, next) ? prev : next;
-            });
-        } catch {
-            // Conservamos estado actual para no limpiar el DDL por un error puntual.
-        }
     };
 
     const mergeTransportistaOptions = (...lists: any[][]) => {
@@ -959,9 +815,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
 
                 return sameTransportistaIds(prev, next) ? prev : next;
             });
-        } catch {
-            // Conservamos estado actual para no limpiar el DDL por un error puntual.
-        }
+        } catch { }
     };
 
     const mergeUnidadTransporteOptions = (...lists: any[][]) => {
@@ -1021,9 +875,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                 );
                 return sameUnidadTransporteIds(prev, next) ? prev : next;
             });
-        } catch {
-            // Conservamos estado actual para no limpiar el DDL por un error puntual.
-        }
+        } catch { }
     };
 
     const mergeConductorOptions = (...lists: any[][]) => {
@@ -1083,9 +935,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                 );
                 return sameConductorIds(prev, next) ? prev : next;
             });
-        } catch {
-            // Conservamos estado actual para no limpiar el DDL por un error puntual.
-        }
+        } catch { }
     };
 
     const handleSubmit = async (enviarSunat: boolean) => {
@@ -1215,59 +1065,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
 
     const handleOpenDocSearch = () => {
         if (importedReferenceDoc) return toast.warning("Limpie la importación actual primero.");
-        setDocSearchFilters(prev => ({ ...prev, entidadId: currentRules.showProv ? (formData.proveedorId || '') : (formData.clienteId || '') }));
         setShowDocModal(true);
-    };
-
-    const fetchDocumentsPage = async (pageToLoad: number) => {
-        if (!['COMPRA', 'VENTA'].includes(currentRules.refType || '')) return;
-        setIsSearchingDocs(true);
-        try {
-            const filtersObj: any = {};
-            if (docSearchFilters.tipoDocId) filtersObj.tipo_documento = [docSearchFilters.tipoDocId];
-            if (docSearchFilters.monedaId) filtersObj.moneda = [docSearchFilters.monedaId];
-            if (docSearchFilters.fechaIni) filtersObj.fecha_inicio = docSearchFilters.fechaIni;
-            if (docSearchFilters.fechaFin) filtersObj.fecha_fin = docSearchFilters.fechaFin;
-
-            let mappedResults = [];
-            let resMeta = null;
-
-            if (currentRules.refType === 'COMPRA') {
-                if (docSearchFilters.entidadId) filtersObj.proveedor = [docSearchFilters.entidadId];
-                const res = await documentoCompraService.getByEmpresa(EMPRESA_ID, pageToLoad, DOC_SEARCH_PAGE_SIZE, docSearchFilters.numero || "", filtersObj);
-                if (res.isSuccess && res.data) {
-                    const rows = Array.isArray(res.data) ? res.data : [];
-                    resMeta = res.meta;
-                    mappedResults = rows.map((doc: any) => ({
-                        id: doc.documentocompraId, fecha: doc.fechaEmision ? format(parseISO(doc.fechaEmision), 'dd/MM/yyyy') : '',
-                        nroDoc: `${doc.serie || ''} - ${doc.numero || ''}`.trim(), entidad: doc.proveedor?.descripcion || 'Sin Proveedor', moneda: doc.monedaId, raw: doc
-                    }));
-                }
-            } else {
-                if (docSearchFilters.entidadId) filtersObj.cliente = [docSearchFilters.entidadId];
-                const res = await documentoVentaService.getByEmpresa(EMPRESA_ID, pageToLoad, DOC_SEARCH_PAGE_SIZE, docSearchFilters.numero || "", filtersObj);
-                if (res?.data) {
-                    const rows = Array.isArray(res.data) ? res.data : [];
-                    resMeta = res.meta;
-                    mappedResults = rows.map((doc: any) => ({
-                        id: doc.documentoventaId, fecha: doc.fechaEmision ? format(parseISO(doc.fechaEmision), 'dd/MM/yyyy') : '',
-                        nroDoc: `${doc.serie || ''} - ${doc.numero || ''}`.trim(), entidad: doc.cliente?.descripcion || doc.proveedor?.descripcion || 'Sin Entidad', moneda: doc.monedaId, raw: doc
-                    }));
-                }
-            }
-            
-            setDocSearchResults(mappedResults);
-            setDocSearchPage(pageToLoad);
-            setDocSearchMeta({ currentPage: resMeta?.currentPage ?? pageToLoad, totalPages: resMeta?.totalPages ?? 1, totalRecords: resMeta?.totalRecords ?? mappedResults.length });
-            if (pageToLoad === 1 && mappedResults.length === 0) toast.info("No se encontraron documentos.");
-        } catch (error) { toast.error("Error al buscar documentos"); } 
-        finally { setIsSearchingDocs(false); }
-    };
-
-    const handleSearchDocSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setDocSearchHasSearched(true);
-        await fetchDocumentsPage(1);
     };
 
     const filteredDocSearchTypes = useMemo(() => {
@@ -1280,8 +1078,13 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
         return tiposDisponibles.filter((t: any) => t.originalData?.tabla_referencia && t.originalData.tabla_referencia.toUpperCase() === filtroAux);
     }, [formData.motivotrasladoId, catalogs]);
 
-    const entitySearchOptions = currentRules.showProv ? catalogs['Proveedor'] : catalogs['Cliente'];
-    const entitySearchLabel = currentRules.showProv ? "Proveedor" : "Cliente";
+    const importModalRules = useMemo(() => ({
+        filtrosVenta: null,
+        allowedDocTypes: filteredDocSearchTypes.map((t: any) => String(t.value || '').trim()).filter(Boolean),
+        tipoCompraFiltro: null,
+        filtrosGuia: null,
+        isSalidaVenta: currentRules.refType === 'VENTA'
+    }), [filteredDocSearchTypes, currentRules.refType]);
 
     return (
         <div className="p-6 max-w-7xl mx-auto pb-20 animate-fade-in-up">
@@ -1430,8 +1233,10 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                 <div className="md:col-span-2 animate-in fade-in slide-in-from-top-2">
                                     <SearchableSelect 
                                         label="Cliente (Destinatario)" name="clienteId"
-                                        options={clienteOptions}
+                                        endpoint="Cliente"
+                                        fetchParams={{ tenantId: TENANT_ID }}
                                         value={formData.clienteId || ''} onChange={handleChange}
+                                        fallbackLabel={clienteNombreImportado}
                                         onSearchChange={handleClienteSearch}
                                         disabled={formData.motivotrasladoId === 'MT00006'} 
                                     />
@@ -1442,8 +1247,10 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                 <div className="md:col-span-2 animate-in fade-in slide-in-from-top-2">
                                     <SearchableSelect 
                                         label="Proveedor (Remitente/Origen)" name="proveedorId"
-                                        options={providerOptions}
+                                        endpoint="Proveedor"
+                                        fetchParams={{ tenantId: TENANT_ID }}
                                         value={formData.proveedorId || ''} onChange={handleChange}
+                                        fallbackLabel={proveedorNombreImportado}
                                         onSearchChange={handleProviderSearch}
                                     />
                                 </div>
@@ -1454,7 +1261,7 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                     label="Almacén Origen (Local)" name="id_almacen_inicio"
                                     options={catalogs['Almacen']}
                                     value={formData.id_almacen_inicio || ''} onChange={handleChange}
-                                    disabled={formData.motivotrasladoId !== 'MT00006'} 
+                                    disabled={false} 
                                 />
                                 <FormInput 
                                     label="Dirección de Partida" name="punto_partida" 
@@ -1560,10 +1367,24 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
                                                 <td className="p-3 text-center text-slate-400 font-mono">{idx + 1}</td>
                                                 <td className="p-3">
                                                     <SearchableSelect 
-                                                        options={productOptions} 
+                                                        name="bienId"
+                                                        fetchCustom={async (term) => {
+                                                            const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, { estado: true });
+
+                                                            if (res.isSuccess) {
+                                                                return (res.data || []).map((p: any) => ({
+                                                                    key: String(p.bienId || '').trim(),
+                                                                    value: String(p.bienId || '').trim(),
+                                                                    label: String(p.descripcion || '').trim(),
+                                                                    aux: String(p.codigo_existencia || '').trim(),
+                                                                    raw: p
+                                                                }));
+                                                            }
+                                                            return [];
+                                                        }}
                                                         value={item.bienId || ''} 
+                                                        fallbackLabel={item.descripcion_aux}
                                                         onChange={(e:any) => handleItemChange(idx, 'bienId', e.target.value)}
-                                                        onSearchChange={handleProductSearch}
                                                         placeholder="Buscar producto por nombre o código..."
                                                     />
                                                 </td>
@@ -1682,155 +1503,17 @@ const mapVentaDetallesToGuiaItems = (venta: DocumentoVenta): GuiaRemisionDetalle
 
             </div>
 
-            <Modal isOpen={showDocModal} onClose={() => setShowDocModal(false)} title="Buscar Documento de Referencia" size="xl">
-                <form onSubmit={handleSearchDocSubmit} className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-lg border border-slate-200">
-                        
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo Documento</label>
-                            <select 
-                                className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white focus:ring-2 focus:ring-indigo-500"
-                                value={docSearchFilters.tipoDocId}
-                                onChange={(e) => setDocSearchFilters({...docSearchFilters, tipoDocId: e.target.value})}
-                            >
-                                <option value="">-- TODOS --</option>
-                                {filteredDocSearchTypes.map((t: any) => (
-                                    <option key={t.value} value={t.value}>{t.label}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase">{entitySearchLabel}</label>
-                            <SearchableSelect 
-                                options={entitySearchOptions}
-                                value={docSearchFilters.entidadId}
-                                onChange={(e:any) => setDocSearchFilters({...docSearchFilters, entidadId: e.target.value})}
-                                placeholder="Seleccione..."
-                            />
-                        </div>
-
-                        <FormInput 
-                            label="N° Documento" 
-                            placeholder="Ej: F001-123" 
-                            value={docSearchFilters.numero} 
-                            onChange={(e:any) => setDocSearchFilters({...docSearchFilters, numero: e.target.value})} 
-                        />
-
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase">Moneda</label>
-                            <select 
-                                className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white focus:ring-2 focus:ring-indigo-500"
-                                value={docSearchFilters.monedaId}
-                                onChange={(e) => setDocSearchFilters({...docSearchFilters, monedaId: e.target.value})}
-                            >
-                                <option value="">-- TODAS --</option>
-                                {catalogs['Moneda']?.map((m: any) => (
-                                    <option key={m.value} value={m.value}>{m.label}</option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <FormInput 
-                            label="Fecha Inicial" 
-                            type="date" 
-                            value={docSearchFilters.fechaIni} 
-                            onChange={(e:any) => setDocSearchFilters({...docSearchFilters, fechaIni: e.target.value})} 
-                        />
-                        <FormInput 
-                            label="Fecha Final" 
-                            type="date" 
-                            value={docSearchFilters.fechaFin} 
-                            onChange={(e:any) => setDocSearchFilters({...docSearchFilters, fechaFin: e.target.value})} 
-                        />
-                    </div>
-
-                    <div className="flex justify-end">
-                        <button type="submit" disabled={isSearchingDocs} className="bg-indigo-600 text-white px-6 py-2 rounded-lg font-bold text-xs flex items-center gap-2 hover:bg-indigo-700 disabled:opacity-50">
-                            {isSearchingDocs ? <IconLoader size={16} className="animate-spin" /> : <IconSearch size={16} />} 
-                            BUSCAR
-                        </button>
-                    </div>
-                </form>
-
-                <div className="mt-6 border border-slate-200 rounded-lg overflow-hidden">
-                    <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-100 text-slate-600 font-bold uppercase">
-                            <tr>
-                                <th className="p-3">ID</th>
-                                <th className="p-3">Fecha</th>
-                                <th className="p-3">N° Doc</th>
-                                <th className="p-3">{entitySearchLabel}</th>
-                                <th className="p-3 text-center">Moneda</th>
-                                <th className="p-3 text-center">Acción</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {docSearchResults.length === 0 ? (
-                                <tr>
-                                    <td colSpan={6} className="p-8 text-center text-slate-400 italic">
-                                        {docSearchHasSearched
-                                            ? "No hay documentos encontrados para esta página/filtro."
-                                            : 'No hay documentos encontrados. Aplique los filtros y presione "Buscar".'}
-                                    </td>
-                                </tr>
-                            ) : (
-                                docSearchResults.map((doc, idx) => (
-                                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                                        <td className="p-3 font-mono">{doc.id}</td>
-                                        <td className="p-3">{doc.fecha}</td>
-                                        <td className="p-3 font-bold">{doc.nroDoc}</td>
-                                        <td className="p-3">{doc.entidad}</td>
-                                        <td className="p-3 text-center">{doc.moneda}</td>
-                                        <td className="p-3 text-center">
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    currentRules.refType === 'COMPRA'
-                                                        ? handleSelectCompraDocument(doc.id)
-                                                        : handleSelectVentaDocument(doc.id)
-                                                }
-                                                className="bg-indigo-50 text-indigo-600 px-3 py-1 rounded hover:bg-indigo-100 font-bold"
-                                            >
-                                                Elegir
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-600">
-                    <div>
-                        {docSearchMeta.totalRecords > 0
-                            ? `Mostrando ${docSearchResults.length} de ${docSearchMeta.totalRecords} registros`
-                            : 'Sin registros'}
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button
-                            type="button"
-                            onClick={() => fetchDocumentsPage(Math.max(1, docSearchPage - 1))}
-                            disabled={isSearchingDocs || docSearchPage <= 1}
-                            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 disabled:opacity-40"
-                        >
-                            Anterior
-                        </button>
-                        <span className="font-semibold">
-                            Página {docSearchMeta.currentPage} de {docSearchMeta.totalPages}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => fetchDocumentsPage(docSearchPage + 1)}
-                            disabled={isSearchingDocs || docSearchPage >= docSearchMeta.totalPages}
-                            className="px-3 py-1.5 rounded border border-slate-300 bg-white text-slate-700 disabled:opacity-40"
-                        >
-                            Siguiente
-                        </button>
-                    </div>
-                </div>
-            </Modal>
+            {showDocModal && (
+                <ImportarDocumentoModal
+                    isOpen={showDocModal}
+                    onClose={() => setShowDocModal(false)}
+                    empresaId={EMPRESA_ID}
+                    transaccionRules={importModalRules as any}
+                    catalogoTiposDoc={catalogs['TipoDocumentoComercial'] || []}
+                    onImport={handleImportedReferenceDocument}
+                    soloStock={true}
+                />
+            )}
 
             {showUnidadModal && (
                 <UnidadFormModal 

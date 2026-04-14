@@ -19,6 +19,11 @@ export interface TablaTransacciones {
         descripcion: string; 
         estado: string 
     };
+    ListaAlmacenes?: Array<{
+        tipoalmacenId: number;
+        descripcion: string;
+        estado: string;
+    }>;
 }
 
 export interface TablaTransaccionesPayload {

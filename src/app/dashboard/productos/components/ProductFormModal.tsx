@@ -89,8 +89,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                     tipobienId: productToEdit.tipobienId, 
                     subclasebienId: normalizeId(productToEdit.subclasebienId) || '', 
                     unidadmedidaId: normalizeId(productToEdit.unidadmedidaId) || '',
-                    operacionesItemId: normalizeId(productToEdit.operacionesItemId) || '',
-                    detraccionbienserviceId: normalizeId(productToEdit.detraccionbienserviceId) || '000',
+                    operacionesItemId: normalizeId(productToEdit.operacionesItemId || (productToEdit as any).operacionesitemId) || '',
+                    detraccionbienserviceId: normalizeId(productToEdit.detraccionbienserviceId || (productToEdit as any).detraccionBienServiceId) || '000',
                     condicion_estado: productToEdit.condicion_estado || 'STOCK',
                     detraccion_porcentaje: productToEdit.detraccion_porcentaje || 0
                 });
@@ -300,12 +300,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 name="detraccionbienserviceId" 
                                 value={formData.detraccionbienserviceId || ''} 
                                 onChange={(e:any) => handleDetraccionChange(e.target.value)} 
-                                options={catalogs['DetraccionBien']?.map((opt: any) => ({
-                                    key: opt.key || opt.value,
-                                    value: opt.value,
-                                    label: opt.label || opt.descripcion || String(opt.value),
-                                    aux: opt.aux
-                                })) || []}
+                                // 🚀 Le pasamos el catálogo limpio sin mapeos extra
+                                options={catalogs['DetraccionBien'] || []}
                                 disabled={isReadOnly || loadingCatalogs}
                             />
                         </div>
@@ -316,12 +312,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 name="operacionesItemId" 
                                 value={formData.operacionesItemId || ''} 
                                 onChange={handleInputChange} 
-                                options={catalogs['OperacionesItem']?.map((opt: any) => ({
-                                    key: opt.key || opt.value,
-                                    value: opt.value,
-                                    label: opt.label || opt.descripcion || String(opt.value),
-                                    aux: opt.aux
-                                })) || []}
+                                // 🚀 Le pasamos el catálogo limpio sin mapeos extra
+                                options={catalogs['OperacionesItem'] || []}
                                 disabled={isReadOnly || loadingCatalogs} 
                             />
                         </div>

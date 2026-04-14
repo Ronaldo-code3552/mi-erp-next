@@ -19,13 +19,16 @@ export const productoService = {
                 if (Array.isArray(filters[key]) && filters[key].length > 0) {
                     cleaned[key] = filters[key];
                     hasData = true;
+                } else if (!Array.isArray(filters[key]) && filters[key] !== undefined && filters[key] !== null && filters[key] !== '') {
+                    cleaned[key] = filters[key];
+                    hasData = true;
                 }
             });
             if (hasData) filtersToSend = JSON.stringify(cleaned);
         }
 
         const response = await apiClient.get(`/Producto/empresa/${empresaId}`, {
-            params: { page, pageSize, term, filters: filtersToSend }
+            params: { page, pageSize, term, estado: true, filters: filtersToSend }
         });
         return response.data;
     },

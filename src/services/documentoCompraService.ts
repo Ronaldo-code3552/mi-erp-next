@@ -1,84 +1,86 @@
 // src/services/documentoCompraService.ts
 import apiClient from '../api/apiCliente';
-import { DocumentoCompra } from '../types/documentoCompra.types';
+import { DocumentoCompra, DocumentoCompraFiltros } from '../types/documentoCompra.types'; // 🚀 Importamos la nueva interfaz
 import { ApiResponse } from '../types';
 
+// 🚀 Función auxiliar para no repetir código (D.R.Y.)
+const buildFiltersString = (filtros: DocumentoCompraFiltros | null | undefined): string | null => {
+    if (!filtros) return null;
+
+    const cleaned: any = {};
+    let hasData = false;
+
+    Object.keys(filtros).forEach(key => {
+        const value = (filtros as any)[key];
+        if (value !== undefined && value !== null && value !== '') {
+            if (Array.isArray(value)) {
+                if (value.length > 0) {
+                    cleaned[key] = value;
+                    hasData = true;
+                }
+            } else {
+                cleaned[key] = value;
+                hasData = true;
+            }
+        }
+    });
+
+    return hasData ? JSON.stringify(cleaned) : null;
+};
+
 export const documentoCompraService = {
-    /**
-     * Obtiene los documentos de compra paginados y filtrados.
-     */
+    
+    // Método clásico
     getByEmpresa: async (
         empresaId: string,
         page = 1,
         pageSize = 20,
         term = '',
-        filters: any = null
+        filtros?: DocumentoCompraFiltros // 🚀 Tipado fuerte
     ): Promise<ApiResponse<DocumentoCompra[]>> => {
-        let filtersToSend = null;
+        
+        const filtersToSend = buildFiltersString(filtros); // 🚀 Usamos la función auxiliar
 
-        if (filters) {
-            const cleaned: any = {};
-            let hasData = false;
-
-            // Limpieza y preparación del JSON de filtros para el SP de C#
-            Object.keys(filters).forEach((key) => {
-                const value = filters[key];
-
-                // Si es un arreglo (ej: tipo_documento: ["01", "03"])
-                if (Array.isArray(value) && value.length > 0) {
-                    cleaned[key] = value;
-                    hasData = true;
-                }
-                // Si es un string normal (ej: fecha_inicio: "2025-01-01")
-                else if (typeof value === 'string' && value.trim() !== '') {
-                    cleaned[key] = value;
-                    hasData = true;
-                }
-                // Si es un número o boolean
-                else if (typeof value === 'number' || typeof value === 'boolean') {
-                    cleaned[key] = value;
-                    hasData = true;
-                }
-            });
-
-            if (hasData) filtersToSend = JSON.stringify(cleaned);
-        }
-
-        // Nota: usamos "search: term" para que coincida con [FromQuery] search en C#
         const response = await apiClient.get(`/DocumentoCompra/empresa/${empresaId}`, {
-            params: {
-                page,
-                pageSize,
-                search: term,
-                filters: filtersToSend
+            params: { page, pageSize, search: term, filters: filtersToSend }
+        });
+        return response.data;
+    },
+
+    // 🚀 MÉTODO: Obtiene solo los disponibles
+    getDisponiblesByEmpresa: async (
+        empresaId: string,
+        page: number = 1,
+        pageSize: number = 20,
+        searchTerm: string = '',
+        filtros: DocumentoCompraFiltros | null = null, // 🚀 Tipado fuerte
+        soloStock: boolean = false
+    ): Promise<ApiResponse<any>> => {
+        
+        const filtersToSend = buildFiltersString(filtros); // 🚀 Usamos la función auxiliar
+
+        const response = await apiClient.get(`/DocumentoCompra/empresa/${empresaId}/disponibles`, {
+            params: { 
+                page, 
+                pageSize, 
+                search: searchTerm, 
+                filters: filtersToSend, // Viaja como String JSON puro ✅
+                soloStock // Viaja como booleano puro ✅
             }
         });
 
         return response.data;
     },
 
-    /**
-     * Obtiene un documento de compra por ID.
-     * Soporta respuestas envueltas ({ data }) y respuestas directas.
-     */
     getById: async (id: string): Promise<ApiResponse<DocumentoCompra>> => {
         const safeId = id?.trim();
-        if (!safeId) {
-            throw new Error('El ID del documento de compra es requerido');
-        }
-
+        if (!safeId) throw new Error('El ID del documento es requerido');
         const response = await apiClient.get(`/DocumentoCompra/${safeId}`);
         const payload = response.data;
-
         if (payload && typeof payload === 'object' && 'isSuccess' in payload) {
             return payload as ApiResponse<DocumentoCompra>;
         }
-
-        return {
-            isSuccess: true,
-            data: payload?.data ?? payload,
-            message: 'Éxito'
-        };
+        return { isSuccess: true, data: payload?.data ?? payload, message: 'Éxito' };
     },
 
     create: async (data: Partial<DocumentoCompra>): Promise<ApiResponse<DocumentoCompra>> => {

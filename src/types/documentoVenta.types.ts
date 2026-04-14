@@ -341,3 +341,24 @@ export interface AnularDocumentoResponse {
   codigoSunat?: string;
   descripcionSunat?: string;
 }
+
+export interface FiltrosDocumentoVenta {
+  FechaInicio?: string;
+  FechaFin?: string;
+  SearchTerm?: string;
+  TipoDocumento?: string[];
+  PuntoVenta?: string[];
+  EstadoSunat?: string[];
+  Estado?: string[];
+  Moneda?: string[];
+  Cliente?: string[];
+  Trabajador?: string[];
+  TipoPago?: string[];
+  Sede?: string[];
+  FormaPago?: string[];
+  CuentaUsuario?: string[];
+  EstadoBoleteo?: string[];
+  SoloNotasCreditoPendientes?: boolean;
+  RequiereSaldoPendiente?: boolean; // 🚀 NUEVO PARÁMETRO
+  EsSalidaConsignacion?: boolean;
+}

@@ -2,13 +2,11 @@
 import apiClient from '../api/apiCliente';
 import { SelectOption } from '../types/catalog.types';
 
-// Guardamos la Promesa para evitar llamadas concurrentes (Race Conditions)
 const catalogCache = new Map<string, Promise<SelectOption[]>>();
 
 const stableStringify = (value: unknown): string => {
     if (value === null || typeof value !== 'object') return JSON.stringify(value);
     if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
-
     const entries = Object.entries(value as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b));
     return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${stableStringify(v)}`).join(',')}}`;
 };
@@ -27,23 +25,23 @@ export const catalogService = {
 
         const fetchPromise = (async () => {
             try {
+                // Base param
                 const queryParams: Record<string, unknown> = { page: 1, ...(extraParams || {}) };
                 let fullUrl = `/${endpointName}`;
                 const getParamString = (value: unknown): string => String(value ?? '').trim();
                 
-                // Reglas de ruteo especiales por controlador
-                if (endpointName === 'MotivoTraslado') {
-                    fullUrl = `/${endpointName}/list`;
+                // Reglas de ruteo
+                if (endpointName === 'MotivoTraslado') fullUrl = `/${endpointName}/list`;
+                else if (endpointName === 'TablaTransaccionesPerfil') fullUrl = `/TablaTransacciones/por-perfil`; 
+                else if (endpointName === 'AlmacenLote') {
+                    fullUrl = `/AlmacenLote/almacen/${getParamString(queryParams.almacenId)}/presentacion/${getParamString(queryParams.presentacionId)}`;
+                    delete queryParams.almacenId;
+                    delete queryParams.presentacionId;
                 }
 
                 const endpointsPorEmpresa = new Set([
-                    'Almacen',
-                    'Punto_Venta',
-                    'Trabajador',
-                    'Transportista',
-                    'UnidadTransporte',
-                    'ConductorTransporte',
-                    'TablaTransacciones'
+                    'Almacen', 'Punto_Venta', 'Trabajador', 'Transportista', 
+                    'UnidadTransporte', 'ConductorTransporte', 'TablaTransacciones', 'Producto'
                 ]);
 
                 const empresaId = getParamString(queryParams.empresaId);
@@ -59,17 +57,22 @@ export const catalogService = {
                 }
                 if (endpointName === 'Cliente' && tenantId) queryParams.tenantId = tenantId;
 
-                // Configuración de parámetros por endpoint (manteniendo comportamiento actual por defecto)
+                // 🚀 LA MAGIA DE LA PAGINACIÓN INTELIGENTE
+                // Solo las tablas masivas cargarán 20 por defecto. Las demás traen 1000.
+                const catMasivos = new Set(['Cliente', 'Proveedor', 'Trabajador', 'Transportista', 'ConductorTransporte', 'AlmacenSerie', 'Producto', 'AlmacenLote']);
+                
+                // Configuración de parámetros por endpoint
                 if (endpointName === 'DocumentoIdentidadXcore') {
                     queryParams.pageSize = 1000;
                     queryParams.estado = true;
                 } else if (endpointName === 'Marca' || endpointName === 'Modelo') {
+                    // 🚀 REGRESAMOS A LA VERSIÓN ESTABLE: 1000 registros para evitar roturas
                     queryParams.size = 1000;
                     queryParams.estado = 1;
                 } else {
                     queryParams.pageSize = 1000;
-                    // 🚀 LA CURA: Excluimos a AlmacenSerie de recibir el "estado=true" por defecto
-                    const endpointsSinEstado = new Set(['Cliente', 'Proveedor', 'AlmacenSerie']);
+                    // 🚀 LA CURA 1: Agregamos OperacionesItem y DetraccionBien para que no fallen
+                    const endpointsSinEstado = new Set(['Cliente', 'Proveedor', 'AlmacenSerie', 'OperacionesItem', 'DetraccionBien']);
                     
                     if (!endpointsSinEstado.has(endpointName) && !('estado' in queryParams)) {
                         queryParams.estado = true;
@@ -78,19 +81,14 @@ export const catalogService = {
 
                 const response = await apiClient.get(fullUrl, { params: queryParams });
                 
-                // Soportamos tanto paginados (response.data.data) como listas planas (response.data)
-                const rawData = Array.isArray(response.data?.data)
-                    ? response.data.data
-                    : Array.isArray(response.data)
-                    ? response.data
-                    : [];
+                const rawData = Array.isArray(response.data?.data) ? response.data.data
+                    : Array.isArray(response.data) ? response.data : [];
 
-                const formattedData: SelectOption[] = rawData.map((item: Record<string, unknown>, index: number) => {
-                    // IDs preferidos por endpoint para evitar colisiones entre catálogos
-                    // 1. CAPTURAR EL ID EXACTO
+                const formattedData: SelectOption[] = rawData.map((item: any, index: number) => {
                     const endpointSpecificId =
                         endpointName === 'MotivoTraslado' ? item.motivotrasladoId
                         : endpointName === 'TipoMovimiento' ? item.tipomovimientoId
+                        : endpointName === 'TipoOperacion' ? item.tipoOperacionId
                         : endpointName === 'TipoDocumentoComercial' ? item.tipodoccomercialId
                         : endpointName === 'CuentaUsuario' ? item.cuentausuarioId
                         : endpointName === 'EstadoGuiasRemision' ? (item.Id || item.id)
@@ -103,86 +101,45 @@ export const catalogService = {
                         : endpointName === 'AlmacenSerie' ? item.serie
                         : endpointName === 'Cliente' ? item.clienteId
                         : endpointName === 'Proveedor' ? item.proveedorId
-                        : endpointName === 'TablaTransacciones' ? item.transaccionId
+                        : endpointName === 'TablaTransacciones' || endpointName === 'TablaTransaccionesPerfil' ? item.transaccionId
+                        : endpointName === 'AlmacenLote' ? item.loteId
+                        : endpointName === 'DetraccionBien' ? item.detraccionbienserviceId
+                        : endpointName === 'OperacionesItem' ? item.operacionesItemId
+                        : endpointName === 'SubClaseBien' ? item.subclasebienId
+                        : endpointName === 'UnidadMedida' ? item.unidadmedidaId
+                        : endpointName === 'TipoBien' ? item.tipobienId
+                        : endpointName === 'Producto' ? item.bienId // 🚀 ¡ESTA ES LA LÍNEA QUE FALTABA!
                         : undefined;
 
-                    // 1. CAPTURAR EL ID EXACTO (Agregamos los de Producto)
+                    // Y por si acaso, añádelo de primero en los fallbacks aquí abajo:
                     const extractedId = String(
-                        endpointSpecificId ||
-                        item.Id ||
-                        item.tipobienId || 
-                        item.subclasebienId || 
-                        item.unidadmedidaId || 
-                        item.tipomovimientoId ||
-                        item.motivotrasladoId ||
-                        item.cuentausuarioId ||
-                        item.operacionesItemId || 
-                        item.cuenta_contable || 
-                        item.detraccionbienserviceId || 
-                        item.modeloId || 
-                        item.marcaId || 
-                        item.docidentId || 
-                        item.almacenId ||
-                        item.tipodoccomercialId ||
-                        item.clienteId ||
-                        item.proveedorId ||
-                        item.trabajadorId ||
-                        item.puntoventaId ||
-                        item.transportistaId ||
-                        item.unidadtransporteId ||
-                        item.conductortransporteId ||
-                        item.id || 
-                        item.codigo ||
-                        item.serie ||
-                        `fallback-${index}`
+                        endpointSpecificId || item.bienId || item.Id || item.tipobienId || item.subclasebienId || 
+                        item.unidadmedidaId || item.modeloId || item.marcaId || item.docidentId || 
+                        item.id || item.codigo || item.serie || `fallback-${index}`
                     ).trim();
 
-                    // 2. CAPTURAR LA DESCRIPCIÓN
-                    const extractedDesc =
-                        endpointName === 'AlmacenSerie'
-                            ? item.serie
-                            : item.Descripcion ||
-                              item.descripcion_larga ||
-                              item.descripcion ||
-                              item.razon_social ||
-                              item.nombres ||
-                              item.nombre ||
-                              item.observacion ||
-                              'Sin nombre';
+                    const extractedDesc = endpointName === 'AlmacenSerie' ? item.serie : 
+                        (item.Descripcion || item.descripcion_larga || item.descripcion || item.razon_social || 
+                         item.nombres || item.nombre || item.observacion || 'Sin nombre');
+                    
                     let finalLabel = String(extractedDesc);
+                    
                     if (endpointName === 'UnidadTransporte') {
                         const unidadDesc = String(item.descripcion || item.nombre || extractedDesc || '').trim();
-                        const placaCabina = String(item.nro_matricula_cabina || item.nroMatriculaCabina || '').trim();
-                        const certInscripcion = String(item.certificado_inscripcion || item.certificadoInscripcion || '').trim();
-
-                        if (placaCabina || certInscripcion) {
-                            const refs = [placaCabina, certInscripcion].filter(Boolean).join(' | ');
-                            finalLabel = `${unidadDesc} - ${refs}`.trim();
-                        }
+                        const refs = [item.nro_matricula_cabina, item.certificado_inscripcion].filter(Boolean).join(' | ');
+                        if (refs) finalLabel = `${unidadDesc} - ${refs}`.trim();
                     }
                     if (endpointName === 'ConductorTransporte' && item.apellidos) {
                         finalLabel = `${String(item.apellidos || '')}, ${String(item.nombres || '')}`.trim();
                     }
 
-                    // 3. CAPTURAR DATOS AUXILIARES (Ej: Tasa, Abreviatura)
                     const auxValue = String(
-                        endpointName === 'AlmacenSerie'
-                            ? (item.enviarSunat || '')
-                            : item.tasa ||
-                              item.abreviatura ||
-                              item.descripcion_corta ||
-                              item.num_docident ||
-                              item.numero_doc ||
-                              item.nro_documento ||
-                              ''
+                        endpointName === 'AlmacenSerie' ? (item.enviarSunat || '') : 
+                        endpointName === 'DetraccionBien' ? (item.tasa !== undefined ? item.tasa : '') :
+                        (item.tasa || item.abreviatura || item.descripcion_corta || item.numero_doc || '')
                     ).trim();
 
-                    // 4. CAPTURAR DEPENDENCIAS (Ej: Subclase depende de Clase)
-                    const groupKeyValue = String(
-                        endpointName === 'AlmacenSerie'
-                            ? item.tipodoccomercialId
-                            : item.clasebienId || item.marcaId || item.groupkey || ''
-                    ).trim();
+                    const groupKeyValue = String(endpointName === 'AlmacenSerie' ? item.tipodoccomercialId : (item.clasebienId || item.marcaId || item.groupkey || '')).trim();
 
                     return {
                         ...item, 
@@ -206,8 +163,5 @@ export const catalogService = {
         catalogCache.set(cacheKey, fetchPromise);
         return fetchPromise;
     },
-
-    clearCache: () => {
-        catalogCache.clear();
-    }
+    clearCache: () => { catalogCache.clear(); }
 };

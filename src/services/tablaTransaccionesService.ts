@@ -31,6 +31,12 @@ export const tablaTransaccionesService = {
         return response.data;
     },
 
+    // 2.1 Detalle
+    getById: async (id: string): Promise<ApiResponse<TablaTransacciones>> => {
+        const response = await apiClient.get(`/TablaTransacciones/detalle/${id}`);
+        return response.data;
+    },
+
     // 3. Crear
     create: async (data: TablaTransaccionesPayload): Promise<ApiResponse<string>> => {
         const response = await apiClient.post('/TablaTransacciones', data);

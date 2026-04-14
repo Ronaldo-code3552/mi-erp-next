@@ -280,13 +280,30 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                         </div>
                         <div className="flex gap-2 items-start">
                             <div className="flex-1">
-                                <SearchableSelect label="Marca" name="marca" options={(catalogs['Marca'] || []).map(opt => ({ ...opt, key: String(opt.value), value: String(opt.value) }))} value={selectedMarca} onChange={handleMarcaChange} disabled={isReadOnly || loadingCatalogs} />
+                                <SearchableSelect 
+                                    label="Marca" 
+                                    name="marca" 
+                                    // 🚀 MODO ESTÁTICO ESTABLE
+                                    options={(catalogs['Marca'] || []).map(opt => ({ ...opt, key: String(opt.value), value: String(opt.value) }))} 
+                                    value={selectedMarca} 
+                                    onChange={handleMarcaChange} 
+                                    disabled={isReadOnly || loadingCatalogs} 
+                                />
                             </div>
                             {!isReadOnly && renderCrudButtons('MARCA', false)}
                         </div>
                         <div className="flex gap-2 items-start">
                             <div className="flex-1">
-                                <SearchableSelect label="Modelo" name="modeloId" options={filteredModelos.map(opt => ({ ...opt, key: String(opt.value), value: String(opt.value) }))} value={formData.modeloId || ''} onChange={handleChange} disabled={!selectedMarca || filteredModelos.length === 0 || isReadOnly || loadingCatalogs} placeholder={!selectedMarca ? "Seleccione marca..." : "Seleccione modelo"} />
+                                <SearchableSelect 
+                                    label="Modelo" 
+                                    name="modeloId" 
+                                    // 🚀 MODO ESTÁTICO ESTABLE
+                                    options={filteredModelos.map(opt => ({ ...opt, key: String(opt.value), value: String(opt.value) }))} 
+                                    value={formData.modeloId || ''} 
+                                    onChange={handleChange} 
+                                    disabled={!selectedMarca || filteredModelos.length === 0 || isReadOnly || loadingCatalogs} 
+                                    placeholder={!selectedMarca ? "Seleccione marca..." : "Seleccione modelo"} 
+                                />
                             </div>
                             {!isReadOnly && renderCrudButtons('MODELO', !selectedMarca)}
                         </div>

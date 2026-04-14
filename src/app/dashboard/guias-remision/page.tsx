@@ -23,7 +23,6 @@ import {
 
 export default function GuiasRemisionPage() {
     const EMPRESA_ID = "005";
-    // const ALMACEN_ID = "001"; // Ya no se necesita en el listado global
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const thirtyDaysAgoStr = format(subDays(new Date(), 30), 'yyyy-MM-dd');
@@ -140,19 +139,29 @@ export default function GuiasRemisionPage() {
         { 
             header: 'Cliente / Motivo', 
             width: '250px',
-            render: (row: GuiaRemisionResponse) => (
-                <div className="flex flex-col">
-                    <p className="font-bold text-slate-800 text-xs truncate max-w-[240px]" title={row.cliente?.descripcion}>
-                        {row.cliente?.descripcion}
-                    </p>
-                    <span className="text-[10px] text-slate-500 flex items-center gap-1">
-                        <IconFileInvoice size={12}/> {row.cliente?.docidentId}: {row.cliente?.num_docident}
-                    </span>
-                    <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-1 rounded w-fit mt-0.5">
-                        {row.motivoTraslado?.descripcion}
-                    </span>
-                </div>
-            )
+            render: (row: GuiaRemisionResponse) => {
+                const entidad = row.cliente || row.proveedor;
+                const numeroDocumento =
+                    "num_docident" in (entidad || {})
+                        ? entidad?.num_docident
+                        : "numero_doc" in (entidad || {})
+                            ? entidad?.numero_doc
+                            : undefined;
+
+                return (
+                    <div className="flex flex-col">
+                        <p className="font-bold text-slate-800 text-xs truncate max-w-[240px]" title={entidad?.descripcion}>
+                            {entidad?.descripcion || "-"}
+                        </p>
+                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                            <IconFileInvoice size={12}/> {entidad?.docidentId || "-"}: {numeroDocumento || "-"}
+                        </span>
+                        <span className="text-[10px] text-purple-600 font-semibold bg-purple-50 px-1 rounded w-fit mt-0.5">
+                            {row.motivoTraslado?.descripcion}
+                        </span>
+                    </div>
+                );
+            }
         },
         { 
             header: 'Ruta (Inicio -> Destino)', 

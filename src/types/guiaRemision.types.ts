@@ -109,3 +109,23 @@ export interface GuiaRemisionResponse {
         descripcion: string;
     };
 }
+
+export interface GuiaRemisionFiltros {
+    estadoJson?: string[];              // ["PENDIENTE", "REGISTRADO"]
+    estados_excluidos?: string[];       // ["COMPROMETIDO", "ANULADO"]
+    tipoMovimientoJson?: string[];
+    tipocomercialJson?: string[];       // ["X031", "X029"]
+    AlmacenInicioJson?: string[];
+    AlmacenDestinoJson?: string[];
+    monedaJson?: string[];
+    motivoTasladoJson?: string[];       // ["DEVOLUCION", "TRASLADO ENTRE ESTABLECIMIENTO DE LA MISMA EMPRESA"]
+    modalidadJson?: string[];
+    trabajadorJson?: string[];
+    cuentaUsuarioJson?: string[];
+    puntoVentaJson?: string[];
+    transportistaJson?: string[];
+    unidadTransporteJson?: string[];
+    conductorJson?: string[];
+    fecha_inicio?: string;              // "YYYY-MM-DD"
+    fecha_fin?: string;                 // "YYYY-MM-DD"
+}

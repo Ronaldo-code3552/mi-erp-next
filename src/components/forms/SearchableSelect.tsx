@@ -1,16 +1,17 @@
 // src/components/forms/SearchableSelect.tsx
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import { IconChevronDown, IconSearch, IconCheck } from '@tabler/icons-react';
+import { IconChevronDown, IconSearch, IconCheck, IconLoader } from '@tabler/icons-react';
+import { catalogService } from '@/services/catalogService';
 
-// 🚀 1. ACTUALIZAMOS LA INTERFAZ: Ahora es híbrida y soporta el estándar moderno (label)
 interface Option {
     key?: string | number;
-    value: string | number; // Ahora puede ser el ID (nuevo estándar) o el Texto (viejo estándar)
-    label?: string;         // Texto a mostrar (nuevo estándar)
+    value: string | number; 
+    label?: string;         
     aux?: string | number;
     descripcion?: string;
     nombre?: string;
+    raw?: any; // 🚀 Útil para extraer el objeto original si es necesario
 }
 
 interface Props {
@@ -18,83 +19,84 @@ interface Props {
     name?: string;
     value: string | number;
     onChange: (e: { target: { name?: string; value: string | number } }) => void;
-    options: Option[] | undefined;
+    options?: Option[];           
+    endpoint?: string;            // Para Catálogos genéricos (ej: 'TipoDocumentoComercial')
+    fetchCustom?: (term: string, params?: any) => Promise<Option[]>; // 🚀 NUEVO: Para servicios especializados (ej: Producto)
+    fetchParams?: Record<string, any>; 
+    fallbackLabel?: string;       
     disabled?: boolean;
     placeholder?: string;
-    onSearchChange?: (term: string) => void;
     searchDebounceMs?: number;
 }
 
 export default function SearchableSelect({
-    label,
-    name,
-    value,
-    onChange,
-    options = [],
-    disabled,
-    placeholder = "-- Seleccione --",
-    onSearchChange,
-    searchDebounceMs = 300
+    label, name, value, onChange, options = [], endpoint, fetchCustom, fetchParams,
+    fallbackLabel, disabled, placeholder = "-- Seleccione --", searchDebounceMs = 400
 }: Props) {
     const [isOpen, setIsOpen] = useState(false);
     const [searchTerm, setSearchTerm] = useState("");
     const containerRef = useRef<HTMLDivElement>(null);
+    
+    const [asyncOptions, setAsyncOptions] = useState<Option[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    
+    // Es asíncrono si tiene endpoint O si tiene función fetchCustom
+    const isAsync = !!endpoint || !!fetchCustom;
 
-    // 🚀 2. FUNCIONES DE EXTRACCIÓN INTELIGENTES
-    // Si no viene label, intentamos campos comunes antes de caer al value (evita mostrar IDs).
+    // 🚀 EFECTO DE BÚSQUEDA ASÍNCRONA ACTUALIZADO
+    useEffect(() => {
+        if (!isAsync || !isOpen) return; // Solo buscamos si está abierto
+
+        const fetchAsync = async () => {
+            setIsLoading(true);
+            try {
+                let res: Option[] = [];
+
+                if (fetchCustom) {
+                    // 🚀 CASO A: Usa el servicio especializado (Ej: productoService)
+                    res = await fetchCustom(searchTerm, fetchParams);
+                } else if (endpoint) {
+                    // 🚀 CASO B: Usa el catálogo genérico
+                    const rawRes = await catalogService.getDynamicCatalog(endpoint, {
+                        ...fetchParams,
+                        search: searchTerm // Mantiene la lógica antigua para catálogos
+                    });
+                    res = rawRes as Option[];
+                }
+
+                setAsyncOptions(res);
+            } catch (error) {
+                console.error("Error en SearchableSelect Async:", error);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        const timer = window.setTimeout(fetchAsync, searchDebounceMs);
+        return () => window.clearTimeout(timer);
+    }, [endpoint, fetchCustom, searchTerm, JSON.stringify(fetchParams), isAsync, searchDebounceMs, isOpen]);
+
+    // Extracción de Labels
     const getOptionLabel = (opt: Option) =>
-        opt.label ??
-        opt.descripcion ??
-        opt.nombre ??
-        (typeof opt.aux === 'string' && opt.aux.trim() ? opt.aux : undefined) ??
-        opt.value;
-    // Si tiene 'value' y también 'label', el ID es el 'value'. Si no, usamos 'key'.
+        opt.label ?? opt.descripcion ?? opt.nombre ?? (typeof opt.aux === 'string' ? opt.aux : undefined) ?? opt.value;
     const getOptionId = (opt: Option) => (opt.label !== undefined ? opt.value : (opt.key ?? opt.value));
 
-    // 🚀 3. BUSCADOR CORREGIDO: Ahora busca por el Texto (Label), no por el ID
-    const filteredOptions = options?.filter(opt => {
+    // Qué opciones mostramos
+    const activeOptions = isAsync ? asyncOptions : options;
+
+    // Filtro Local (Solo si NO es asíncrono)
+    const filteredOptions = isAsync ? activeOptions : (activeOptions?.filter(opt => {
         const term = searchTerm.toLowerCase().trim();
         if (!term) return true;
-
-        const searchableText = [
-            getOptionLabel(opt),
-            opt.aux,
-            getOptionId(opt),
-            (opt as any).direccion,
-            (opt as any).email,
-            (opt as any).telefono_movil,
-            (opt as any).telefono_movil2,
-            (opt as any).telefono_fijo,
-            (opt as any).telefono_fijo2,
-            (opt as any).numero_doc,
-            (opt as any).num_docident,
-            (opt as any).nro_documento,
-            (opt as any).descripcion,
-            (opt as any).marca,
-            (opt as any).certificado_inscripcion,
-            (opt as any).nro_matricula_cabina,
-            (opt as any).nro_matricula_carrosa1,
-            (opt as any).nro_matricula_carrosa2,
-            (opt as any).nro_matricula_carrosa3,
-            (opt as any).observaciones,
-            (opt as any).peso_maximo,
-            (opt as any).modelo?.descripcion,
-            (opt as any).modelo?.marca?.descripcion,
-            (opt as any).nombres,
-            (opt as any).apellidos,
-            (opt as any).correo,
-            (opt as any).licencia_conducir
-        ]
-            .filter(Boolean)
-            .map(v => String(v).toLowerCase())
-            .join(' ');
-
+        const searchableText = [getOptionLabel(opt), opt.aux, getOptionId(opt), (opt as any).numero_doc]
+            .filter(Boolean).map(v => String(v).toLowerCase()).join(' ');
         return searchableText.includes(term);
-    }) || [];
+    }) || []);
 
-    // 🚀 4. SELECCIÓN CORREGIDA: Compara usando el ID correcto
-    const selectedOption = options?.find(opt => String(getOptionId(opt)) === String(value));
-    const selectedLabel = selectedOption ? getOptionLabel(selectedOption) : null;
+    const selectedOption = activeOptions?.find(opt => String(getOptionId(opt)) === String(value));
+    const selectedLabel = selectedOption 
+        ? getOptionLabel(selectedOption) 
+        : (value && fallbackLabel ? fallbackLabel : null);
 
     useEffect(() => {
         const handleClickOutside = (e: MouseEvent) => {
@@ -107,12 +109,6 @@ export default function SearchableSelect({
         return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    useEffect(() => {
-        if (!onSearchChange) return;
-        const timer = window.setTimeout(() => onSearchChange(searchTerm), searchDebounceMs);
-        return () => window.clearTimeout(timer);
-    }, [searchTerm, onSearchChange, searchDebounceMs]);
-
     return (
         <div className="flex flex-col gap-1.5 relative text-left" ref={containerRef}>
             {label && <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">{label}</label>}
@@ -120,10 +116,8 @@ export default function SearchableSelect({
             <div 
                 onClick={() => !disabled && setIsOpen(!isOpen)}
                 className={`w-full border p-2.5 rounded-lg flex justify-between items-center text-xs transition-all select-none
-                    ${disabled 
-                        ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200' 
-                        : `bg-white cursor-pointer ${isOpen ? 'border-blue-500 ring-2 ring-blue-50' : 'border-slate-200 hover:border-slate-300'}`
-                    }`}
+                    ${disabled ? 'bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200' 
+                               : `bg-white cursor-pointer ${isOpen ? 'border-blue-500 ring-2 ring-blue-50' : 'border-slate-200 hover:border-slate-300'}`}`}
             >
                 <span className={`truncate uppercase ${!selectedLabel ? 'text-slate-400' : (disabled ? 'text-slate-400' : 'text-slate-700 font-semibold')}`}>
                     {selectedLabel || placeholder}
@@ -133,33 +127,26 @@ export default function SearchableSelect({
 
             {isOpen && (
                 <div className="absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-slate-200 rounded-xl shadow-xl z-[120] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-                    <div className="p-2 border-b border-slate-100 bg-slate-50">
-                        <div className="relative">
-                            <IconSearch size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
-                            <input 
-                                autoFocus
-                                type="text"
-                                placeholder="Buscar..."
-                                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-blue-400 bg-white"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
-                        </div>
+                    <div className="p-2 border-b border-slate-100 bg-slate-50 relative">
+                        <IconSearch size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input 
+                            autoFocus type="text" placeholder="Buscar..."
+                            className="w-full pl-8 pr-8 py-1.5 text-xs border border-slate-200 rounded-md focus:outline-none focus:border-blue-400 bg-white"
+                            value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                        />
+                        {isLoading && <IconLoader size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-500 animate-spin" />}
                     </div>
 
-                    <ul className="max-h-52 overflow-y-auto custom-scrollbar">
+                    <ul className="max-h-52 overflow-y-auto custom-scrollbar relative">
                         {filteredOptions.length > 0 ? (
                             filteredOptions.map((opt, index) => {
                                 const optId = getOptionId(opt);
                                 const optLabel = getOptionLabel(opt);
-                                
                                 return (
                                     <li 
-                                        // Usamos un fallback en el key por si acaso vienen duplicados o sin ID
                                         key={`${optId}-${index}`}
                                         onClick={() => {
-                                            // 🚀 5. ONCHANGE CORREGIDO: Enviamos el ID correcto al padre
-                                            onChange({ target: { name, value: optId } });
+                                            onChange({ target: { name, value: optId }, option: opt } as any);
                                             setIsOpen(false);
                                             setSearchTerm("");
                                         }}
@@ -167,7 +154,6 @@ export default function SearchableSelect({
                                             ${String(optId) === String(value) ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-600 hover:bg-slate-50'}`}
                                     >
                                         <div className="flex flex-col">
-                                            {/* 🚀 6. MOSTRAMOS LA DESCRIPCIÓN, NO EL ID */}
                                             <span className="uppercase">{optLabel}</span>
                                             {opt.aux && <span className="text-[9px] text-slate-400">{opt.aux}</span>}
                                         </div>
@@ -176,7 +162,9 @@ export default function SearchableSelect({
                                 );
                             })
                         ) : (
-                            <li className="px-4 py-6 text-center text-xs text-slate-400 italic">No hay resultados</li>
+                            <li className="px-4 py-6 text-center text-xs text-slate-400 italic">
+                                {isLoading ? 'Buscando...' : 'No hay resultados'}
+                            </li>
                         )}
                     </ul>
                 </div>

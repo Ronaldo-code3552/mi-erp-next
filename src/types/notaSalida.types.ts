@@ -1,10 +1,10 @@
-// src/types/notaIngreso.types.ts
+// src/types/notaSalida.types.ts
 
-export interface NotaIngresoDetalle {
+export interface NotaSalidaDetalle {
     item: number;
     bienId: string;
     cantidad: number;
-    costo: number;
+    precio: number;   // 🚀 En Salidas usamos "precio" según el backend
     importe: number;
     presentacionId: string | null;
     loteId?: string | null;
@@ -19,44 +19,40 @@ export interface NotaIngresoDetalle {
     }>;
 }
 
-export interface NotaIngresoPayload {
+export interface NotaSalidaPayload {
     transaccionId: string;
     monedaId: string;
     tipo_cambio: number;
     tipodoccomercialId: string;
     doc_referencia: string;
     almacenId: string;
+    almacenDestinoId?: string; // 🚀 Requerido para Traslados (TE)
     estado: string;
     cuentausuario: string;
     observaciones: string;
     doc_referencia_numero: string;
-    nro_contenedor: string;
     empresaId: string;
-    detalles: NotaIngresoDetalle[];
-    fecha_doc?: string;
-    fecha_emision?: string;
-    proveedorId?: string;
+    detalles: NotaSalidaDetalle[];
 }
 
-export interface NotaIngresoResponse extends Omit<NotaIngresoPayload, 'detalles'> {
-    notasingresosId: string;
+export interface NotaSalidaResponse extends Omit<NotaSalidaPayload, 'detalles'> {
+    notassalidaId: string;
     fecha_emision: string;
     fecha_doc: string;
-    detalles?: NotaIngresoDetalle[];
+    detalles?: NotaSalidaDetalle[];
+    
+    // Campos extra que suele devolver el SP para la grilla
+    transaccionDesc?: string;
+    tipodoccomercialDesc?: string;
+    CuentasusuarioId?: string;
+    NombreUsuario?: string;
+    clienteDesc?: string;
     
     // Objetos anidados que devuelve el backend (GET BY ID)
-    transaccion?: any;
+    tablaTransacciones?: any;
     tipoDocumentoComercial?: any;
     moneda?: any;
     almacen?: any;
-}
-
-export interface NotaIngresoFilters {
-    SearchTerm?: string;
-    FechaInicio?: string;
-    FechaFin?: string;
-    Estados?: string[];
-    Transacciones?: string[];
-    TiposDocumentoComercial?: string[];
-    CuentasUsuario?: string[];
+    cliente?: any;
+    cuentaUsuario?: any;
 }

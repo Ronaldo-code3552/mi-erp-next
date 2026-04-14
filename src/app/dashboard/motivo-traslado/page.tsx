@@ -58,8 +58,8 @@ export default function MotivoTrasladoPage() {
             header: 'Descripción', 
             render: (row: MotivoTraslado) => (
                 <div className="flex flex-col">
-                    <span className="font-bold text-slate-800 text-xs">{row.descripcion}</span>
-                    <span className="text-[10px] text-slate-400">{row.sunatCatalogo?.descripcion || '-'}</span>
+                    <span className="font-bold text-slate-800 text-xs uppercase">{row.descripcion}</span>
+                    {/* <span className="text-[10px] text-slate-400">{row.sunatCatalogo?.descripcion || '-'}</span> */}
                 </div>
             )
         },

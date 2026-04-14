@@ -113,3 +113,15 @@ export interface DocumentoCompra {
     empresa?: DocumentoCompraEmpresa;
     detalles?: DocumentoCompraDetalle[];
 }
+// El reflejo de tu ParseFilters en C#
+export interface DocumentoCompraFiltros {
+    tipo_documento?: string[];
+    proveedor?: string[];
+    moneda?: string[];
+    tipo_pago?: string[];
+    estado?: number;
+    fecha_inicio?: string; // Formato YYYY-MM-DD
+    fecha_fin?: string;    // Formato YYYY-MM-DD
+    tipo_compra?: string;  // "IMPORTACION" | "COMPRA NACIONAL"
+    estados_excluidos?: string[]; // ["COMPROMETIDO", "ANULADO"]
+}

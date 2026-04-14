@@ -1,24 +1,46 @@
 // src/services/guiaRemisionService.ts
 import apiClient from '../api/apiCliente';
-import { GuiaRemisionPayload, GuiaRemisionResponse } from '../types/guiaRemision.types';
+import { GuiaRemisionPayload, GuiaRemisionResponse, GuiaRemisionFiltros } from '../types/guiaRemision.types'; // 🚀 Importamos GuiaRemisionFiltros
 import { ApiResponse } from '../types';
+
+// 🚀 FUNCIÓN CENTRALIZADA PARA SERIALIZAR FILTROS
+const buildFiltersString = (filtros: GuiaRemisionFiltros | null | undefined): string | null => {
+    if (!filtros) return null;
+
+    const cleaned: any = {};
+    let hasData = false;
+
+    Object.keys(filtros).forEach(key => {
+        const value = (filtros as any)[key];
+        if (value !== undefined && value !== null && value !== '') {
+            if (Array.isArray(value)) {
+                if (value.length > 0) {
+                    cleaned[key] = value;
+                    hasData = true;
+                }
+            } else {
+                cleaned[key] = value;
+                hasData = true;
+            }
+        }
+    });
+
+    return hasData ? JSON.stringify(cleaned) : null;
+};
 
 export const guiaRemisionService = {
 
     // 1. Obtener listado paginado
-    getByEmpresa: async (empresaId: string, page = 1, pageSize = 20, term = "", filters: any = null): Promise<ApiResponse<GuiaRemisionResponse[]>> => {
-        let filtersToSend = null;
-        if (filters) {
-            const cleaned: any = {};
-            let hasData = false;
-            Object.keys(filters).forEach(key => {
-                if ((Array.isArray(filters[key]) && filters[key].length > 0) || (filters[key] && !Array.isArray(filters[key]))) {
-                    cleaned[key] = filters[key];
-                    hasData = true;
-                }
-            });
-            if (hasData) filtersToSend = JSON.stringify(cleaned);
-        }
+    getByEmpresa: async (
+        empresaId: string, 
+        page = 1, 
+        pageSize = 20, 
+        term = "", 
+        filtros?: GuiaRemisionFiltros // 🚀 Tipado Fuerte y parámetro opcional
+    ): Promise<ApiResponse<GuiaRemisionResponse[]>> => {
+        
+        // 🚀 Usamos la función auxiliar
+        const filtersToSend = buildFiltersString(filtros);
 
         const response = await apiClient.get(`/GuiaRemision/empresa/${empresaId}`, {
             params: { page, pageSize, term, filters: filtersToSend }
@@ -26,7 +48,33 @@ export const guiaRemisionService = {
         return response.data;
     },
 
-    // 🚀 NUEVO: Obtener el correlativo dinámico y seguro
+    // 2. Obtener solo los disponibles
+    getDisponiblesByEmpresa: async (
+        empresaId: string, 
+        page = 1, 
+        pageSize = 20, 
+        searchTerm = "", // Cambié 'term' a 'searchTerm' para estandarizar
+        filtros: GuiaRemisionFiltros | null = null, // 🚀 Tipado Fuerte
+        soloStock: boolean = false 
+    ): Promise<ApiResponse<GuiaRemisionResponse[]>> => {
+        
+        // 🚀 Usamos la función auxiliar (¡Adiós a la lógica repetida!)
+        const filtersToSend = buildFiltersString(filtros);
+
+        // Llamamos a la ruta /disponibles
+        const response = await apiClient.get(`/GuiaRemision/empresa/${empresaId}/disponibles`, {
+            params: { 
+                page, 
+                pageSize, 
+                search: searchTerm, // En C# lo mapeas como 'search' o 'term' según tu controller
+                filters: filtersToSend,
+                soloStock
+            }
+        });
+        return response.data;
+    },
+
+    // 🚀 Obtener el correlativo dinámico y seguro
     getSiguienteCorrelativo: async (tipoDocId: string, serie: string): Promise<ApiResponse<{ correlativo: string }>> => {
         const response = await apiClient.get(`/GuiaRemision/siguiente-correlativo`, {
             params: { tipoDocId, serie }
@@ -34,7 +82,7 @@ export const guiaRemisionService = {
         return response.data;
     },
 
-    // 3. Obtener por ID (Para Editar)
+    // 3. Obtener por ID (Para Editar / Importar)
     getById: async (id: string): Promise<ApiResponse<any>> => {
         const response = await apiClient.get(`/GuiaRemision/${id}`);
         return response.data;

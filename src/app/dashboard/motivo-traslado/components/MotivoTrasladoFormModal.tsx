@@ -46,8 +46,8 @@ export default function MotivoTrasladoFormModal({ isOpen, onClose, onSuccess, da
             // Cargar datos si es edición
             if (dataToEdit) {
                 setFormData({
-                    descripcion: dataToEdit.descripcion || '',
-                    COD_SUNAT: dataToEdit.COD_SUNAT || ''
+                    descripcion: String(dataToEdit.descripcion || '').toUpperCase(),
+                    COD_SUNAT: String(dataToEdit.COD_SUNAT || '').toUpperCase()
                 });
             } else {
                 setFormData(initialState);
@@ -57,7 +57,12 @@ export default function MotivoTrasladoFormModal({ isOpen, onClose, onSuccess, da
 
     const handleChange = (e: any) => {
         const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
+        const normalizedValue =
+            name === 'descripcion' || name === 'COD_SUNAT'
+                ? String(value || '').toUpperCase()
+                : value;
+
+        setFormData(prev => ({ ...prev, [name]: normalizedValue }));
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -70,11 +75,17 @@ export default function MotivoTrasladoFormModal({ isOpen, onClose, onSuccess, da
 
         setLoading(true);
         try {
+            const payload = {
+                ...formData,
+                descripcion: String(formData.descripcion || '').trim().toUpperCase(),
+                COD_SUNAT: String(formData.COD_SUNAT || '').trim().toUpperCase()
+            };
+
             let res;
             if (dataToEdit?.motivotrasladoId) {
-                res = await motivoTrasladoService.update(dataToEdit.motivotrasladoId, formData);
+                res = await motivoTrasladoService.update(dataToEdit.motivotrasladoId, payload);
             } else {
-                res = await motivoTrasladoService.create(formData);
+                res = await motivoTrasladoService.create(payload);
             }
 
             if (res.isSuccess) {
