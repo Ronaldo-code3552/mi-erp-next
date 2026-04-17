@@ -5,19 +5,22 @@ import { NotaIngresoPayload, NotaIngresoResponse, NotaIngresoFilters } from '../
 
 export const notaIngresoService = {
     // 1. Obtener Listado Paginado por Almacén (con filtros avanzados)
-    // En src/services/notaIngresoService.ts (Míralo y confirma que esté así)
-
     getByAlmacen: async (
-        almacenId: string, 
+        almacenId?: string | null,
         page: number = 1, 
         pageSize: number = 20, 
         search: string = '', 
-        filters: any = {} // <-- El useCrud inyectará { estadoJson: [], transaccionJson: [], etc } aquí
+        filters: any = {}, // <-- El useCrud inyectará { estadoJson: [], transaccionJson: [], etc } aquí
+        empresaId: string = '005'
     ) => {
         try {
             const params = new URLSearchParams();
             params.append('page', String(page));
             params.append('pageSize', String(pageSize));
+            // Backend: almacen es opcional, pero si no viene debe venir EmpresaId
+            if (empresaId && String(empresaId).trim() !== '') {
+                params.append('EmpresaId', String(empresaId).trim());
+            }
 
             // Si hay búsqueda global (Input de texto)
             if (search && search.trim() !== '') {
@@ -42,7 +45,12 @@ export const notaIngresoService = {
                 filters.usuarioJson.forEach((c: string) => params.append('CuentasUsuario', c));
             }
 
-            const response = await apiClient.get(`/NotaIngreso/almacen/${almacenId}?${params.toString()}`);
+            const trimmedAlmacenId = String(almacenId ?? '').trim();
+            const url = trimmedAlmacenId
+                ? `/NotaIngreso/almacen/${trimmedAlmacenId}?${params.toString()}`
+                : `/NotaIngreso/almacen?${params.toString()}`;
+
+            const response = await apiClient.get(url);
             
             if (response.status === 204) {
                  return { isSuccess: true, data: [], meta: { currentPage: page, totalPages: 1, totalRecords: 0 } };

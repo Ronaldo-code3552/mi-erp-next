@@ -9,7 +9,8 @@ import { ApiResponse } from '@/types';
 export function useCrud<T>(
   service: any, 
   contextId: string | null | undefined, 
-  initialFilters: any = {}
+  initialFilters: any = {},
+  contextOptions?: { empresaId?: string }
 ) {
   const [data, setData] = useState<T[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,13 +23,19 @@ export function useCrud<T>(
     try {
       let response: ApiResponse<T[]>;
 
-      if (contextId) {
-        // 🚀 EVOLUCIÓN: Detectar inteligentemente el método del servicio
-        if (typeof service.getByAlmacen === 'function') {
-            // CASO C: Entidades dependientes de un almacén (Ej: Notas de Ingreso)
-            response = await service.getByAlmacen(contextId, page, 20, term, activeFilters);
-        } else if (typeof service.getByEmpresa === 'function') {
+      // 🚀 EVOLUCIÓN: Detectar inteligentemente el método del servicio
+      if (typeof service.getByAlmacen === 'function') {
+        const normalizedContextId =
+          typeof contextId === 'string' ? contextId.trim() : contextId;
+        const effectiveContextId = normalizedContextId ? normalizedContextId : null;
+        // CASO C: Entidades dependientes de almacén, pero que también pueden listar por empresa
+        // Si no hay contextId, el service puede resolver /almacen por EmpresaId (contextOptions.empresaId).
+        response = await service.getByAlmacen(effectiveContextId, page, 20, term, activeFilters, contextOptions?.empresaId);
+      } else if (contextId) {
+        if (typeof service.getByEmpresa === 'function') {
             // CASO A: Entidades dependientes de una empresa (Ej: Productos, Conductores)
+            response = await service.getByEmpresa(contextId, page, 20, term, activeFilters);
+        } else if (typeof service.getByEmpresa === 'function') {
             response = await service.getByEmpresa(contextId, page, 20, term, activeFilters);
         } else {
             throw new Error("El servicio no implementa getByEmpresa ni getByAlmacen");

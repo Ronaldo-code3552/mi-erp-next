@@ -119,6 +119,7 @@ export default function CrearNotaSalidaPage() {
     const [scSearchLoading, setScSearchLoading] = useState(false);
     const scSearchReqIdRef = useRef(0);
     const [xpSearchTerm, setXpSearchTerm] = useState('');
+    const [xpValidationMsg, setXpValidationMsg] = useState('');
 
     // Carga de Catálogos
     const { catalogs, loadingCatalogs } = useCatalogs([
@@ -161,9 +162,17 @@ export default function CrearNotaSalidaPage() {
 
     const almacenDestinoOptions = useMemo(() => {
         const transaccionId = String(formData.transaccionId || '').trim();
+        const originAlmacen = almacenOrigenOptions.find(
+            (a: any) => String(a?.value || '').trim() === String(formData.almacenId || '').trim()
+        );
+        const originSedeId = String(
+            originAlmacen?.originalData?.sedeId ??
+            originAlmacen?.originalData?.sede?.sedeId ??
+            ''
+        ).trim();
 
         return almacenOrigenOptions.filter((a: any) => {
-            if (String(a.value) === String(formData.almacenId)) return false;
+            if (String(a.value || '').trim() === String(formData.almacenId || '').trim()) return false;
 
             const tipoAlmacenId = String(
                 a?.originalData?.tipoalmacenId ??
@@ -177,7 +186,16 @@ export default function CrearNotaSalidaPage() {
             if (transaccionId === 'SP') return tipoAlmacenId === '3';
             if (transaccionId === 'YG') return tipoAlmacenId === '6';
             if (['YC', 'YF', 'YR', 'YV'].includes(transaccionId)) return tipoAlmacenId === '5';
-            if (transaccionId === 'ZX') return true;
+            if (transaccionId === 'ZX') {
+                // ZX: Solo almacenes destino de la misma sede que el almacén origen seleccionado
+                if (!originSedeId) return true; // fallback si el catálogo no trae sede
+                const destinoSedeId = String(
+                    a?.originalData?.sedeId ??
+                    a?.originalData?.sede?.sedeId ??
+                    ''
+                ).trim();
+                return !destinoSedeId || destinoSedeId === originSedeId;
+            }
 
             return true;
         });
@@ -339,18 +357,38 @@ export default function CrearNotaSalidaPage() {
         const tablaReferencia = isGuia ? "GUIAS_REMISION" : "DOCUMENTO_VENTA";
         const visualString = `${String(cabecera.serie || '').trim()}-${String(cabecera.numero || cabecera.correlativo || '').trim()}`;
         const cliNombre = cabecera.cliente?.descripcion || cabecera.clienteDesc || 'SIN CLIENTE';
+        const importedAlmacenDestinoId = isGuia ? String(cabecera.id_almacen_destino || '').trim() : '';
+        const importedAlmacenOrigenId = isGuia ? String(cabecera.id_almacen_inicio || '').trim() : '';
 
         setClienteNombre(cliNombre);
         setDocReferenciaVisible(visualString);
 
-        setFormData(prev => ({
-            ...prev,
-            tipodoccomercialId: String(cabecera.tipodoccomercialId || '').trim(),
-            doc_referencia: tablaReferencia,       
-            doc_referencia_numero: realDocId,      
-            monedaId: cabecera.monedaId || '001',
-            tipo_cambio: cabecera.tipo_cambio || cabecera.tipoCambio || 1,
-        }));
+        setFormData(prev => {
+            const next: any = {
+                ...prev,
+                tipodoccomercialId: String(cabecera.tipodoccomercialId || '').trim(),
+                doc_referencia: tablaReferencia,
+                doc_referencia_numero: realDocId,
+                monedaId: cabecera.monedaId || '001',
+                tipo_cambio: cabecera.tipo_cambio || cabecera.tipoCambio || 1
+            };
+
+            // Regla TE: el destino debe venir de la guía y bloquearse (match con DDL)
+            if (isGuia && String(prev.transaccionId || '').trim() === 'TE' && importedAlmacenDestinoId) {
+                next.almacenDestinoId = importedAlmacenDestinoId;
+            }
+
+            return next;
+        });
+
+        if (isGuia && String(formData.transaccionId || '').trim() === 'TE') {
+            if (importedAlmacenOrigenId && String(importedAlmacenOrigenId) !== String(formData.almacenId || '').trim()) {
+                toast.warning(`La guía tiene almacén origen ${importedAlmacenOrigenId} y su nota está en ${String(formData.almacenId || '').trim()}. Verifique que corresponda.`);
+            }
+            if (!importedAlmacenDestinoId) {
+                toast.warning("La guía importada no trae un almacén destino (id_almacen_destino).");
+            }
+        }
         
         toast.info("Procesando y calculando unidades disponibles...");
         
@@ -751,6 +789,7 @@ export default function CrearNotaSalidaPage() {
             factorOrigen
         });
         setXpSearchTerm('');
+        setXpValidationMsg('');
         setShowSCModal(true);
     };
 
@@ -766,6 +805,18 @@ export default function CrearNotaSalidaPage() {
 
         // 🚀 LA FÓRMULA MATEMÁTICA EXACTA DE TU ASP.NET
         const cantidadConvertida = (Number(scInput.cantidadInicial) * Number(factorOrigen)) / Number(factorDestino);
+        const isDestinoMayor = Number(factorOrigen) < Number(factorDestino);
+        const rounded = Math.round(cantidadConvertida);
+        const isEntero = Math.abs(cantidadConvertida - rounded) < 1e-6;
+        if (isDestinoMayor && !isEntero) {
+            const multiple = Number(factorDestino) / Number(factorOrigen || 1);
+            setXpValidationMsg(
+                `Conversión inválida: al convertir a una presentación mayor, el resultado no puede ser fraccionado. ` +
+                `Ingrese un múltiplo de ${Number(multiple || 0).toFixed(4)} (en la presentación origen).`
+            );
+        } else {
+            setXpValidationMsg('');
+        }
 
         setScInput(prev => ({
             ...prev,
@@ -782,6 +833,25 @@ export default function CrearNotaSalidaPage() {
             const presDestino = scInput.unidades_opciones.find((u: any) => u.presentacionId === scInput.presentacionDestinoId);
             const factorDestino = Number(presDestino?.cantidad_pres || 1);
             calc = (cantidadInicial * Number(scInput.factorOrigen || 1)) / factorDestino;
+        }
+        if (scInput.presentacionDestinoId) {
+            const presDestino = scInput.unidades_opciones.find((u: any) => u.presentacionId === scInput.presentacionDestinoId);
+            const factorDestino = Number(presDestino?.cantidad_pres || 1);
+            const factorOrigen = Number(scInput.factorOrigen || 1);
+            const isDestinoMayor = factorOrigen < factorDestino;
+            const rounded = Math.round(calc);
+            const isEntero = Math.abs(calc - rounded) < 1e-6;
+            if (isDestinoMayor && !isEntero) {
+                const multiple = factorDestino / (factorOrigen || 1);
+                setXpValidationMsg(
+                    `Conversión inválida: al convertir a una presentación mayor, el resultado no puede ser fraccionado. ` +
+                    `Ingrese un múltiplo de ${Number(multiple || 0).toFixed(4)} (en la presentación origen).`
+                );
+            } else {
+                setXpValidationMsg('');
+            }
+        } else {
+            setXpValidationMsg('');
         }
 
         setScInput(prev => ({
@@ -804,6 +874,21 @@ export default function CrearNotaSalidaPage() {
 
         const calc = (Number(scInput.cantidadInicial || 0) * Number(scInput.factorOrigen || 1)) / factorDestino;
         const next = parseFloat(calc.toFixed(4));
+
+        const factorOrigen = Number(scInput.factorOrigen || 1);
+        const isDestinoMayor = factorOrigen < Number(factorDestino);
+        const rounded = Math.round(calc);
+        const isEntero = Math.abs(calc - rounded) < 1e-6;
+        if (isDestinoMayor && !isEntero) {
+            const multiple = Number(factorDestino) / (factorOrigen || 1);
+            setXpValidationMsg(
+                `Conversión inválida: al convertir a una presentación mayor, el resultado no puede ser fraccionado. ` +
+                `Ingrese un múltiplo de ${Number(multiple || 0).toFixed(4)} (en la presentación origen).`
+            );
+        } else {
+            setXpValidationMsg('');
+        }
+
         if (Number(scInput.cantidadCalculada || 0) === next) return;
 
         setScInput(prev => ({ ...prev, cantidadCalculada: next }));
@@ -820,6 +905,9 @@ export default function CrearNotaSalidaPage() {
     const handleSaveXPDestino = () => {
         if (!scInput.presentacionDestinoId) {
             return toast.warning("Debe seleccionar una presentación de destino.");
+        }
+        if (xpValidationMsg) {
+            return toast.warning(xpValidationMsg);
         }
         if (Number(scInput.cantidadInicial) <= 0) {
             return toast.warning("La cantidad a convertir debe ser mayor a cero.");
@@ -1213,6 +1301,7 @@ export default function CrearNotaSalidaPage() {
                                         options={almacenDestinoOptions}
                                         value={formData.almacenDestinoId || ''} 
                                         onChange={handleChange}
+                                        disabled={isImportedData && String(formData.transaccionId || '').trim() === 'TE'}
                                         placeholder="Seleccione almacén receptor..."
                                     />
                                 </div>
@@ -1466,6 +1555,7 @@ export default function CrearNotaSalidaPage() {
                     setScSearchTerm('');
                     setScSearchResults([]);
                     setXpSearchTerm('');
+                    setXpValidationMsg('');
                 }}
                 title={transaccionRules.esCambioPresentacion ? "Cambio de Presentación (XP)" : "Conversión de Código (SC)"}
                 size="xl"
@@ -1639,6 +1729,11 @@ export default function CrearNotaSalidaPage() {
                                             {Number(scInput.cantidadCalculada || 0).toFixed(4)}{' '}
                                             <span className="text-[10px] font-normal opacity-80 uppercase">Unidades</span>
                                         </div>
+                                        {!!xpValidationMsg && (
+                                            <div className="mt-3 p-3 rounded-xl border border-rose-200 bg-rose-50 text-rose-700 text-[11px] font-bold leading-relaxed">
+                                                {xpValidationMsg}
+                                            </div>
+                                        )}
                                         <div className="mt-2 text-[11px] text-slate-600">
                                             Formula: <span className="font-mono font-bold">(Cantidad * FactorOrigen) / FactorDestino</span>
                                         </div>
@@ -1653,7 +1748,7 @@ export default function CrearNotaSalidaPage() {
                             </button>
                             <button 
                                 onClick={handleSaveXPDestino}
-                                disabled={!scInput.presentacionDestinoId}
+                                disabled={!scInput.presentacionDestinoId || !!xpValidationMsg}
                                 className="px-6 py-2.5 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-colors shadow-md shadow-blue-200 flex items-center gap-2"
                             >
                                 <IconDeviceFloppy size={18} /> Confirmar Conversión
@@ -1967,6 +2062,7 @@ export default function CrearNotaSalidaPage() {
                     catalogoTiposDoc={catalogs['TipoDocumentoComercial'] || []}
                     onImport={handleDataImportada}
                     soloStock={true} 
+                    tipoOperacionGuia="NS"
                 />
             )}
         </div>

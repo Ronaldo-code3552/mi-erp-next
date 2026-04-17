@@ -28,7 +28,9 @@ export const productoService = {
         }
 
         const response = await apiClient.get(`/Producto/empresa/${empresaId}`, {
-            params: { page, pageSize, term, estado: true, filters: filtersToSend }
+            // Importante: ya no forzamos `estado=true` para permitir ver también anulados
+            // y poder reactivarlos desde la UI. La BD controla la lógica de activación/anulación.
+            params: { page, pageSize, term, filters: filtersToSend }
         });
         return response.data;
     },

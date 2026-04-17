@@ -6,6 +6,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { productoService } from "@/services/productoService";
 import { useCatalogs } from "@/hooks/useCatalogs"; // <-- NUEVO HOOK IMPORTADO
 import { Producto } from "@/types/producto.types";
+import Swal from "sweetalert2";
+import { toast } from "sonner";
 
 import DataTable from "@/components/shared/DataTable";
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
@@ -15,7 +17,7 @@ import PresentacionesModal from "./components/PresentacionesModal";
 
 import { 
     IconPlus, IconRefresh, IconSearch, IconFilter, 
-    IconEdit, IconTrash, IconBan, IconEye, IconStack2 
+    IconEdit, IconTrash, IconEye, IconStack2
 } from '@tabler/icons-react';
 
 // Constante para los estados (reemplaza el hardcodeo del SP anterior)
@@ -40,7 +42,8 @@ export default function ProductosPage() {
         filters, setFilters, fetchData, handleAction 
     } = useCrud<Producto>(productoService, EMPRESA_ID, initialFilters);
 
-    const [tempFilters, setTempFilters] = useState<any>(initialFilters);
+    type ProductosFilters = typeof initialFilters;
+    const [tempFilters, setTempFilters] = useState<ProductosFilters>(initialFilters);
     const [showFilters, setShowFilters] = useState(false);
     const [showForm, setShowForm] = useState(false);
     const [showPresentaciones, setShowPresentaciones] = useState(false);
@@ -71,6 +74,39 @@ export default function ProductosPage() {
         setShowFilters(false);
     };
 
+    const handleToggleProductoEstado = async (row: Producto) => {
+        const isActivo = !!row.estado;
+        const title = isActivo ? "¿Anular producto?" : "¿Activar producto?";
+        const confirmText = isActivo ? "Sí, anular" : "Sí, activar";
+        const confirmColor = isActivo ? "#f59e0b" : "#16a34a"; // amber-500 / green-600
+        const label = String(row.descripcion || row.codigo_existencia || "").trim();
+
+        const result = await Swal.fire({
+            title,
+            html: `<span style="color: grey; font-size: 14px;">${label || "Este producto"}</span>`,
+            icon: isActivo ? "warning" : "question",
+            showCancelButton: true,
+            confirmButtonText: confirmText,
+            confirmButtonColor: confirmColor,
+            cancelButtonText: "Cancelar",
+        });
+
+        if (!result.isConfirmed) return;
+
+        try {
+            const res = await productoService.anular(row.bienId);
+            if (res?.isSuccess) {
+                toast.success(res.message || (isActivo ? "Producto anulado correctamente" : "Producto activado correctamente"));
+                fetchData(meta.currentPage);
+            } else {
+                toast.error(res?.message || "No se pudo actualizar el estado del producto");
+            }
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "";
+            toast.error(message || "Error de conexión");
+        }
+    };
+
     // DEFINICIÓN DE COLUMNAS (Lógica recuperada de React)
     const columns = [
         { header: 'Código', width: '100px', render: (row: Producto) => <span className="font-mono font-bold text-xs">{row.codigo_existencia || 'S/C'}</span> },
@@ -96,15 +132,11 @@ export default function ProductosPage() {
         {
             header: 'Acciones',
             className: 'text-center',
-            width: '180px',
+            width: '260px',
             render: (row: Producto) => (
                 <div className="flex justify-center gap-1">
                     <button onClick={() => { setProductToEdit(row); setShowForm(true); }} className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="Editar">
                         {row.estado ? <IconEdit size={18} /> : <IconEye size={18} />}
-                    </button>
-                    
-                    <button onClick={() => handleAction(row.bienId, 'anular')} disabled={!row.estado} className="p-1.5 hover:bg-orange-50 text-slate-400 hover:text-orange-600 disabled:opacity-30 rounded transition-colors" title="Anular">
-                        <IconBan size={18} />
                     </button>
                     
                     <button onClick={() => handleAction(row.bienId, 'delete')} className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded transition-colors" title="Eliminar">
@@ -121,6 +153,35 @@ export default function ProductosPage() {
                         title="Gestionar Presentaciones"
                     >
                         <IconStack2 size={18} />
+                    </button>
+
+                    <button
+                        onClick={() => handleToggleProductoEstado(row)}
+                        className="px-2 py-1 rounded-lg hover:bg-slate-50 transition-colors"
+                        title={row.estado ? "Activo (clic para anular)" : "Anulado (clic para activar)"}
+                        type="button"
+                    >
+                        <div className="flex items-center gap-2">
+                            <span
+                                className={`relative inline-flex h-5 w-9 items-center rounded-full border transition-colors ${
+                                    row.estado
+                                        ? "bg-emerald-600 border-emerald-700/20"
+                                        : "bg-slate-200 border-slate-300"
+                                }`}
+                            >
+                                <span
+                                    className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${
+                                        row.estado ? "translate-x-[18px]" : "translate-x-0.5"
+                                    }`}
+                                />
+                            </span>
+                            <span
+                                className={`text-[10px] font-black tracking-wide ${
+                                    row.estado ? "text-emerald-700" : "text-slate-500"
+                                }`}
+                            >
+                            </span>
+                        </div>
                     </button>
                 </div>
             )
@@ -171,7 +232,7 @@ export default function ProductosPage() {
             <FiltrosAvanzados 
                 isOpen={showFilters} 
                 onClose={() => setShowFilters(false)}
-                onApply={() => { setFilters(tempFilters); setShowFilters(false); }}
+                onApply={handleApplyFilters}
                 onClear={() => {
                     setTempFilters(initialFilters);
                     setFilters(initialFilters);

@@ -18,6 +18,12 @@ interface Props {
     product: Producto | null | undefined;
 }
 
+type UnidadMedidaOption = {
+    value: string;
+    label: string;
+    aux?: string;
+};
+
 type PresentacionUI = Omit<Presentacion, 'cantidad' | 'bienId'> & {
     cantidad: number | string;
     bienId?: string;
@@ -33,12 +39,25 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
     
     const { hasError, clearError, validate, resetErrors, errors } = useValidation();
     const normalizeId = (value: unknown) => (typeof value === 'string' ? value.trim() : value);
-    const getBackendErrorMessage = (error: any, fallback: string) => {
-        const rawMessage =
-            error?.response?.data?.message ||
-            error?.response?.data?.title ||
-            error?.message ||
-            '';
+    const getBackendErrorMessage = (error: unknown, fallback: string) => {
+        let rawMessage = '';
+
+        if (error instanceof Error) rawMessage = error.message;
+        if (!rawMessage && typeof error === 'string') rawMessage = error;
+
+        // Axios-like: error.response.data.message/title
+        if (!rawMessage && typeof error === 'object' && error !== null) {
+            const maybeResponse = (error as { response?: unknown }).response;
+            if (typeof maybeResponse === 'object' && maybeResponse !== null) {
+                const maybeData = (maybeResponse as { data?: unknown }).data;
+                if (typeof maybeData === 'object' && maybeData !== null) {
+                    const maybeMessage = (maybeData as { message?: unknown }).message;
+                    const maybeTitle = (maybeData as { title?: unknown }).title;
+                    if (typeof maybeMessage === 'string') rawMessage = maybeMessage;
+                    else if (typeof maybeTitle === 'string') rawMessage = maybeTitle;
+                }
+            }
+        }
         const normalized = String(rawMessage).toLowerCase();
 
         if (normalized.includes('no se puede eliminar')) {
@@ -55,26 +74,26 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
     useEffect(() => {
         if (isOpen && product && !loadingCatalogs && catalogs['UnidadMedida']) {
             resetErrors();
-            loadData(catalogs['UnidadMedida']); // Le pasamos el catálogo listo
+            loadData(catalogs['UnidadMedida'] as UnidadMedidaOption[]); // Le pasamos el catálogo listo
         }
     }, [isOpen, product, loadingCatalogs, catalogs]);
 
-    const loadData = async (currentUnits: any[]) => {
+    const loadData = async (currentUnits: UnidadMedidaOption[]) => {
         setLoading(true);
         try {
             // Ya no hacemos Promise.all, solo pedimos la data real de las presentaciones
             const resData = await presentacionService.getByBien(product!.bienId);
             
-            const loadedRows: PresentacionUI[] = (resData.data || []).map((row: PresentacionUI) => ({
+            const loadedRows: PresentacionUI[] = (resData.data || []).map((row) => ({
                 ...row,
                 unidadmedidaId: String(normalizeId(row.unidadmedidaId) || '')
             }));
             const baseUnitId = String(normalizeId(product!.unidadmedidaId) || '');
             
             // 🚀 ACTUALIZADO: Buscamos por 'value' (ID) y obtenemos 'label' (Descripción)
-            const baseUnitName = currentUnits.find((u:any) => String(normalizeId(u.value)) === baseUnitId)?.label || '';
+            const baseUnitName = currentUnits.find((u) => String(normalizeId(u.value)) === baseUnitId)?.label || '';
 
-            const baseIndex = loadedRows.findIndex((r: any) => String(normalizeId(r.unidadmedidaId)) === baseUnitId);
+            const baseIndex = loadedRows.findIndex((r) => String(normalizeId(r.unidadmedidaId)) === baseUnitId);
 
             if (baseIndex >= 0) {
                 const [baseRow] = loadedRows.splice(baseIndex, 1);
@@ -94,7 +113,7 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
 
             setRows([...loadedRows, createEmptyRow()]);
 
-        } catch (error) {
+        } catch (error: unknown) {
             console.error(error);
             toast.error("Error al cargar presentaciones");
         } finally {
@@ -130,7 +149,7 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
             const unitId = newRows[index].unidadmedidaId;
             
             // 🚀 ACTUALIZADO: Buscamos en el catálogo directamente
-            const currentUnits = catalogs['UnidadMedida'] || [];
+            const currentUnits = (catalogs['UnidadMedida'] as UnidadMedidaOption[]) || [];
             const unitLabel = currentUnits.find(u => String(normalizeId(u.value)) === String(normalizeId(unitId)))?.label || '';
             const qty = newRows[index].cantidad; 
             
@@ -177,7 +196,7 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                 } else {
                     toast.error(res.message || "No se pudo eliminar");
                 }
-            } catch (error: any) {
+            } catch (error: unknown) {
                 toast.error(getBackendErrorMessage(error, "No se pudo eliminar la presentación."));
             }
         }
@@ -185,8 +204,8 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
 
     const handleSaveAll = async () => { /* IGUAL */ 
         if(!product) return;
-        const validationRules: Record<string, any> = {};
-        const validRows: any[] = [];
+        const validationRules: Record<string, unknown> = {};
+        const validRows: Array<PresentacionUI & { idx: number }> = [];
         rows.forEach((row, idx) => {
             if (idx === rows.length - 1 && !row.unidadmedidaId && !row.cantidad && !row.descripcion) return;
             validationRules[`${idx}-unidadmedidaId`] = row.unidadmedidaId;
@@ -215,21 +234,21 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                     } else {
                         await presentacionService.create(payload);
                     }
-                } catch (err: any) {
+                } catch (err: unknown) {
                     toast.error(getBackendErrorMessage(err, `Error guardando: ${row.descripcion}`));
                 }
             }
             toast.success("Presentaciones actualizadas correctamente");
             onClose();
-        } catch (error: any) {
+        } catch (error: unknown) {
             toast.error(getBackendErrorMessage(error, "Error crítico al guardar"));
         } finally {
             setLoading(false);
         }
     };
 
-    const getAvailableUnits = (currentRowIndex: number) => {
-        const currentUnits = catalogs['UnidadMedida'] || [];
+    const getAvailableUnits = (currentRowIndex: number): UnidadMedidaOption[] => {
+        const currentUnits = (catalogs['UnidadMedida'] as UnidadMedidaOption[]) || [];
         const allSelectedIds = rows.map(r => String(normalizeId(r.unidadmedidaId)));
         return currentUnits.filter(u => {
             // 🚀 Usamos u.value en vez de u.key para el chequeo de disponibilidad
@@ -279,7 +298,7 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                                         >
                                             <option value="">-- SEL --</option>
                                             {/* 🚀 Usamos u.value y u.label */}
-                                            {getAvailableUnits(idx).map((u: any) => (
+                                            {getAvailableUnits(idx).map((u) => (
                                                 <option key={u.value} value={u.value}>{u.label} {u.aux ? `(${u.aux})` : ''}</option>
                                             ))}
                                         </select>
@@ -312,13 +331,36 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
 
                                     {/* ESTADO */}
                                     <td className="p-2 text-center">
-                                        <input 
-                                            type="checkbox" 
-                                            checked={row.estado} 
-                                            onChange={(e) => handleCellChange(idx, 'estado', e.target.checked)} 
-                                            className="accent-blue-600 w-4 h-4 cursor-pointer align-middle disabled:opacity-50" 
-                                            disabled={idx === 0} 
-                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => handleCellChange(idx, 'estado', !row.estado)}
+                                            disabled={idx === 0}
+                                            className="px-2 py-1 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                            title={row.estado ? "Activo (clic para anular)" : "Anulado (clic para activar)"}
+                                        >
+                                            <div className="flex items-center justify-center gap-2">
+                                                <span
+                                                    className={`relative inline-flex h-5 w-9 items-center rounded-full border transition-colors ${
+                                                        row.estado
+                                                            ? "bg-emerald-600 border-emerald-700/20"
+                                                            : "bg-slate-200 border-slate-300"
+                                                    }`}
+                                                >
+                                                    <span
+                                                        className={`inline-block h-4 w-4 rounded-full bg-white shadow-sm ring-1 ring-black/5 transition-transform ${
+                                                            row.estado ? "translate-x-[18px]" : "translate-x-0.5"
+                                                        }`}
+                                                    />
+                                                </span>
+                                                <span
+                                                    className={`text-[10px] font-black tracking-wide ${
+                                                        row.estado ? "text-emerald-700" : "text-slate-500"
+                                                    }`}
+                                                >
+                                                    {row.estado ? "ACTIVO" : "ANULADO"}
+                                                </span>
+                                            </div>
+                                        </button>
                                     </td>
 
                                     {/* ACCIONES */}

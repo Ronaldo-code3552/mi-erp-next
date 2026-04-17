@@ -26,10 +26,11 @@ interface ImportarDocumentoModalProps {
     catalogoTiposDoc: any[];
     onImport: (cabecera: any, detalles: any[]) => void;
     soloStock?: boolean;
+    tipoOperacionGuia?: string; // NS | NI (backend)
 }
 
 export default function ImportarDocumentoModal({ 
-    isOpen, onClose, empresaId, transaccionRules, catalogoTiposDoc, onImport, soloStock = false 
+    isOpen, onClose, empresaId, transaccionRules, catalogoTiposDoc, onImport, soloStock = false, tipoOperacionGuia
 }: ImportarDocumentoModalProps) {
     
     const [tipoDocId, setTipoDocId] = useState('');
@@ -141,7 +142,7 @@ export default function ImportarDocumentoModal({
 
                 if (esGuiaActual) {
                     res = await guiaRemisionService.getDisponiblesByEmpresa(
-                        empresaId, pageToFetch, pageSize, searchTerm, filtrosParaBackend, soloStock
+                        empresaId, pageToFetch, pageSize, searchTerm, filtrosParaBackend, soloStock, tipoOperacionGuia || null
                     );
                 } else {
                     res = await documentoCompraService.getDisponiblesByEmpresa(

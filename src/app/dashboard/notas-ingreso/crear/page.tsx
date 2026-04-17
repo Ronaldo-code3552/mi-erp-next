@@ -1151,6 +1151,7 @@ export default function CrearNotaIngresoPage() {
                     catalogoTiposDoc={catalogs['TipoDocumentoComercial'] || []}
                     onImport={handleDataImportada}
                     soloStock={true} 
+                    tipoOperacionGuia="NI"
                 />
             )}
         </div>

@@ -55,7 +55,8 @@ export const guiaRemisionService = {
         pageSize = 20, 
         searchTerm = "", // Cambié 'term' a 'searchTerm' para estandarizar
         filtros: GuiaRemisionFiltros | null = null, // 🚀 Tipado Fuerte
-        soloStock: boolean = false 
+        soloStock: boolean = false,
+        tipoOperacion: string | null = null
     ): Promise<ApiResponse<GuiaRemisionResponse[]>> => {
         
         // 🚀 Usamos la función auxiliar (¡Adiós a la lógica repetida!)
@@ -66,8 +67,9 @@ export const guiaRemisionService = {
             params: { 
                 page, 
                 pageSize, 
-                search: searchTerm, // En C# lo mapeas como 'search' o 'term' según tu controller
+                term: searchTerm,
                 filters: filtersToSend,
+                tipoOperacion,
                 soloStock
             }
         });

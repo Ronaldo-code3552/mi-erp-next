@@ -9,16 +9,19 @@ export const notaSalidaService = {
      * 🚀 IMPORTANTE: El backend espera un POST con el Body (Filtros) y el Query (Paginación)
      */
     getByAlmacen: async (
-        almacenId: string,
+        almacenId?: string | null,
         page = 1,
         pageSize = 20,
         term = '',
-        filters: any = null
+        filters: any = null,
+        empresaId: string = '005'
     ): Promise<ApiResponse<NotaSalidaResponse[]>> => {
         
+        const trimmedAlmacenId = String(almacenId ?? '').trim();
         // Armamos el Payload que mapea exactamente con la clase 'NotaSalidaByAlmacen' de C#
         const payload = {
-            almacenId: almacenId,
+            empresaId: String(empresaId || '').trim() || null,
+            almacenId: trimmedAlmacenId ? trimmedAlmacenId : null,
             SearchTerm: term || null,
             FechaIncio: filters?.fecha_inicio || null, // 🚀 Mapeado al typo exacto del backend
             FechaFin: filters?.fecha_fin || null,
