@@ -89,9 +89,27 @@ export default function VerNotaIngresoPage() {
         };
     }, [nota?.transaccionId]);
 
-    const importedEntityLabel = nota?.transaccionId === 'DV' ? 'Cliente' : 'Proveedor';
-    const importedEntityValue = (nota as any)?.proveedor?.descripcion || (nota as any)?.cliente?.descripcion || nota?.proveedorId || '-';
-    const transactionDescription = (nota as any)?.tablaTransacciones?.descripcion || nota?.transaccionId || '';
+    const entidadLabel = (() => {
+        if (nota?.referenciaDocumento?.cliente || nota?.transaccionId === 'DV') return 'Cliente';
+        if (nota?.referenciaDocumento?.proveedor) return 'Proveedor';
+        return 'Entidad';
+    })();
+
+    const entidadValue = (() => {
+        const fromReferenciaDocumento = String(
+            nota?.referenciaDocumento?.entidad?.descripcion ||
+            nota?.referenciaDocumento?.cliente?.descripcion ||
+            nota?.referenciaDocumento?.proveedor?.descripcion ||
+            ''
+        ).trim();
+
+        const fromLegacy = String(nota?.proveedor?.descripcion || nota?.cliente?.descripcion || '').trim();
+        const fromIdFallback = String(nota?.proveedorId || nota?.clienteId || '').trim();
+
+        return fromReferenciaDocumento || fromLegacy || fromIdFallback || '';
+    })();
+
+    const transactionDescription = nota?.tablaTransacciones?.descripcion || nota?.transaccionId || '';
     const documentDescription = nota?.tipoDocumentoComercial?.descripcion || nota?.tipodoccomercialId || '';
     const documentReferenceValue = nota?.doc_referencia_numero || nota?.doc_referencia || '';
 
@@ -236,10 +254,12 @@ export default function VerNotaIngresoPage() {
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 sticky top-4">
                         <SectionTitle title="Entidad y Extras" icon={IconBuildingStore} />
                         <div className="space-y-4">
-                            <ReadonlySelect
-                                label={importedEntityLabel}
-                                value={importedEntityValue}
-                            />
+                            {entidadValue ? (
+                                <ReadonlySelect
+                                    label={entidadLabel}
+                                    value={entidadValue}
+                                />
+                            ) : null}
 
                             <ReadonlySelect
                                 label="Moneda"
@@ -284,7 +304,7 @@ export default function VerNotaIngresoPage() {
                                 <IconBox size={16} className="text-blue-600 mt-0.5 shrink-0" />
                                 <div>
                                     <p className="font-bold text-slate-700">Responsable</p>
-                                    <p>{(nota as any).cuentaUsuario?.observacion || nota.cuentausuario || '-'}</p>
+                                    <p>{nota.cuentaUsuario?.observacion || nota.cuentausuario || '-'}</p>
                                 </div>
                             </div>
                         </div>

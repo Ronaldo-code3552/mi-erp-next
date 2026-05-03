@@ -142,38 +142,48 @@ export default function DetalleGuiaPage({ params }: { params: Promise<{ id: stri
                     }
 
                     // 🚀 MAPEO DE ITEMS CON LIMPIEZA
-                    if (guia.detalles && guia.detalles.length > 0) {
-                        const mappedItems = await Promise.all(guia.detalles.map(async (det: any, idx: number) => {
-                            const bienIdLimpio = String(det.bienId || '').trim();
-                            const presentacionIdLimpia = String(det.presentacionId || '').trim();
-                            const uAuxLimpio = String(det.unidad_aux || '').trim();
+	                    if (guia.detalles && guia.detalles.length > 0) {
+	                        const mappedItems = await Promise.all(guia.detalles.map(async (det: any, idx: number) => {
+	                            const bienIdLimpio = String(det.bienId || '').trim();
+	                            const presentacionIdLimpia = String(det.presentacionId || '').trim();
+	                            const uAuxLimpio = String(det.unidad_aux || '').trim();
 
-                            const resPres = await presentacionService.getByBien(bienIdLimpio);
-                            let opcionesUM: any[] = [];
-                            
-                            if (resPres.isSuccess && resPres.data) {
-                                opcionesUM = resPres.data.map((pres: any) => ({
-                                    key: String(pres.unidadmedidaId || '').trim(),
-                                    value: pres.descripcion || pres.unidadmedidaId,
-                                    presentacionId: String(pres.presentacionId || '').trim()
-                                }));
-                            }
+	                            const resPres = await presentacionService.getByBien(bienIdLimpio);
+	                            let opcionesUM: any[] = [];
+	                            
+	                            if (resPres.isSuccess && resPres.data) {
+	                                opcionesUM = resPres.data.map((pres: any) => ({
+	                                    // IMPORTANTE: la presentación se identifica por presentacionId (no por unidadmedidaId),
+	                                    // porque un producto puede tener varias presentaciones con la misma unidad de medida.
+	                                    key: String(pres.presentacionId || '').trim(),
+	                                    value: pres.descripcion || pres.unidadmedidaId,
+	                                    presentacionId: String(pres.presentacionId || '').trim(),
+	                                    unidadmedidaId: String(pres.unidadmedidaId || '').trim()
+	                                }));
+	                            }
 
-                            const prodDesc = det.bien?.descripcion || rawProducts.find((p:any) => String(p.bienId).trim() === bienIdLimpio)?.descripcion || `Producto ${bienIdLimpio}`;
+	                            const prodDesc = det.bien?.descripcion || rawProducts.find((p:any) => String(p.bienId).trim() === bienIdLimpio)?.descripcion || `Producto ${bienIdLimpio}`;
+	                            const presentacionDescDesdeApi = String(det.presentacion?.descripcion || '').trim();
+	                            const selectedPresentacionId = presentacionIdLimpia || uAuxLimpio;
 
-                            return {
-                                ...det,
-                                item: idx + 1,
-                                bienId: bienIdLimpio,
-                                unidad_aux: presentacionIdLimpia 
-                                    ? opcionesUM.find(o => o.presentacionId === presentacionIdLimpia)?.key || uAuxLimpio
-                                    : uAuxLimpio,
-                                descripcion_aux: prodDesc,
-                                unidades_opciones: opcionesUM.length > 0 ? opcionesUM : [{ key: uAuxLimpio, value: uAuxLimpio }]
-                            };
-                        }));
-                        setItems(mappedItems);
-                    }
+	                            return {
+	                                ...det,
+	                                item: idx + 1,
+	                                bienId: bienIdLimpio,
+	                                // UI: guardamos la selección por presentacionId para que el <select> haga match correcto.
+	                                unidad_aux: selectedPresentacionId,
+	                                descripcion_aux: prodDesc,
+	                                unidades_opciones: opcionesUM.length > 0
+	                                    ? opcionesUM
+	                                    : [{
+	                                        key: selectedPresentacionId,
+	                                        value: presentacionDescDesdeApi || selectedPresentacionId || '-',
+	                                        presentacionId: selectedPresentacionId || null
+	                                    }]
+	                            };
+	                        }));
+	                        setItems(mappedItems);
+	                    }
                 } else {
                     toast.error("No se pudo cargar la guía");
                     router.push('/dashboard/guias-remision');
@@ -410,14 +420,18 @@ export default function DetalleGuiaPage({ params }: { params: Promise<{ id: stri
                                                 <SearchableSelect 
                                                     options={productOptions} value={item.bienId} onChange={handleNoOp} disabled={isReadOnly}
                                                 />
-                                            </td>
-                                            <td className="p-3">
-                                                <select className="w-full border border-slate-200 p-2 rounded bg-slate-50 text-slate-600 cursor-not-allowed" disabled>
-                                                    {item.unidades_opciones?.map((u: any) => (
-                                                        <option key={u.key} value={u.key}>{u.value}</option>
-                                                    ))}
-                                                </select>
-                                            </td>
+	                                            </td>
+	                                            <td className="p-3">
+	                                                <select
+	                                                    className="w-full border border-slate-200 p-2 rounded bg-slate-50 text-slate-600 cursor-not-allowed"
+	                                                    disabled
+	                                                    value={String(item.presentacionId || item.unidad_aux || '').trim()}
+	                                                >
+	                                                    {item.unidades_opciones?.map((u: any) => (
+	                                                        <option key={u.key} value={u.key}>{u.value}</option>
+	                                                    ))}
+	                                                </select>
+	                                            </td>
                                             <td className="p-3">
                                                 <FormInput type="number" className="text-right" value={item.cantidad} disabled={isReadOnly} />
                                             </td>

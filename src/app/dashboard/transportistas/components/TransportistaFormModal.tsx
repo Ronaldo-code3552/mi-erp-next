@@ -14,7 +14,7 @@ import { RucResponse, DniResponse } from '@/types/apiExternal.types';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onSuccess: () => void;
+    onSuccess: (saved?: Transportista) => void;
     transportistaToEdit?: Transportista | null;
 }
 
@@ -194,14 +194,45 @@ export default function TransportistaFormModal({ isOpen, onClose, onSuccess, tra
                 empresaId: EMPRESA_ID
             };
 
+            const pickId = (obj: any) => {
+                if (obj === undefined || obj === null) return '';
+                if (typeof obj === 'string' || typeof obj === 'number') return String(obj).trim();
+                const candidate =
+                    obj.transportistaId ??
+                    obj.transportista_id ??
+                    obj.TransportistaId ??
+                    obj.id ??
+                    obj.Id ??
+                    obj.data; // algunos endpoints devuelven { data: "TR000869" }
+                return String(candidate ?? '').trim();
+            };
+
             if (transportistaToEdit?.transportistaId) {
-                await transportistaService.update(transportistaToEdit.transportistaId, payload);
+                const res = await transportistaService.update(transportistaToEdit.transportistaId, payload);
                 toast.success("Transportista actualizado correctamente");
+                const raw = (res as any)?.data ?? res;
+                const entity = raw?.transportista ?? raw;
+                const id = pickId(entity) || pickId(raw) || String(transportistaToEdit.transportistaId).trim();
+                onSuccess({
+                    ...payload,
+                    ...(entity || {}),
+                    transportistaId: id,
+                    // estado puede venir como 0/1/bool/string: lo dejamos al valor que venga o asumimos activo
+                    estado: (entity as any)?.estado ?? true
+                } as Transportista);
             } else {
-                await transportistaService.create(payload);
+                const res = await transportistaService.create(payload);
                 toast.success("Transportista registrado correctamente");
+                const raw = (res as any)?.data ?? res;
+                const entity = raw?.transportista ?? raw;
+                const id = pickId(entity) || pickId(raw);
+                onSuccess({
+                    ...payload,
+                    ...(entity || {}),
+                    transportistaId: id,
+                    estado: (entity as any)?.estado ?? true
+                } as Transportista);
             }
-            onSuccess();
             onClose();
         } catch (error: any) {
             const rawMessage = String(error?.response?.data?.message || '');

@@ -17,7 +17,7 @@ import { getInputClasses } from '@/utils/formStyles';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onSuccess: () => void;
+    onSuccess: (saved?: Conductor) => void;
     conductorToEdit?: Conductor | null;
 }
 
@@ -230,14 +230,47 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
 
         setLoading(true);
         try {
+            const pickId = (obj: any) => {
+                if (obj === undefined || obj === null) return '';
+                if (typeof obj === 'string' || typeof obj === 'number') return String(obj).trim();
+                const candidate =
+                    obj.conductortransporteId ??
+                    obj.conductorTransporteId ??
+                    obj.conductortransporte_id ??
+                    obj.ConductorTransporteId ??
+                    obj.id ??
+                    obj.Id ??
+                    obj.data; // algunos endpoints devuelven { data: "CT001317" }
+                return String(candidate ?? '').trim();
+            };
+
             if (conductorToEdit?.conductortransporteId) {
-                await conductorService.update(conductorToEdit.conductortransporteId, payload);
+                const res = await conductorService.update(conductorToEdit.conductortransporteId, payload);
                 toast.success('Conductor actualizado correctamente');
+                const raw = (res as any)?.data ?? res;
+                const entity = raw?.conductor ?? raw;
+                const id = pickId(entity) || pickId(raw) || String(conductorToEdit.conductortransporteId).trim();
+                onSuccess({
+                    ...payload,
+                    ...(entity || {}),
+                    conductortransporteId: id,
+                    estado: (entity as any)?.estado ?? true,
+                    empresaId: EMPRESA_ID
+                } as Conductor);
             } else {
-                await conductorService.create(payload);
+                const res = await conductorService.create(payload);
                 toast.success('Conductor registrado correctamente');
+                const raw = (res as any)?.data ?? res;
+                const entity = raw?.conductor ?? raw;
+                const id = pickId(entity) || pickId(raw);
+                onSuccess({
+                    ...payload,
+                    ...(entity || {}),
+                    conductortransporteId: id,
+                    estado: (entity as any)?.estado ?? true,
+                    empresaId: EMPRESA_ID
+                } as Conductor);
             }
-            onSuccess();
             onClose();
         } catch (error: any) {
             const rawMessage = String(error?.response?.data?.message || '');

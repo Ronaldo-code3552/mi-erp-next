@@ -119,6 +119,24 @@ export default function ProductosPage() {
                 </div>
             )
         },
+        { 
+            header: 'Tipo Afecto', 
+            width: '260px',
+            render: (row: Producto) => {
+                const desc = String(row.operacionItem?.descripcion || '').trim();
+                const label = desc || '-';
+                return (
+                    <div className="min-w-0">
+                        <span
+                            className="block text-[11px] font-semibold text-slate-700 leading-tight line-clamp-2 break-words"
+                            title={label}
+                        >
+                            {label}
+                        </span>
+                    </div>
+                );
+            }
+        },
         { header: 'Precio', className: 'text-right', render: (row: Producto) => <span className="font-mono font-bold text-emerald-600">S/ {row.precio?.toFixed(2)}</span> },
         { 
             header: 'Estado', 
@@ -180,6 +198,7 @@ export default function ProductosPage() {
                                     row.estado ? "text-emerald-700" : "text-slate-500"
                                 }`}
                             >
+                                {row.estado ? "ACTIVO" : "ANULADO"}
                             </span>
                         </div>
                     </button>

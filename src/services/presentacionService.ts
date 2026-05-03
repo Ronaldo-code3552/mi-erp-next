@@ -20,11 +20,21 @@ export interface PresentacionPorCantidadFiltros {
 }
 
 export const presentacionService = {
-    getByBien: async (bienId: string): Promise<ApiResponse<Presentacion[]>> => {
+    getByBien: async (bienId: string, estado?: boolean): Promise<ApiResponse<Presentacion[]>> => {
         const response = await apiClient.get(`/Presentaciones/bien/${bienId}`, {
-            params: { page: 1, pageSize: 50 }
+            params: { page: 1, pageSize: 50, ...(typeof estado === 'boolean' ? { estado } : {}) }
         });
-        return response.data;
+        const payload = response.data as ApiResponse<Presentacion[]>;
+        if (typeof estado !== 'boolean') return payload;
+
+        // Fallback de frontend: si el backend no filtra por querystring, filtramos aqui.
+        const normalized = (payload?.data || []).filter((p: any) => {
+            const st = p?.estado;
+            const isActive = st === true || st === 1 || st === '1' || String(st).toUpperCase() === 'ACTIVO';
+            return estado ? isActive : !isActive;
+        });
+
+        return { ...payload, data: normalized };
     },
 
     // 🚀 NUEVO MÉTODO PARA CONSUMIR EL ENDPOINT POR CANTIDAD

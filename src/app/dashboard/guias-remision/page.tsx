@@ -121,7 +121,7 @@ export default function GuiasRemisionPage() {
     // --- COLUMNAS DE LA TABLA ---
     const columns = [
         { 
-            header: 'Emisión / Guía', 
+            header: 'Fecha / Guía', 
             width: '140px',
             render: (row: GuiaRemisionResponse) => (
                 <div className="flex flex-col">
@@ -170,13 +170,13 @@ export default function GuiasRemisionPage() {
                     <div className="flex items-start gap-1 text-[10px]">
                         <IconMapPin size={12} className="text-green-600 mt-0.5" />
                         <span className="text-slate-600 leading-tight line-clamp-1" title={row.punto_partida}>
-                             {row.almacenInicio?.descripcion || 'Partida'}
+                             {row.punto_partida || 'Partida'}
                         </span>
                     </div>
                     <div className="flex items-start gap-1 text-[10px]">
                         <IconMapPin size={12} className="text-red-600 mt-0.5" />
                         <span className="text-slate-600 leading-tight line-clamp-1" title={row.punto_llegada}>
-                             {row.almacenDestino?.descripcion || 'Llegada'}
+                             {row.punto_llegada || 'Llegada'}
                         </span>
                     </div>
                 </div>

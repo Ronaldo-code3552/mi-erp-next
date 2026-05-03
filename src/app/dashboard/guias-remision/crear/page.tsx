@@ -1,6 +1,6 @@
 // src/app/dashboard/guias-remision/crear/page.tsx
 "use client";
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { format, isBefore, parseISO } from 'date-fns';
@@ -30,6 +30,7 @@ import {
     IconMapPin, IconTruck, IconPackage, IconFileDescription, IconFileInvoice,
     IconBarcode, IconEdit, IconSearch, IconLoader, IconX
 } from '@tabler/icons-react';
+import { upsertOptionByValue } from '@/utils/selectOptions';
 
 const SectionTitle = ({ title, icon: Icon }: any) => (
     <div className="flex items-center gap-2 text-slate-800 border-b border-slate-200 pb-2 mb-4 mt-6">
@@ -172,11 +173,9 @@ export default function CrearGuiaPage() {
         }
 
         const fetchProducts = async () => {
-            const resProducts = await productoService.getByEmpresa(EMPRESA_ID, 1, 500); 
+            const resProducts = await productoService.getByEmpresa(EMPRESA_ID, 1, 500, '', null, true); 
             if (resProducts.isSuccess) {
-                const mappedProds = (resProducts.data || [])
-                    .filter((p: any) => p.estado !== 0 && p.estado !== false && p.estado !== '0')
-                    .map(mapProductToOption);
+                const mappedProds = (resProducts.data || []).map(mapProductToOption);
                 setProducts(mappedProds);
                 setProductOptions(mappedProds);
             }
@@ -251,11 +250,9 @@ export default function CrearGuiaPage() {
         }
 
         try {
-            const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 100, normalizedTerm);
+            const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 100, normalizedTerm, null, true);
             if (requestId !== productSearchReqIdRef.current) return;
-            const remote = (res?.data || [])
-                .filter((p: any) => p.estado !== 0 && p.estado !== false && p.estado !== '0')
-                .map(mapProductToOption);
+            const remote = (res?.data || []).map(mapProductToOption);
 
             setProductOptions(prev => {
                 const selectedIds = Array.from(new Set(items.map((it: any) => String(it?.bienId || '').trim()).filter(Boolean)));
@@ -347,9 +344,15 @@ export default function CrearGuiaPage() {
         return (selectedSerie?.originalData?.enviarSunat || '').toUpperCase() === 'SI';
     }, [filteredSeries, formData.serie]);
 
-    const REFERENCE_REQUIRED_MOTIVOS = ['MT00001', 'MT00002', 'MT00003', 'MT00004', 'MT00013'];
+    // Documento Referencia:
+    // - "Soportado": se muestra el bloque y se permite importar.
+    // - "Obligatorio": se valida solo en ciertas series / cuando se envía a SUNAT (ver handleSubmit).
+    // Regla especial: MT00002 => Documento Referencia debe ser OPCIONAL (nunca obligatorio).
+    const REFERENCE_SUPPORTED_MOTIVOS = ['MT00001', 'MT00002', 'MT00003', 'MT00004', 'MT00013'];
+    const REFERENCE_REQUIRED_MOTIVOS = ['MT00001', 'MT00003', 'MT00004', 'MT00013'];
+    const supportsDocumentReference = REFERENCE_SUPPORTED_MOTIVOS.includes(formData.motivotrasladoId || '');
     const requiresDocumentReference = REFERENCE_REQUIRED_MOTIVOS.includes(formData.motivotrasladoId || '');
-    const canSearchDocument = requiresDocumentReference;
+    const canSearchDocument = supportsDocumentReference;
 
     useEffect(() => {
         if (formData.motivotrasladoId !== 'MT00006') return;
@@ -456,17 +459,17 @@ export default function CrearGuiaPage() {
             setFormData(prev => ({ ...prev, [name]: value, fecha_doc: value }));
         } 
         else if (name === 'motivotrasladoId') {
-            const requiresReference = REFERENCE_REQUIRED_MOTIVOS.includes(value);
+            const supportsReference = REFERENCE_SUPPORTED_MOTIVOS.includes(value);
             
             setFormData(prev => ({ 
                 ...prev, 
                 [name]: value,
                 clienteId: '',
                 proveedorId: '', id_almacen_destino: '', otro_motivo_traslado: '',
-                ...(requiresReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '' })
+                ...(supportsReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '' })
             }));
             
-            if (!requiresReference) {
+            if (!supportsReference) {
                 setDocRefComponents({ serie: '', numero: '' });
                 setImportedReferenceDoc(null);
             }
@@ -512,7 +515,7 @@ export default function CrearGuiaPage() {
             if (!p) return;
 
             try {
-                const res = await presentacionService.getByBien(value);
+                const res = await presentacionService.getByBien(value, true);
                 
                 let opcionesUM: any[] = [];
                 const unidadBaseKey = p.raw?.unidadmedidaId || 'NIU';
@@ -522,7 +525,12 @@ export default function CrearGuiaPage() {
                     res.data.forEach((pres: any) => {
                         const presKey = pres.unidadmedidaId?.trim(); 
                         if (presKey === unidadBaseKey?.trim()) hasBaseUnitInPresentations = true;
-                        opcionesUM.push({ key: presKey, value: pres.descripcion || presKey, presentacionId: pres.presentacionId });
+                        opcionesUM.push({
+                            key: presKey,
+                            value: pres.descripcion || presKey,
+                            presentacionId: pres.presentacionId,
+                            cantidad_pres: Number(pres.cantidad || 1)
+                        });
                     });
                 }
 
@@ -530,7 +538,12 @@ export default function CrearGuiaPage() {
                     const catUnidad = catalogs['UnidadMedida']?.find((u: any) => u.value === unidadBaseKey);
                     const nombreDesdeProducto = p.raw?.unidadMedidaDesc; 
                     const unidadBaseDesc = catUnidad?.label || nombreDesdeProducto || unidadBaseKey;
-                    opcionesUM.unshift({ key: unidadBaseKey, value: `${unidadBaseDesc} 1`, presentacionId: p.raw?.presentacionId || null });
+                    opcionesUM.unshift({
+                        key: unidadBaseKey,
+                        value: `${unidadBaseDesc} 1`,
+                        presentacionId: p.raw?.presentacionId || null,
+                        cantidad_pres: 1
+                    });
                 }
 
                 setItems(prevItems => {
@@ -546,7 +559,7 @@ export default function CrearGuiaPage() {
                     const updated = [...prevItems];
                     if (updated[index]) {
                         const base = p.raw?.unidadmedidaId || 'NIU';
-                        updated[index].unidades_opciones = [{ key: base, value: `${base} 1`, presentacionId: null }];
+                        updated[index].unidades_opciones = [{ key: base, value: `${base} 1`, presentacionId: null, cantidad_pres: 1 }];
                         updated[index].unidad_aux = base;
                     }
                     return updated;
@@ -578,13 +591,14 @@ export default function CrearGuiaPage() {
             const bienIdLimpio = detalle?.bienId ? String(detalle.bienId).trim() : '';
             const presentacionIdLimpia = detalle?.presentacionId ? String(detalle.presentacionId).trim() : '';
             const cantidadNum = Number(detalle?.cantidad ?? 0) || 0;
+            const cantidadPresentacion = Number(detalle?.presentacion?.cantidad ?? 1) || 1;
             
             return {
                 item: idx + 1, 
                 bienId: bienIdLimpio,
                 presentacionId: presentacionIdLimpia || null, 
                 cantidad: cantidadNum,
-                conversion_total: Number(detalle?.conversionTotal ?? 0) || 0, 
+                conversion_total: Number(detalle?.conversionTotal ?? cantidadNum * cantidadPresentacion) || 0, 
                 precio: Number(detalle?.costo ?? 0), 
                 costo: Number(detalle?.costo ?? 0),
                 importe: Number(detalle?.importe ?? 0), 
@@ -600,7 +614,8 @@ export default function CrearGuiaPage() {
                 unidades_opciones: [{ 
                     key: presentacionIdLimpia, 
                     value: detalle?.presentacion?.descripcion || presentacionIdLimpia || '-', 
-                    presentacionId: presentacionIdLimpia || null 
+                    presentacionId: presentacionIdLimpia || null,
+                    cantidad_pres: cantidadPresentacion
                 }]
             } as any;
         });
@@ -612,13 +627,14 @@ export default function CrearGuiaPage() {
             const bienIdLimpio = detalle?.bienId ? String(detalle.bienId).trim() : '';
             const presentacionIdLimpia = detalle?.presentacionId ? String(detalle.presentacionId).trim() : '';
             const cantidadNum = Number(detalle?.cantidad ?? 0) || 0;
+            const cantidadPresentacion = Number(detalle?.presentacion?.cantidad ?? 1) || 1;
             
             return {
                 item: idx + 1, 
                 bienId: bienIdLimpio,
                 presentacionId: presentacionIdLimpia || null, 
                 cantidad: cantidadNum,
-                conversion_total: Number(detalle?.conversionTotal ?? 0) || 0, 
+                conversion_total: Number(detalle?.conversionTotal ?? cantidadNum * cantidadPresentacion) || 0, 
                 precio: Number(detalle?.precio ?? 0), 
                 costo: Number(detalle?.precio ?? 0),
                 importe: Number(detalle?.importe ?? 0), 
@@ -634,7 +650,8 @@ export default function CrearGuiaPage() {
                 unidades_opciones: [{ 
                     key: presentacionIdLimpia, 
                     value: detalle?.presentacion?.descripcion || presentacionIdLimpia || '-', 
-                    presentacionId: presentacionIdLimpia || null 
+                    presentacionId: presentacionIdLimpia || null,
+                    cantidad_pres: cantidadPresentacion
                 }]
             } as any;
         });
@@ -966,7 +983,8 @@ export default function CrearGuiaPage() {
 
         const serieActual = String(formData.serie || '').trim().toUpperCase();
         const motivoActual = String(formData.motivotrasladoId || '').trim();
-        const motivosConDocReferencia = new Set(['MT00003', 'MT00001', 'MT00002', 'MT00004', 'MT00013']);
+        // Solo exigimos Documento Referencia en motivos "obligatorios" (MT00002 queda opcional siempre).
+        const motivosConDocReferencia = new Set(REFERENCE_REQUIRED_MOTIVOS);
         const debeExigirDocReferencia = (serieActual === 'T002' || shouldSendToSunat) && motivosConDocReferencia.has(motivoActual);
         if (debeExigirDocReferencia) {
             const hasTipoRef = !!(formData.documentoReferenciaTipo && String(formData.documentoReferenciaTipo).trim());
@@ -982,16 +1000,18 @@ export default function CrearGuiaPage() {
                 ...formData as GuiaRemisionPayload,
                 puntoventaId: '',
                 trabajadorId: '',
-                ...(requiresDocumentReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '' }),
+                ...(supportsDocumentReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '' }),
                 detalles: items.map((item, idx) => {
                     const cantidadNum = Number(item.cantidad) || 0;
                     const selectedUM = item.unidades_opciones?.find((u: any) => u.key === item.unidad_aux);
+                    const factorPresentacion = Number(selectedUM?.cantidad_pres || 1);
+                    const conversionTotal = parseFloat((cantidadNum * factorPresentacion).toFixed(2));
                     const afectoInafectoBool = typeof (item as any).afecto_inafecto === 'boolean' ? (item as any).afecto_inafecto : (item as any).afecto_inafecto === 1 || (item as any).afecto_inafecto === 'true';
 
                     return {
                         bienId: item.bienId,
                         presentacionId: selectedUM?.presentacionId || null,
-                        item: idx + 1, cantidad: cantidadNum, conversion_total: 100, precio: 100, costo: 100, importe: 100, Saldo_cantidad: cantidadNum,
+                        item: idx + 1, cantidad: cantidadNum, conversion_total: conversionTotal, precio: 0, costo: 0, importe: 0, Saldo_cantidad: cantidadNum,
                         descuento_producto: Number((item as any).descuento_producto ?? 0), afecto_inafecto: afectoInafectoBool,
                         observacion: (item as any).observacion ?? 'KG', documentoId: null, tabla_documento: 'GUIAS_REMISION', saldo_temporal: cantidadNum
                     };
@@ -1060,6 +1080,27 @@ export default function CrearGuiaPage() {
                 } else toast.error("No se pudo cargar el conductor");
             } catch (e) { toast.error("Error al cargar conductor"); }
             finally { setLoading(false); }
+        }
+    };
+
+    const applyAutoSelect = (
+        fieldName: 'transportistaId' | 'unidadTransporteId' | 'conductorId',
+        saved: { id?: unknown; label?: unknown; aux?: unknown; raw?: unknown } | null | undefined,
+        setOptions: Dispatch<SetStateAction<any[]>>
+    ) => {
+        const id = String(saved?.id ?? '').trim();
+        const label = String(saved?.label ?? '').trim();
+        if (!id) return;
+
+        setFormData((prev) => ({ ...prev, [fieldName]: id }));
+        if (label) {
+            setOptions((prev) =>
+                upsertOptionByValue(
+                    prev,
+                    { value: id, label, aux: saved?.aux, originalData: saved?.raw },
+                    { prepend: true }
+                )
+            );
         }
     };
 
@@ -1293,12 +1334,17 @@ export default function CrearGuiaPage() {
                         </div>
                     </div>
 
-                    {requiresDocumentReference && (
+                    {supportsDocumentReference && (
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200">
                         <SectionTitle title="Documento Referencia" icon={IconFileInvoice} />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             
                             <div className="space-y-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+                                {!requiresDocumentReference && (
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase">
+                                        Opcional para este motivo
+                                    </div>
+                                )}
                                 <div className="flex flex-col gap-1.5">
                                     <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo Documento</label>
                                     <select 
@@ -1369,7 +1415,7 @@ export default function CrearGuiaPage() {
                                                     <SearchableSelect 
                                                         name="bienId"
                                                         fetchCustom={async (term) => {
-                                                            const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, { estado: true });
+                                                            const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, null, true);
 
                                                             if (res.isSuccess) {
                                                                 return (res.data || []).map((p: any) => ({
@@ -1519,10 +1565,13 @@ export default function CrearGuiaPage() {
                 <UnidadFormModal 
                     isOpen={showUnidadModal} 
                     onClose={() => setShowUnidadModal(false)} 
-                    onSuccess={() => { 
-                        refreshCatalogs(); 
-                        setShowUnidadModal(false); 
-                    }} 
+                    onSuccess={(saved: any) => {
+                        // Auto-seleccionar lo creado/editado sin obligar al usuario a abrir el DDL
+                        const id = saved?.unidadtransporteId ?? saved?.unidadTransporteId ?? saved?.id;
+                        const label = saved?.nro_matricula_cabina || saved?.nroMatriculaCabina || saved?.descripcion || saved?.label;
+                        applyAutoSelect('unidadTransporteId', { id, label, raw: saved }, setUnidadTransporteOptions);
+                        refreshCatalogs();
+                    }}
                     unitToEdit={unidadToEdit} 
                 />
             )}
@@ -1531,10 +1580,15 @@ export default function CrearGuiaPage() {
                 <ConductorFormModal 
                     isOpen={showConductorModal} 
                     onClose={() => setShowConductorModal(false)} 
-                    onSuccess={() => { 
-                        refreshCatalogs(); 
-                        setShowConductorModal(false); 
-                    }} 
+                    onSuccess={(saved: any) => {
+                        const id = saved?.conductortransporteId ?? saved?.conductorTransporteId ?? saved?.id;
+                        const label =
+                            saved?.label ||
+                            `${saved?.nombres || ''} ${saved?.apellidos || ''}`.trim() ||
+                            saved?.descripcion;
+                        applyAutoSelect('conductorId', { id, label, raw: saved }, setConductorOptions);
+                        refreshCatalogs();
+                    }}
                     conductorToEdit={conductorToEdit} 
                 />
             )}
@@ -1543,9 +1597,12 @@ export default function CrearGuiaPage() {
                 <TransportistaFormModal
                     isOpen={showTransportistaModal}
                     onClose={() => setShowTransportistaModal(false)}
-                    onSuccess={() => {
+                    onSuccess={(saved: any) => {
+                        const id = saved?.transportistaId ?? saved?.transportista_id ?? saved?.id;
+                        const label = saved?.descripcion || saved?.razonSocial || saved?.razon_social || saved?.label;
+                        const aux = saved?.numero_doc || saved?.numeroDoc || saved?.numeroDocumento || saved?.aux;
+                        applyAutoSelect('transportistaId', { id, label, aux, raw: saved }, setTransportistaOptions);
                         refreshCatalogs();
-                        setShowTransportistaModal(false);
                     }}
                     transportistaToEdit={transportistaToEdit}
                 />

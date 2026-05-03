@@ -2,6 +2,7 @@
 
 import apiClient from '../api/apiCliente';
 import { NotaIngresoPayload, NotaIngresoResponse, NotaIngresoFilters } from '../types/notaIngreso.types';
+import { ApiResponse } from '../types';
 
 export const notaIngresoService = {
     // 1. Obtener Listado Paginado por Almacén (con filtros avanzados)
@@ -119,5 +120,15 @@ export const notaIngresoService = {
                 message: error.response?.data?.message || 'Error al anular la Nota de Ingreso'
             };
         }
+    },
+
+    /**
+     * Genera la impresión (PDF) de la Nota de Ingreso.
+     * Backend: GET /NotaIngreso/{id}/imprimir
+     * Retorna ApiResponse.Success({ base64: "...", ... })
+     */
+    imprimir: async (id: string): Promise<ApiResponse<any>> => {
+        const response = await apiClient.get(`/NotaIngreso/${id}/imprimir`);
+        return response.data;
     }
 };

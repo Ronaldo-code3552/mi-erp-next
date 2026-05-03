@@ -23,6 +23,7 @@ import {
     IconBuildingStore, IconPackage, IconPlus, IconTrash, IconSearch,
     IconLoader, IconListDetails, IconExchange, IconX
 } from '@tabler/icons-react';
+import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
 
 const SectionTitle = ({ title, icon: Icon }: any) => (
     <div className="flex items-center gap-2 text-slate-800 border-b border-slate-200 pb-2 mb-4 mt-6">
@@ -133,31 +134,7 @@ export default function CrearNotaSalidaPage() {
     ]);
 
     const almacenOrigenOptions = useMemo(() => {
-        const activos = (catalogs['Almacen'] || []).filter((a: any) => {
-            const estado = a?.originalData?.estado ?? a?.estado;
-            return estado === true || estado === 1 || estado === '1';
-        });
-        return [...activos].sort((a: any, b: any) => {
-            const tipoA = Number(
-                a?.originalData?.tipoalmacenId ??
-                a?.originalData?.tipoAlmacen?.tipoAlmacenId ??
-                9999
-            );
-            const tipoB = Number(
-                b?.originalData?.tipoalmacenId ??
-                b?.originalData?.tipoAlmacen?.tipoAlmacenId ??
-                9999
-            );
-
-            const prioA = tipoA === 3 ? 0 : 1;
-            const prioB = tipoB === 3 ? 0 : 1;
-            if (prioA !== prioB) return prioA - prioB;
-            if (tipoA !== tipoB) return tipoA - tipoB;
-
-            const labelA = String(a?.label || '').toUpperCase();
-            const labelB = String(b?.label || '').toUpperCase();
-            return labelA.localeCompare(labelB);
-        });
+        return getAlmacenesActivosOrdenados(catalogs['Almacen'] || []);
     }, [catalogs]);
 
     const almacenDestinoOptions = useMemo(() => {
@@ -400,7 +377,7 @@ export default function CrearNotaSalidaPage() {
                     
                     let opcionesUM: any[] = [];
                     try {
-                        const res = await presentacionService.getByBien(pId);
+                        const res = await presentacionService.getByBien(pId, true);
                         if (res.isSuccess && res.data && res.data.length > 0) {
                             opcionesUM = res.data.map((pres: any) => ({
                                 key: String(pres.presentacionId).trim(),
@@ -576,10 +553,10 @@ export default function CrearNotaSalidaPage() {
             try {
                 const resProd = await productoService.getByEmpresa(EMPRESA_ID, 1, 1, value, {
                     condicion_estado: ['STOCK']
-                });
+                }, true);
                 const rawBienData = resProd.isSuccess && resProd.data && resProd.data.length > 0 ? resProd.data[0] : null;
 
-                const res = await presentacionService.getByBien(value);
+                const res = await presentacionService.getByBien(value, true);
                 let opcionesUM: any[] = [];
                 
                 if (res.isSuccess && res.data && res.data.length > 0) {
@@ -1389,7 +1366,7 @@ export default function CrearNotaSalidaPage() {
                                                             fetchCustom={async (term) => {
                                                                 const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, {
                                                                     condicion_estado: ['STOCK']
-                                                                });
+                                                                }, true);
                                                                 if (res.isSuccess) {
                                                                     return (res.data || []).map((p: any) => ({
                                                                         key: String(p.bienId || '').trim(),

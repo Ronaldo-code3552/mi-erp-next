@@ -16,6 +16,7 @@ import DataTable from "@/components/shared/DataTable";
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
 import MultiSelect from "@/components/forms/MultiSelect";
 import SearchableSelect from "@/components/forms/SearchableSelect";
+import { getAlmacenesActivosOrdenados, withTodosAlmacenesOption } from "@/utils/almacenOptions";
 
 import { 
     IconRefresh, IconSearch, IconFilter, 
@@ -59,14 +60,8 @@ export default function NotasIngresoPage() {
     ]);
 
     const almacenOptions = useMemo(() => {
-        const activos = (catalogs['Almacen'] || []).filter((a) => {
-            const estado = a?.originalData?.estado ?? a?.estado;
-            return estado === true || estado === 1 || estado === '1';
-        });
-        return [
-            { value: '', label: '-- TODOS LOS ALMACENES --', key: 'ALL', originalData: {} },
-            ...activos
-        ];
+        const activosOrdenados = getAlmacenesActivosOrdenados(catalogs['Almacen'] || []);
+        return withTodosAlmacenesOption(activosOrdenados);
     }, [catalogs]);
 
     const almacenNameById = useMemo(() => {
@@ -125,21 +120,26 @@ export default function NotasIngresoPage() {
     const handlePrint = async (id: string) => {
         setPrintingId(id);
         try {
-            // Asumiendo que crearás este método en el service más adelante
-            const res = await notaIngresoService.imprimir?.(id); 
-            if (res?.isSuccess && res.data?.base64) {
-                const byteCharacters = atob(res.data.base64);
+            const res = await notaIngresoService.imprimir(id);
+
+            // Aceptar base64 puro o dataURL "data:application/pdf;base64,..."
+            const base64Raw = String(res?.data?.base64 || '').trim();
+            const base64 = base64Raw.includes('base64,') ? base64Raw.split('base64,').pop() || '' : base64Raw;
+
+            if (res?.isSuccess && base64) {
+                const byteCharacters = atob(base64);
                 const byteNumbers = new Array(byteCharacters.length);
                 for (let i = 0; i < byteCharacters.length; i++) byteNumbers[i] = byteCharacters.charCodeAt(i);
                 const byteArray = new Uint8Array(byteNumbers);
                 const blob = new Blob([byteArray], { type: 'application/pdf' });
                 window.open(URL.createObjectURL(blob), '_blank');
-                toast.success("Impresión generada.");
+                toast.success(res.message || "Impresión generada.");
             } else {
-                toast.error("Error al generar el documento");
+                toast.error(res?.message || "Error al generar el documento");
             }
-        } catch {
-            toast.error("Error de conexión al intentar imprimir");
+        } catch (error: any) {
+            console.error("Error al imprimir:", error);
+            toast.error(error?.response?.data?.message || "Error de conexión al intentar imprimir");
         } finally {
             setPrintingId(null);
         }

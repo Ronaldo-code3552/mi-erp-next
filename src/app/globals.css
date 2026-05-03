@@ -1,1 +1,10 @@
 @import "tailwindcss";
+
+/* Oculta la barra de scroll visual, pero mantiene el scroll funcional (wheel/touch). */
+.scrollbar-hidden {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge legacy */
+}
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}

@@ -6,7 +6,7 @@ import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
 import { notaSalidaService } from '@/services/notaSalidaService';
-import { NotaSalidaResponse } from '@/types/notaSalida.types';
+import { NotaSalidaDetalle, NotaSalidaResponse } from '@/types/notaSalida.types';
 
 import {
     IconArrowLeft,
@@ -17,14 +17,25 @@ import {
     IconPackage
 } from '@tabler/icons-react';
 
-const SectionTitle = ({ title, icon: Icon }: any) => (
+type IconComponent = (props: { size?: number; className?: string }) => JSX.Element;
+
+const SectionTitle = ({ title, icon: Icon }: { title: string; icon: IconComponent }) => (
     <div className="flex items-center gap-2 text-slate-800 border-b border-slate-200 pb-2 mb-4 mt-6">
         <Icon className="text-blue-600" size={20} />
         <h3 className="font-bold text-sm uppercase tracking-wide">{title}</h3>
     </div>
 );
 
-const FormInput = ({ label, className, value, ...props }: any) => (
+const FormInput = ({
+    label,
+    className,
+    value,
+    ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & {
+    label: string;
+    className?: string;
+    value?: string | number | null;
+}) => (
     <div className="flex flex-col gap-1.5">
         <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">{label}</label>
         <input
@@ -70,8 +81,9 @@ export default function VerNotaSalidaPage() {
                     return;
                 }
                 setNota(res.data);
-            } catch (error: any) {
-                toast.error(error?.message || 'Error al cargar la nota de salida.');
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : '';
+                toast.error(message || 'Error al cargar la nota de salida.');
                 router.push('/dashboard/notas-salida');
             } finally {
                 setLoading(false);
@@ -92,8 +104,8 @@ export default function VerNotaSalidaPage() {
     }, [nota?.transaccionId]);
 
     const transactionDescription =
-        (nota as any)?.tablaTransacciones?.descripcion ||
-        (nota as any)?.transaccion?.descripcion ||
+        nota?.tablaTransacciones?.descripcion ||
+        nota?.transaccion?.descripcion ||
         nota?.transaccionId ||
         '';
 
@@ -104,7 +116,17 @@ export default function VerNotaSalidaPage() {
         '';
 
     const documentReferenceValue = nota?.doc_referencia_numero || nota?.doc_referencia || '';
-    const entidadValue = (nota as any)?.cliente?.descripcion || nota?.clienteDesc || '-';
+    const entidadValue = (() => {
+        const fromReferenciaDocumento = String(
+            nota?.referenciaDocumento?.entidad?.descripcion ||
+            nota?.referenciaDocumento?.cliente?.descripcion ||
+            nota?.referenciaDocumento?.proveedor?.descripcion ||
+            ''
+        ).trim();
+
+        const fromLegacy = String(nota?.cliente?.descripcion || nota?.clienteDesc || '').trim();
+        return fromReferenciaDocumento || fromLegacy || '';
+    })();
 
     if (loading) {
         return (
@@ -147,7 +169,7 @@ export default function VerNotaSalidaPage() {
                             {transaccionRules.esTrasladoInterno && (
                                 <FormInput
                                     label="Almacén Destino"
-                                    value={(nota as any)?.almacenDestino?.descripcion || (nota as any)?.almacenDestinoId || '-'}
+                                    value={nota?.almacenDestino?.descripcion || nota?.almacenDestinoId || '-'}
                                 />
                             )}
 
@@ -189,7 +211,7 @@ export default function VerNotaSalidaPage() {
                                             </td>
                                         </tr>
                                     ) : (
-                                        nota.detalles.map((item: any, idx: number) => (
+                                        nota.detalles.map((item: NotaSalidaDetalle, idx: number) => (
                                             <tr key={`${item.bienId}-${idx}`} className="hover:bg-slate-50 transition-colors">
                                                 <td className="p-3 text-center font-mono text-slate-400">{item.item || idx + 1}</td>
                                                 <td className="p-3">
@@ -242,10 +264,12 @@ export default function VerNotaSalidaPage() {
                     <div className="bg-white p-6 rounded-xl shadow-sm border border-slate-200 sticky top-4">
                         <SectionTitle title="Entidad y Extras" icon={IconBuildingStore} />
                         <div className="space-y-4">
-                            <ReadonlySelect
-                                label="Cliente / Entidad"
-                                value={entidadValue}
-                            />
+                            {entidadValue ? (
+                                <ReadonlySelect
+                                    label="Cliente / Entidad"
+                                    value={entidadValue}
+                                />
+                            ) : null}
 
                             <ReadonlySelect
                                 label="Moneda"
@@ -264,7 +288,7 @@ export default function VerNotaSalidaPage() {
 
                             <FormInput
                                 label="Almacén"
-                                value={nota.almacen?.descripcion || (nota as any)?.almacenId || ''}
+                                value={nota.almacen?.descripcion || nota?.almacenId || ''}
                             />
 
                             <div className="pt-4 border-t border-slate-100">
@@ -280,7 +304,7 @@ export default function VerNotaSalidaPage() {
                                 <IconBox size={16} className="text-blue-600 mt-0.5 shrink-0" />
                                 <div>
                                     <p className="font-bold text-slate-700">Responsable</p>
-                                    <p>{(nota as any)?.cuentaUsuario?.observacion || nota.cuentausuario || '-'}</p>
+                                    <p>{nota?.cuentaUsuario?.observacion || nota.cuentausuario || '-'}</p>
                                 </div>
                             </div>
                         </div>

@@ -16,6 +16,7 @@ import DataTable from "@/components/shared/DataTable";
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
 import MultiSelect from "@/components/forms/MultiSelect";
 import SearchableSelect from "@/components/forms/SearchableSelect";
+import { getAlmacenesActivosOrdenados, withTodosAlmacenesOption } from "@/utils/almacenOptions";
 
 import { 
     IconFileExport, IconRefresh, IconSearch, IconFilter, 
@@ -56,14 +57,8 @@ export default function NotasSalidaPage() {
     ]);
 
     const almacenOptions = useMemo(() => {
-        const activos = (catalogs['Almacen'] || []).filter((a) => {
-            const estado = a?.originalData?.estado ?? a?.estado;
-            return estado === true || estado === 1 || estado === '1';
-        });
-        return [
-            { value: '', label: '-- TODOS LOS ALMACENES --', key: 'ALL', originalData: {} },
-            ...activos
-        ];
+        const activosOrdenados = getAlmacenesActivosOrdenados(catalogs['Almacen'] || []);
+        return withTodosAlmacenesOption(activosOrdenados);
     }, [catalogs]);
 
     const almacenNameById = useMemo(() => {

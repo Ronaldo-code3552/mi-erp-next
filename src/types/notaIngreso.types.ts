@@ -1,5 +1,39 @@
 // src/types/notaIngreso.types.ts
 
+export interface EntidadLite {
+    descripcion?: string;
+}
+
+export interface ClienteLite {
+    descripcion?: string;
+}
+
+export interface ProveedorLite {
+    descripcion?: string;
+}
+
+export interface TablaTransaccionesLite {
+    descripcion?: string;
+}
+
+export interface TipoDocumentoComercialLite {
+    descripcion?: string;
+}
+
+export interface MonedaLite {
+    descripcion?: string;
+    abreviatura?: string;
+    simbolomoneda?: string;
+}
+
+export interface AlmacenLite {
+    descripcion?: string;
+}
+
+export interface CuentaUsuarioLite {
+    observacion?: string;
+}
+
 export interface NotaIngresoDetalle {
     item: number;
     bienId: string;
@@ -36,6 +70,7 @@ export interface NotaIngresoPayload {
     fecha_doc?: string;
     fecha_emision?: string;
     proveedorId?: string;
+    clienteId?: string;
 }
 
 export interface NotaIngresoResponse extends Omit<NotaIngresoPayload, 'detalles'> {
@@ -45,10 +80,26 @@ export interface NotaIngresoResponse extends Omit<NotaIngresoPayload, 'detalles'
     detalles?: NotaIngresoDetalle[];
     
     // Objetos anidados que devuelve el backend (GET BY ID)
-    transaccion?: any;
-    tipoDocumentoComercial?: any;
-    moneda?: any;
-    almacen?: any;
+    tablaTransacciones?: TablaTransaccionesLite;
+    transaccion?: TablaTransaccionesLite;
+    tipoDocumentoComercial?: TipoDocumentoComercialLite;
+    moneda?: MonedaLite;
+    almacen?: AlmacenLite;
+    cuentaUsuario?: CuentaUsuarioLite;
+
+    referenciaDocumento?: {
+        idDocumento?: string;
+        entidadId?: string;
+        clienteId?: string;
+        proveedorId?: string;
+        entidad?: EntidadLite;
+        cliente?: ClienteLite;
+        proveedor?: ProveedorLite;
+    };
+
+    // Campos legacy (si el backend aún los devuelve en algunos casos)
+    cliente?: ClienteLite;
+    proveedor?: ProveedorLite;
 }
 
 export interface NotaIngresoFilters {

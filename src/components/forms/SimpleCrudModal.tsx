@@ -48,12 +48,24 @@ export default function SimpleCrudModal({ isOpen, onClose, onSuccess, title, ini
 
             if (res.isSuccess) {
                 toast.success("Guardado correctamente");
-                // Devolvemos un objeto simulado para actualizar el select sin recargar todo
-                onSuccess({ 
-                    key: initialData?.id || res.data?.marcaId || res.data?.modeloId, // Ajustar según respuesta de tu API
-                    value: desc.toUpperCase(),
+                const pickId = (raw: any) => {
+                    if (raw === undefined || raw === null) return null;
+                    if (typeof raw === 'number' || typeof raw === 'string') return raw;
+                    return raw?.marcaId ?? raw?.modeloId ?? raw?.id ?? raw?.Id ?? raw?.data ?? null;
+                };
+
+                const rawData = (res as any)?.data;
+                const id = initialData?.id ?? pickId(rawData) ?? pickId(res);
+
+                // Devolvemos un objeto consistente para autoselección
+                onSuccess({
+                    id,
+                    key: id,
+                    value: id,
+                    label: desc.toUpperCase(),
+                    descripcion: desc.toUpperCase(),
                     ...extraData
-                }); 
+                });
                 onClose();
             } else {
                 toast.error(res.message);

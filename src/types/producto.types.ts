@@ -55,6 +55,12 @@ export interface Producto {
     subClaseBien?: { descripcion: string };
     claseBien?: { descripcion: string };
     unidadMedida?: { descripcion: string; abreviatura: string };
+
+    // Tipo Afecto (operación/tributación). Viene en el GET ALL según el backend.
+    operacionItem?: {
+        descripcion?: string;
+        valor?: number;
+    };
 }
 
 export interface ApiResponse<T> {

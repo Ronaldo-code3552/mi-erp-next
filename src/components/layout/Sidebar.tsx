@@ -25,6 +25,7 @@ const Sidebar = () => {
     {title: 'Guias Remision', icon: <IconActivity size={20} />, path: '/dashboard/guias-remision' },
     {title: 'Notas de Entrada', icon: <IconAccessible size={20} />, path: '/dashboard/notas-ingreso' },
     {title: 'Notas de Salida', icon: <Icon3dCubeSphereOff size={20} />, path: '/dashboard/notas-salida' },
+    {title: 'Kardex', icon: <IconTruck size={20} />, path: '/dashboard/kardex' },
     {title: 'Motivo Traslado', icon: <Icon24Hours size={20} />, path: '/dashboard/motivo-traslado' },
     {title: 'Tabla Transaccion', icon: <IconAdjustmentsCode size={20} />, path: '/dashboard/tabla-transaccion' },
   ];

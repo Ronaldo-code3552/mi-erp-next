@@ -21,7 +21,7 @@ import { useValidation } from '@/hooks/useValidation';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onSuccess: () => void;
+    onSuccess: (saved?: UnidadTransporte) => void;
     unitToEdit?: UnidadTransporte | null;
 }
 
@@ -33,6 +33,8 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
     const { catalogs, loadingCatalogs, refreshCatalogs } = useCatalogs(isOpen ? ['Marca', 'Modelo'] : []);
 
     const [selectedMarca, setSelectedMarca] = useState("");
+    const [marcaFallbackLabel, setMarcaFallbackLabel] = useState("");
+    const [modeloFallbackLabel, setModeloFallbackLabel] = useState("");
     const [filteredModelos, setFilteredModelos] = useState<SelectOption[]>([]);
     
     const [crudModal, setCrudModal] = useState<{ type: 'MARCA' | 'MODELO' | null, action: 'ADD' | 'EDIT' | null, data?: any }>({ type: null, action: null });
@@ -69,6 +71,8 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
         } else {
             setFormData(initialState);
             setSelectedMarca("");
+            setMarcaFallbackLabel("");
+            setModeloFallbackLabel("");
         }
     }, [isOpen, unitToEdit]);
 
@@ -158,8 +162,35 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
     };
 
     // Refrescar combos cuando se inserta o edita desde el Modal CRUD
-    const handleCrudSuccess = () => {
-        refreshCatalogs(); // Llamamos al nuevo método del hook
+    const handleCrudSuccess = (newItem: any) => {
+        const type = crudModal.type;
+        const id = String(newItem?.id ?? newItem?.key ?? '').trim();
+        const label = String(newItem?.label ?? newItem?.descripcion ?? newItem?.value ?? '').trim();
+
+        if (type === 'MARCA') {
+            if (id) {
+                setSelectedMarca(id);
+                setMarcaFallbackLabel(label);
+                setModeloFallbackLabel('');
+                setFormData((prev) => ({ ...prev, modeloId: '' }));
+            }
+        }
+        if (type === 'MODELO') {
+            const marcaId = String(newItem?.marcaId ?? '').trim();
+            if (marcaId) setSelectedMarca(marcaId);
+            if (id) {
+                setModeloFallbackLabel(label);
+                setFormData((prev) => ({ ...prev, modeloId: id }));
+                setFilteredModelos((prev) => {
+                    if (!id) return prev;
+                    const exists = prev.some((x) => String(x.value) === id);
+                    if (exists) return prev;
+                    return [{ value: id, label: label || id, groupKey: marcaId }, ...prev];
+                });
+            }
+        }
+
+        refreshCatalogs();
     };
 
     // --- BÚSQUEDA EXTERNA ---
@@ -240,14 +271,47 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                 modeloId: String(normalizeId(formData.modeloId) || ''),
                 peso_maximo: pesoMaximoNum
             };
+            const pickId = (obj: any) => {
+                if (obj === undefined || obj === null) return '';
+                if (typeof obj === 'string' || typeof obj === 'number') return String(obj).trim();
+                const candidate =
+                    obj.unidadtransporteId ??
+                    obj.unidadTransporteId ??
+                    obj.unidadtransporte_id ??
+                    obj.UnidadTransporteId ??
+                    obj.id ??
+                    obj.Id ??
+                    obj.data; // algunos endpoints devuelven { data: "UT001228" }
+                return String(candidate ?? '').trim();
+            };
+
             if (unitToEdit?.unidadtransporteId) {
-                await unidadTransporteService.update(unitToEdit.unidadtransporteId, payload);
+                const res = await unidadTransporteService.update(unitToEdit.unidadtransporteId, payload);
                 toast.success("Vehículo actualizado");
+                const raw = (res as any)?.data ?? res;
+                const entity = raw?.unidadTransporte ?? raw;
+                const id = pickId(entity) || pickId(raw) || String(unitToEdit.unidadtransporteId).trim();
+                onSuccess({
+                    ...payload,
+                    ...(entity || {}),
+                    unidadtransporteId: id,
+                    estado: (entity as any)?.estado ?? '1',
+                    empresaId: EMPRESA_ID
+                } as UnidadTransporte);
             } else {
-                await unidadTransporteService.create(payload);
+                const res = await unidadTransporteService.create(payload);
                 toast.success("Vehículo registrado");
+                const raw = (res as any)?.data ?? res;
+                const entity = raw?.unidadTransporte ?? raw;
+                const id = pickId(entity) || pickId(raw);
+                onSuccess({
+                    ...payload,
+                    ...(entity || {}),
+                    unidadtransporteId: id,
+                    estado: (entity as any)?.estado ?? '1',
+                    empresaId: EMPRESA_ID
+                } as UnidadTransporte);
             }
-            onSuccess();
             onClose();
         } catch (error: any) {
             toast.error(error?.response?.data?.message || "Error al procesar");
@@ -288,6 +352,7 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                                     value={selectedMarca} 
                                     onChange={handleMarcaChange} 
                                     disabled={isReadOnly || loadingCatalogs} 
+                                    fallbackLabel={marcaFallbackLabel}
                                 />
                             </div>
                             {!isReadOnly && renderCrudButtons('MARCA', false)}
@@ -303,6 +368,7 @@ export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit
                                     onChange={handleChange} 
                                     disabled={!selectedMarca || filteredModelos.length === 0 || isReadOnly || loadingCatalogs} 
                                     placeholder={!selectedMarca ? "Seleccione marca..." : "Seleccione modelo"} 
+                                    fallbackLabel={modeloFallbackLabel}
                                 />
                             </div>
                             {!isReadOnly && renderCrudButtons('MODELO', !selectedMarca)}
