@@ -10,7 +10,8 @@ import {
   Icon24Hours,
   IconAdjustmentsCode,
   IconAccessible,
-  Icon3dCubeSphereOff
+  Icon3dCubeSphereOff,
+  IconActivityHeartbeat
 } from "@tabler/icons-react";
 
 const Sidebar = () => {
@@ -26,6 +27,7 @@ const Sidebar = () => {
     {title: 'Notas de Entrada', icon: <IconAccessible size={20} />, path: '/dashboard/notas-ingreso' },
     {title: 'Notas de Salida', icon: <Icon3dCubeSphereOff size={20} />, path: '/dashboard/notas-salida' },
     {title: 'Kardex', icon: <IconTruck size={20} />, path: '/dashboard/kardex' },
+    {title: 'Reportes', icon: <IconActivityHeartbeat size={20} />, path: '/dashboard/reportes' },
     {title: 'Motivo Traslado', icon: <Icon24Hours size={20} />, path: '/dashboard/motivo-traslado' },
     {title: 'Tabla Transaccion', icon: <IconAdjustmentsCode size={20} />, path: '/dashboard/tabla-transaccion' },
   ];

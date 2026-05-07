@@ -56,5 +56,13 @@ export interface MovimientoEmpresaDto {
     saldo_cantidad_UndMin?: number;
 }
 
+export interface KardexEmpresaRequest {
+    empresaId?: string;
+    bienId?: string;
+    fechaInicial: string;
+    fechaFinal: string;
+    agrupamiento?: string;
+}
+
 // El backend devuelve un diccionario agrupado por mes/trimestre
 export type KardexEmpresaResponse = Record<string, MovimientoEmpresaDto[]>;

@@ -1,6 +1,6 @@
 "use client";
 import { useMemo, useState } from 'react';
-import { IconSearch, IconFileSpreadsheet, IconPackage, IconDatabase, IconX } from '@tabler/icons-react';
+import { IconSearch, IconFileSpreadsheet, IconPackage, IconDatabase, IconX, IconLoader } from '@tabler/icons-react';
 import { toast } from 'sonner';
 
 // Componentes propios
@@ -56,6 +56,7 @@ export default function KardexPage() {
     // --- ESTADOS ---
     const [activeTab, setActiveTab] = useState<1 | 3>(1); // 1: Presentación, 3: General
     const [loading, setLoading] = useState(false);
+    const [exportingExcel, setExportingExcel] = useState(false);
     
     // Tipado union para soportar ambas tablas
     const [movimientos, setMovimientos] = useState<Array<MovimientoInventarioDto | MovimientoEmpresaDto>>([]);
@@ -232,8 +233,10 @@ export default function KardexPage() {
     };
 
     const handleExportar = async () => {
+        if (exportingExcel) return;
         if (movimientos.length === 0) return toast.warning('No hay datos para exportar.');
         
+        setExportingExcel(true);
         try {
             const blob = activeTab === 1 
                 ? await kardexService.exportarPresentacion(filtros)
@@ -246,8 +249,11 @@ export default function KardexPage() {
             document.body.appendChild(link);
             link.click();
             link.remove();
+            window.URL.revokeObjectURL(url);
         } catch {
             toast.error('Error al descargar el Excel.');
+        } finally {
+            setExportingExcel(false);
         }
     };
 
@@ -376,13 +382,29 @@ export default function KardexPage() {
                         {activeTab === 3 && <div className="hidden xl:block" />}
                     </div>
 
-                    <div className="flex gap-2 justify-start xl:justify-end">
-                        <button onClick={handleBuscar} disabled={loading} className="flex items-center justify-center gap-2 bg-[#59696A] px-4 py-2.5 rounded-lg text-white hover:bg-slate-700 transition shadow-sm min-w-[112px] disabled:opacity-60">
-                            <IconSearch size={18} /> Buscar
-                        </button>
-                        <button onClick={handleExportar} disabled={movimientos.length === 0} className="flex items-center justify-center gap-2 bg-emerald-600 px-4 py-2.5 rounded-lg text-white hover:bg-emerald-700 transition shadow-sm min-w-[104px] disabled:opacity-50">
-                            <IconFileSpreadsheet size={18} /> Excel
-                        </button>
+                    <div className="flex flex-col gap-2 justify-start xl:items-end">
+                        <div className="flex gap-2 justify-start xl:justify-end">
+                            <button onClick={handleBuscar} disabled={loading || exportingExcel} className="flex items-center justify-center gap-2 bg-[#59696A] px-4 py-2.5 rounded-lg text-white hover:bg-slate-700 transition shadow-sm min-w-[112px] disabled:cursor-not-allowed disabled:opacity-60">
+                                <IconSearch size={18} /> Buscar
+                            </button>
+                            <button onClick={handleExportar} disabled={movimientos.length === 0 || exportingExcel} className="flex items-center justify-center gap-2 bg-emerald-600 px-4 py-2.5 rounded-lg text-white hover:bg-emerald-700 transition shadow-sm min-w-[132px] disabled:cursor-not-allowed disabled:opacity-60">
+                                {exportingExcel ? (
+                                    <>
+                                        <IconLoader size={18} className="animate-spin" /> Generando...
+                                    </>
+                                ) : (
+                                    <>
+                                        <IconFileSpreadsheet size={18} /> Excel
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                        {exportingExcel && (
+                            <div className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700 shadow-sm" role="status" aria-live="polite">
+                                <IconLoader size={16} className="animate-spin" />
+                                Preparando Excel de {activeTab === 1 ? 'Kardex por Presentación' : 'Kardex General'}...
+                            </div>
+                        )}
                     </div>
                 </div>
 

@@ -5,18 +5,29 @@ import {
     KardexFilterRequest, 
     MovimientoInventarioDto, 
     SaldosKardexDto,
+    KardexEmpresaRequest,
     KardexEmpresaResponse 
 } from '../types/kardex.types';
+
+const buildQueryParams = <T extends object>(filter: T) => {
+    return Object.fromEntries(
+        Object.entries(filter).filter(([, value]) => value !== undefined && value !== null && value !== '')
+    );
+};
 
 export const kardexService = {
     // SECCIÓN 1: Kardex por Presentación
     getMovimientos: async (filter: KardexFilterRequest): Promise<ApiResponse<MovimientoInventarioDto[]>> => {
-        const response = await apiClient.post('/MovimientoKardex/kardex/presentacion', filter);
+        const response = await apiClient.get('/MovimientoKardex/kardex/presentacion', {
+            params: buildQueryParams(filter)
+        });
         return response.data;
     },
 
     getSaldos: async (filter: KardexFilterRequest): Promise<ApiResponse<SaldosKardexDto>> => {
-        const response = await apiClient.post('/MovimientoKardex/kardex/presentacion-saldos', filter);
+        const response = await apiClient.get('/MovimientoKardex/kardex/presentacion-saldos', {
+            params: buildQueryParams(filter)
+        });
         return response.data;
     },
 
@@ -28,19 +39,23 @@ export const kardexService = {
     },
 
     // SECCIÓN 3: Kardex por Empresa
-    getKardexEmpresa: async (filter: any): Promise<ApiResponse<KardexEmpresaResponse>> => {
-        const response = await apiClient.post('/MovimientoKardex/kardex/empresa', filter);
+    getKardexEmpresa: async (filter: KardexEmpresaRequest): Promise<ApiResponse<KardexEmpresaResponse>> => {
+        const response = await apiClient.get('/MovimientoKardex/kardex/empresa', {
+            params: buildQueryParams(filter)
+        });
         return response.data;
     },
-    exportarEmpresa: async (filter: any) => {
+    exportarEmpresa: async (filter: KardexEmpresaRequest) => {
         const response = await apiClient.post('/MovimientoKardex/kardex/exportar-empresa', filter, {
             responseType: 'blob'
         });
         return response.data;
     },
 
-    getSaldosEmpresa: async (filter: any): Promise<ApiResponse<{ saldoReal: number, saldoDisponible: number, saldoFuturo: number }>> => {
-        const response = await apiClient.post('/MovimientoKardex/kardex/empresa-saldos', filter);
+    getSaldosEmpresa: async (filter: KardexEmpresaRequest): Promise<ApiResponse<{ saldoReal: number, saldoDisponible: number, saldoFuturo: number }>> => {
+        const response = await apiClient.get('/MovimientoKardex/kardex/empresa-saldos', {
+            params: buildQueryParams(filter)
+        });
         return response.data;
     }
 };

@@ -46,6 +46,7 @@ export default function NotasIngresoPage() {
     } = useCrud<NotaIngresoResponse>(notaIngresoService, selectedAlmacenId, initialFilters, { empresaId: EMPRESA_ID });
 
     const [tempFilters, setTempFilters] = useState(initialFilters);
+    const [tempSelectedAlmacenId, setTempSelectedAlmacenId] = useState("");
     const [showFilters, setShowFilters] = useState(false);
     const [printingId, setPrintingId] = useState<string | null>(null);
     const debouncedSearch = useDebounce(searchTerm, 500);
@@ -78,17 +79,36 @@ export default function NotasIngresoPage() {
         fetchData(1, debouncedSearch, filters); 
     }, [debouncedSearch, filters, fetchData, selectedAlmacenId]);
 
-    const handleAlmacenChange = (e: { target?: { value?: unknown } }) => {
-        const value = String(e?.target?.value || '').trim();
-        setSelectedAlmacenId(value);
+    const hasAdvancedFilters = useMemo(() => {
+        const hasListFilters = Object.values(filters).some(v => (Array.isArray(v) && v.length > 0) || (typeof v === 'string' && v !== ""));
+        return hasListFilters || Boolean(selectedAlmacenId);
+    }, [filters, selectedAlmacenId]);
+
+    const tempActiveFiltersCount = useMemo(() => {
+        const listCount = Object.values(tempFilters).flat().filter(Boolean).length;
+        return listCount + (tempSelectedAlmacenId ? 1 : 0);
+    }, [tempFilters, tempSelectedAlmacenId]);
+
+    const handleOpenSidebar = () => {
+        setTempFilters(filters);
+        setTempSelectedAlmacenId(selectedAlmacenId);
+        setShowFilters(true);
+    };
+
+    const handleApplyFilters = () => {
+        if (tempSelectedAlmacenId !== selectedAlmacenId) setSearchTerm("");
+        setSelectedAlmacenId(tempSelectedAlmacenId);
+        setFilters(tempFilters);
+        setShowFilters(false);
+    };
+
+    const handleClearFilters = () => {
+        setTempSelectedAlmacenId("");
+        setSelectedAlmacenId("");
         setSearchTerm("");
         setTempFilters(initialFilters);
         setFilters(initialFilters);
     };
-
-    const handleOpenSidebar = () => { setTempFilters(filters); setShowFilters(true); };
-    const handleApplyFilters = () => { setFilters(tempFilters); setShowFilters(false); };
-    const handleClearFilters = () => { setTempFilters(initialFilters); setFilters(initialFilters); };
 
     const handleAnularNota = async (notasingresosId: string) => {
         const result = await Swal.fire({
@@ -137,9 +157,12 @@ export default function NotasIngresoPage() {
             } else {
                 toast.error(res?.message || "Error al generar el documento");
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error al imprimir:", error);
-            toast.error(error?.response?.data?.message || "Error de conexión al intentar imprimir");
+            const message = typeof error === 'object' && error !== null && 'response' in error
+                ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+                : undefined;
+            toast.error(message || "Error de conexión al intentar imprimir");
         } finally {
             setPrintingId(null);
         }
@@ -374,40 +397,6 @@ export default function NotasIngresoPage() {
                 </div>
             </div>
 
-            <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-                <div className="flex items-start gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 border border-blue-100">
-                        <IconBuildingStore size={22} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                        <div className="mb-3">
-                            <h2 className="text-sm font-bold text-slate-800">Contexto de Almacén</h2>
-                            <p className="text-xs text-slate-500">
-                                Puede consultar por empresa (todos los almacenes) o filtrar por un almacén específico.
-                            </p>
-                        </div>
-
-                        <div className="max-w-xl">
-                            <SearchableSelect
-                                label="Almacén (Opcional)"
-                                name="almacenId"
-                                options={almacenOptions}
-                                value={selectedAlmacenId}
-                                onChange={handleAlmacenChange}
-                                placeholder="Todos los almacenes"
-                            />
-                        </div>
-
-                        <div className="mt-3 flex items-center gap-2 text-[11px] text-slate-500">
-                            <span className={`inline-block h-2.5 w-2.5 rounded-full ${selectedAlmacenId ? 'bg-emerald-500' : 'bg-amber-400'}`} />
-                            {selectedAlmacenId
-                                ? 'Filtrando por almacén seleccionado.'
-                                : `Consultando toda la empresa (${EMPRESA_ID}).`}
-                        </div>
-                    </div>
-                </div>
-            </div>
-
             {/* Buscador y Botón Filtros */}
             <div className="flex gap-4 mb-4">
                 <div className="relative flex-1">
@@ -423,7 +412,7 @@ export default function NotasIngresoPage() {
                 <button 
                     onClick={handleOpenSidebar} 
                     className={`px-4 py-2.5 rounded-xl font-semibold flex items-center gap-2 border transition-all ${
-                        Object.values(filters).some(v => (Array.isArray(v) && v.length > 0) || (typeof v === 'string' && v !== ""))
+                        hasAdvancedFilters
                         ? 'bg-blue-50 text-blue-700 border-blue-200' 
                         : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
                     } disabled:opacity-50 disabled:cursor-not-allowed`}
@@ -442,12 +431,37 @@ export default function NotasIngresoPage() {
                 onClose={() => setShowFilters(false)} 
                 onApply={handleApplyFilters} 
                 onClear={handleClearFilters}
-                totalActive={Object.values(tempFilters).flat().filter(Boolean).length}
+                totalActive={tempActiveFiltersCount}
             >
                 {loadingCatalogs ? (
                     <div className="text-center py-10 text-slate-400 italic">Cargando filtros...</div>
                 ) : (
                     <div className="flex flex-col gap-6">
+                        <div className="space-y-3">
+                            <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
+                                <IconBuildingStore size={14}/> Contexto de Almacén
+                            </label>
+                            <p className="text-xs text-slate-500">
+                                Puede consultar por empresa o filtrar por un almacén específico.
+                            </p>
+                            <SearchableSelect
+                                label="Almacén (Opcional)"
+                                name="almacenId"
+                                options={almacenOptions}
+                                value={tempSelectedAlmacenId}
+                                onChange={(e) => setTempSelectedAlmacenId(String(e.target.value || '').trim())}
+                                placeholder="Todos los almacenes"
+                            />
+                            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                <span className={`inline-block h-2.5 w-2.5 rounded-full ${tempSelectedAlmacenId ? 'bg-emerald-500' : 'bg-amber-400'}`} />
+                                {tempSelectedAlmacenId
+                                    ? 'Filtrará por almacén seleccionado al aplicar.'
+                                    : `Consultará toda la empresa (${EMPRESA_ID}).`}
+                            </div>
+                        </div>
+
+                        <hr className="border-slate-100"/>
+
                         <div className="space-y-3">
                             <label className="text-xs font-bold text-slate-500 uppercase flex items-center gap-1">
                                 <IconCalendar size={14}/> Rango de Fechas
