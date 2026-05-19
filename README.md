@@ -39,16 +39,7 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 
 ```json
 //Properties-launchSettings.json
-{
-  "$schema": "http://json.schemastore.org/launchsettings.json",
-  "iisSettings": {
-    "windowsAuthentication": false,
-    "anonymousAuthentication": true,
-    "iisExpress": {
-      "applicationUrl": "http://localhost:6930",
-      "sslPort": 44351
-    }
-  },
+
   "profiles": {
     "Backend_GestionXcore": {
       "commandName": "Project",
@@ -60,39 +51,6 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
         "ASPNETCORE_ENVIRONMENT": "Development",
         "JWT_SECRET": "2f6G9sK8dL1pQ5vXyZ3nA4rT7uM0bHcE"
       }
-    },
-    "IIS Express": {
-      "commandName": "IISExpress",
-      "launchBrowser": true,
-      "launchUrl": "swagger",
-      "environmentVariables": {
-        "ASPNETCORE_ENVIRONMENT": "Development",
-        "JWT_SECRET": "2f6G9sK8dL1pQ5vXyZ3nA4rT7uM0bHcE"
-      }
-    }
-  }
-}
 
-
-{
-  "Logging": {
-    "LogLevel": {
-      "Default": "Information",
-      "Microsoft.AspNetCore": "Warning"
-    }
-  },
-  "AllowedHosts": "*",
-  "ConnectionStrings": {
-    //"DefaultConnection": "Server=161.132.223.34\\SERVERSQL2016,50200;User ID=SOPORTETI;Password=SOPORTETI;Database=X;Encrypt=False;TrustServerCertificate=True;",
-    "DefaultConnection": "Server=161.132.223.34\\SERVERSQL2016,50200;User ID=SOPORTETI;Password=SOPORTETI;Database=TEST;Encrypt=False;TrustServerCertificate=True;",
-    "SqlGestionXcoreDB": "Server=161.132.223.34\\SERVERSQL2016,50200;User ID=SOPORTETI;Password=SOPORTETI;Database=GestionXcoreDB;Encrypt=false;TrustServerCertificate=True;"
-  },
-  "Jwt": {
-    "Secret": "2f6G9sK8dL1pQ5vXyZ3nA4rT7uM0bHcE",
-    "Issuer": "gestionXcore.API",
-    "Audience": "gestionXcore.Clientes"
-  }
-
-}
 
 ```
