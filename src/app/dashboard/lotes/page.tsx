@@ -66,9 +66,11 @@ type ApiPaginationMeta = {
     totalRecords?: number;
     totalPages?: number;
     currentPage?: number;
+    totalStock?: number;
     TotalRecords?: number;
     TotalPages?: number;
     CurrentPage?: number;
+    TotalStock?: number;
 };
 
 const normalizeMeta = (apiMeta: ApiPaginationMeta | undefined, fallbackPage: number, fallbackTotal: number): PaginationMeta => {
@@ -88,6 +90,19 @@ const getApiErrorMessage = (error: unknown, fallback: string) => {
     }
 
     return error instanceof Error && error.message ? error.message : fallback;
+};
+
+const getDetalleKey = (detalle: LoteDetalleItem) => {
+    const almacenId = String(detalle.almacenId || "").trim();
+    const presentacionId = String(detalle.presentacionId || "").trim();
+    return `${almacenId}::${presentacionId}`;
+};
+
+const getDetalleLabel = (detalle: LoteDetalleItem) => {
+    const almacen = detalle.almacen?.descripcion || detalle.almacenId || "-";
+    const bien = detalle.presentacion?.bien?.descripcion || "Producto";
+    const presentacion = detalle.presentacion?.descripcion || detalle.presentacionId || "-";
+    return `${almacen} / ${bien} / ${presentacion}`;
 };
 
 export default function LotesPage() {
@@ -281,6 +296,52 @@ export default function LotesPage() {
         })).filter((detalle) => detalle.presentacionId && detalle.almacenId);
     };
 
+    const validarDetallesContraStock = async (detalles: LoteDetalleItem[], detallesOriginales: LoteDetalleItem[] = []) => {
+        const originalPorCombinacion = detallesOriginales.reduce<Record<string, number>>((acc, detalle) => {
+            const key = getDetalleKey(detalle);
+            acc[key] = (acc[key] || 0) + Number(detalle.cantidad_lote_stock || 0);
+            return acc;
+        }, {});
+
+        const nuevoPorCombinacion = detalles.reduce<Record<string, { detalle: LoteDetalleItem; cantidad: number }>>((acc, detalle) => {
+            const key = getDetalleKey(detalle);
+            acc[key] = {
+                detalle,
+                cantidad: (acc[key]?.cantidad || 0) + Number(detalle.cantidad_lote_stock || 0)
+            };
+            return acc;
+        }, {});
+
+        for (const { detalle, cantidad } of Object.values(nuevoPorCombinacion)) {
+            const almacenId = String(detalle.almacenId || '').trim();
+            const presentacionId = String(detalle.presentacionId || '').trim();
+
+            if (!almacenId || !presentacionId) {
+                return "Todos los detalles deben tener almacén y presentación.";
+            }
+
+            if (cantidad < 0) {
+                return `La cantidad no puede ser negativa en ${getDetalleLabel(detalle)}.`;
+            }
+
+            const [stockResponse, lotesResponse] = await Promise.all([
+                almacenLoteService.getStockPresentacion(almacenId, presentacionId),
+                almacenLoteService.getByAlmacenYPresentacion(almacenId, presentacionId, 1, 20)
+            ]);
+
+            const stockReal = Number(stockResponse.data?.[0]?.stock_real_pres || 0);
+            const totalStock = Number(lotesResponse.meta?.totalStock ?? lotesResponse.meta?.TotalStock ?? 0);
+            const cantidadOriginal = originalPorCombinacion[getDetalleKey(detalle)] || 0;
+            const maximoPermitido = stockReal - (totalStock - cantidadOriginal);
+
+            if (cantidad > maximoPermitido) {
+                return `No hay stock suficiente para ${getDetalleLabel(detalle)}. Máximo permitido: ${Math.max(0, maximoPermitido).toFixed(2)}. Cantidad ingresada: ${cantidad.toFixed(2)}.`;
+            }
+        }
+
+        return null;
+    };
+
     const guardarCabeceraLote = async () => {
         if (!loteForm.fecha_produccion || !loteForm.fecha_vencimiento || !loteForm.fecha_alerta) {
             toast.warning("Complete las fechas obligatorias del lote.");
@@ -404,6 +465,12 @@ export default function LotesPage() {
 
         setDetailSaving(true);
         try {
+            const validationError = await validarDetallesContraStock(detalles, selectedLoteData.detalles || []);
+            if (validationError) {
+                toast.error(validationError);
+                return;
+            }
+
             const payload = {
                 empresaId: selectedLoteData.empresaId || EMPRESA_ID,
                 descripcion: selectedLoteData.descripcion || "",
