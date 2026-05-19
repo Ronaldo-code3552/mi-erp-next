@@ -15,14 +15,45 @@ export interface LoteSaveRequest {
     fecha_alerta: string;
     empresaId: string;
     codigo_lote_importacion?: string;
-    detalles: LoteDetalleRequest[];
+    detalles?: LoteDetalleRequest[];
+}
+
+export interface LoteEmpresaFilters {
+    estadoJson?: string[];
+    estados_excluidos?: string[];
+    almacenJson?: string[];
+    presentacionJson?: string[];
+    bienJson?: string[];
+    sedeJson?: string[];
+    tipoAlmacenJson?: string[];
+    condicionEstadoBienJson?: string[];
+    fecha_registro_inicio?: string;
+    fecha_registro_fin?: string;
+    fecha_produccion_inicio?: string;
+    fecha_produccion_fin?: string;
+    fecha_vencimiento_inicio?: string;
+    fecha_vencimiento_fin?: string;
+    fecha_alerta_inicio?: string;
+    fecha_alerta_fin?: string;
+}
+
+export type AlmacenLoteResponse = Record<string, unknown>;
+
+export interface StockPresentacionResponse {
+    almacenId: string;
+    bienId: string;
+    presentacionId: string;
+    stock_real_pres: number;
+    stock_disponible_pres: number;
+    stock_futura_pres: number;
+    saldo_manual_consultado: number;
 }
 
 export const almacenLoteService = {
     /**
      * Trae un lote específico con toda su información relacionada.
      */
-    getById: async (loteId: string): Promise<ApiResponse<any>> => {
+    getById: async (loteId: string): Promise<ApiResponse<AlmacenLoteResponse>> => {
         const response = await apiClient.get(`/AlmacenLote/${loteId}`);
         return response.data;
     },
@@ -30,9 +61,29 @@ export const almacenLoteService = {
     /**
      * Lista todos los lotes de una empresa (Paginado)
      */
-    getByEmpresa: async (empresaId: string, page = 1, pageSize = 20): Promise<ApiResponse<any[]>> => {
+    getByEmpresa: async (
+        empresaId: string,
+        page = 1,
+        pageSize = 20,
+        term = "",
+        filters?: LoteEmpresaFilters,
+        soloConDetalle = false,
+        soloConStock = false
+    ): Promise<ApiResponse<AlmacenLoteResponse[]>> => {
+        const filtersToSend = filters && Object.values(filters).some((value) => {
+            if (Array.isArray(value)) return value.length > 0;
+            return Boolean(value);
+        }) ? JSON.stringify(filters) : undefined;
+
         const response = await apiClient.get(`/AlmacenLote/empresa/${empresaId}`, {
-            params: { page, pageSize }
+            params: {
+                page,
+                pageSize,
+                term,
+                filters: filtersToSend,
+                soloConDetalle,
+                soloConStock
+            }
         });
         return response.data;
     },
@@ -47,12 +98,22 @@ export const almacenLoteService = {
         page = 1, 
         pageSize = 20,
         filtros?: { Tipo?: string; SearchTerm?: string }
-    ): Promise<ApiResponse<any[]>> => {
+    ): Promise<ApiResponse<AlmacenLoteResponse[]>> => {
         const response = await apiClient.get(`/AlmacenLote/almacen/${almacenId}/presentacion/${presentacionId}`, {
             params: { 
                 page, 
                 pageSize,
                 ...filtros
+            }
+        });
+        return response.data;
+    },
+
+    getStockPresentacion: async (almacenId: string, presentacionId: string): Promise<ApiResponse<StockPresentacionResponse[]>> => {
+        const response = await apiClient.get('/Almacen/stock-presentacion', {
+            params: {
+                almacenId,
+                presentacionId
             }
         });
         return response.data;
@@ -69,7 +130,7 @@ export const almacenLoteService = {
     /**
      * Actualiza cabecera y reemplaza detalles de un Lote.
      */
-    update: async (loteId: string, nuevoEstado: string, data: LoteSaveRequest): Promise<ApiResponse<any>> => {
+    update: async (loteId: string, nuevoEstado: string, data: LoteSaveRequest): Promise<ApiResponse<AlmacenLoteResponse>> => {
         const response = await apiClient.put(`/AlmacenLote/${loteId}/${nuevoEstado}`, data);
         return response.data;
     },
@@ -77,7 +138,7 @@ export const almacenLoteService = {
     /**
      * Elimina físicamente el lote (Si no tiene movimientos).
      */
-    delete: async (loteId: string): Promise<ApiResponse<any>> => {
+    delete: async (loteId: string): Promise<ApiResponse<AlmacenLoteResponse>> => {
         const response = await apiClient.delete(`/AlmacenLote/${loteId}`);
         return response.data;
     },
@@ -85,7 +146,7 @@ export const almacenLoteService = {
     /**
      * Cambia el estado del lote a 'Anulado'.
      */
-    anular: async (loteId: string): Promise<ApiResponse<any>> => {
+    anular: async (loteId: string): Promise<ApiResponse<AlmacenLoteResponse>> => {
         const response = await apiClient.patch(`/AlmacenLote/anular/${loteId}`);
         return response.data;
     }

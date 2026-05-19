@@ -1,6 +1,6 @@
 // src/app/dashboard/reportes/page.tsx
 "use client";
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     IconBuildingWarehouse,
     IconCalendarStats,
@@ -8,6 +8,7 @@ import {
     IconChevronDown,
     IconClipboardList,
     IconFileSpreadsheet,
+    IconFileTypePdf,
     IconLoader,
     IconPackages,
     IconRoute,
@@ -16,6 +17,7 @@ import {
 import SearchableSelect from '@/components/forms/SearchableSelect';
 import apiClient from '@/api/apiCliente';
 import { reporteService } from '@/services/reporteService';
+import { tablaTransaccionesService } from '@/services/tablaTransaccionesService';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { getAlmacenesActivosOrdenados, getTipoAlmacenId } from '@/utils/almacenOptions';
 import { SelectOption } from '@/types/catalog.types';
@@ -95,6 +97,7 @@ function DownloadButton({
     loading,
     disabled,
     colorClass,
+    variant = 'excel',
     onClick
 }: {
     label: string;
@@ -102,9 +105,11 @@ function DownloadButton({
     loading: string | null;
     disabled?: boolean;
     colorClass: string;
+    variant?: 'excel' | 'pdf';
     onClick: () => void;
 }) {
     const isLoading = loading === reportId;
+    const Icon = variant === 'pdf' ? IconFileTypePdf : IconFileSpreadsheet;
 
     return (
         <button
@@ -113,8 +118,8 @@ function DownloadButton({
             disabled={disabled || Boolean(loading)}
             className={`flex min-h-11 w-full items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-bold text-white shadow-sm transition active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60 disabled:shadow-none ${colorClass}`}
         >
-            {isLoading ? <IconLoader size={18} className="animate-spin" /> : <IconFileSpreadsheet size={18} />}
-            <span className="truncate">{isLoading ? 'Generando Excel...' : label}</span>
+            {isLoading ? <IconLoader size={18} className="animate-spin" /> : <Icon size={18} />}
+            <span className="truncate">{isLoading ? 'Generando...' : label}</span>
         </button>
     );
 }
@@ -128,6 +133,7 @@ export default function ReportesPage() {
 
     const [stockParams, setStockParams] = useState({ tipoAlmacen: "0", almacenId: "000", tipoReporte: "1" });
     const [tipoAlmacenOptions, setTipoAlmacenOptions] = useState<SelectOption[]>([{ value: "0", label: "TODOS LOS TIPOS" }]);
+    const [transaccionOptions, setTransaccionOptions] = useState<SelectOption[]>([{ value: "0", label: "TODAS LAS TRANSACCIONES" }]);
 
     const [kardexParams, setKardexParams] = useState({ tipo: "ADMINISTRATIVO", almacenId: "000", desdeFecha: "", hastaFecha: "" });
     const [pendientesParams, setPendientesParams] = useState({ desdeFecha: "", hastaFecha: "" });
@@ -143,6 +149,8 @@ export default function ReportesPage() {
         ...almacenesOrdenados
     ], [almacenesOrdenados]);
 
+    const almacenOptionsSinTodos = useMemo<SelectOption[]>(() => almacenesOrdenados, [almacenesOrdenados]);
+
     const stockAlmacenOptions = useMemo<SelectOption[]>(() => {
         const tipoSeleccionado = Number(stockParams.tipoAlmacen);
         const almacenesFiltrados = tipoSeleccionado > 0
@@ -151,6 +159,8 @@ export default function ReportesPage() {
 
         return [{ value: "000", label: "TODOS LOS ALMACENES" }, ...almacenesFiltrados];
     }, [almacenesOrdenados, stockParams.tipoAlmacen]);
+
+    const shouldLockStockAlmacen = stockParams.tipoAlmacen === "3" && stockParams.tipoReporte === "1";
 
     useEffect(() => {
         let isMounted = true;
@@ -172,6 +182,50 @@ export default function ReportesPage() {
         fetchTiposAlmacen();
         return () => { isMounted = false; };
     }, []);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        const fetchTransacciones = async () => {
+            try {
+                const response = await tablaTransaccionesService.getByEmpresa(empresaId, 1, 20);
+                const opciones = (response.data || [])
+                    .filter((item) => item.transaccionId)
+                    .map((item) => ({
+                        value: String(item.transaccionId || '').trim(),
+                        label: String(item.descripcion || item.transaccionId || '').trim()
+                    }));
+
+                if (isMounted) {
+                    setTransaccionOptions([{ value: "0", label: "TODAS LAS TRANSACCIONES" }, ...opciones]);
+                }
+            } catch (error) {
+                console.error("Error cargando transacciones:", error);
+            }
+        };
+
+        fetchTransacciones();
+        return () => { isMounted = false; };
+    }, [empresaId]);
+
+    useEffect(() => {
+        if (shouldLockStockAlmacen && stockParams.almacenId !== "000") {
+            setStockParams((prev) => ({ ...prev, almacenId: "000" }));
+        }
+    }, [shouldLockStockAlmacen, stockParams.almacenId]);
+
+    const fetchTransaccionOptions = useCallback(async (term: string) => {
+        const response = await tablaTransaccionesService.getByEmpresa(empresaId, 1, 20, term);
+        const opciones = (response.data || [])
+            .filter((item) => item.transaccionId)
+            .map((item) => ({
+                value: String(item.transaccionId || '').trim(),
+                label: String(item.descripcion || item.transaccionId || '').trim(),
+                aux: String(item.transaccionId || '').trim()
+            }));
+
+        return [{ value: "0", label: "TODAS LAS TRANSACCIONES" }, ...opciones];
+    }, [empresaId]);
 
     const reportItems = useMemo<ReportListItem[]>(() => [
         {
@@ -274,7 +328,7 @@ export default function ReportesPage() {
         return null;
     }, [activeAction, reportItems]);
 
-    const handleDownload = async (reportName: ReportActionId, serviceCall: () => Promise<void>) => {
+    const handleDownload = async (reportName: string, serviceCall: () => Promise<void>) => {
         try {
             setLoading(reportName);
             await serviceCall();
@@ -285,8 +339,15 @@ export default function ReportesPage() {
         }
     };
 
-    const handleActionDownload = (action: ReportActionId) => {
-        const actions: Record<ReportActionId, () => Promise<void>> = {
+    const handleOpenAction = (action: ReportActionId) => {
+        if (action === 'm_det' && movimientosParams.almacenId === "000") {
+            setMovimientosParams((prev) => ({ ...prev, almacenId: "001" }));
+        }
+        setActiveAction(action);
+    };
+
+    const handleActionDownload = (action: ReportActionId, format: 'excel' | 'pdf') => {
+        const excelActions: Record<ReportActionId, () => Promise<void>> = {
             stock: () => reporteService.descargarStockExcel({
                 empresaId,
                 tipoAlmacen: Number(stockParams.tipoAlmacen),
@@ -312,7 +373,33 @@ export default function ReportesPage() {
             r_prod: () => reporteService.descargarListaProductos(empresaId)
         };
 
-        return handleDownload(action, actions[action]);
+        const pdfActions: Record<ReportActionId, () => Promise<void>> = {
+            stock: () => reporteService.descargarStockPdf({
+                empresaId,
+                tipoAlmacen: Number(stockParams.tipoAlmacen),
+                almacenId: stockParams.almacenId,
+                tipoReporte: stockParams.tipoReporte
+            }),
+            kardex: () => reporteService.descargarKardexPdf({ empresaId, ...kardexParams }),
+            p_ventas: () => reporteService.descargarVentasPendientesPdf({ empresaId, ...pendientesParams }),
+            p_compras: () => reporteService.descargarComprasPendientesPdf({ empresaId, ...pendientesParams }),
+            p_guiasout: () => reporteService.descargarGuiasSalidaPdf({ empresaId, ...pendientesParams }),
+            p_guiasin: () => reporteService.descargarGuiasIngresoPdf({ empresaId, ...pendientesParams }),
+            v_mes: () => reporteService.descargarVentasMesPdf({ empresaId, ...ventasParams }),
+            v_sede: () => reporteService.descargarVentasSedePdf({ empresaId, ...ventasParams }),
+            m_det: () => reporteService.descargarRotacionDetalladaPdf(movimientosParams),
+            m_tras: () => reporteService.descargarTrasladosAlmacenPdf(movimientosParams),
+            m_dist: () => reporteService.descargarDistribucionTransportePdf(movimientosParams),
+            r_inv: () => reporteService.descargarRotacionInventarioPdf({
+                empresaId,
+                desdeFecha: maestrosParams.desdeFecha,
+                hastaFecha: maestrosParams.hastaFecha
+            }),
+            r_kard: () => reporteService.descargarTransaccionesKardexPdf({ empresaId, ...maestrosParams }),
+            r_prod: () => reporteService.descargarListaProductosPdf(empresaId)
+        };
+
+        return handleDownload(`${action}:${format}`, format === 'pdf' ? pdfActions[action] : excelActions[action]);
     };
 
     const isActionDisabled = (action: ReportActionId) => {
@@ -334,15 +421,22 @@ export default function ReportesPage() {
                         options={tipoAlmacenOptions}
                         onChange={(e) => setStockParams({ ...stockParams, tipoAlmacen: String(e.target.value), almacenId: "000" })}
                     />
-                    <SearchableSelect
-                        label="Almacén"
-                        name="almacenId"
-                        value={stockParams.almacenId}
-                        options={stockAlmacenOptions}
-                        disabled={loadingCatalogs}
-                        placeholder={loadingCatalogs ? "Cargando almacenes..." : "Seleccione almacén"}
-                        onChange={(e) => setStockParams({ ...stockParams, almacenId: String(e.target.value) })}
-                    />
+                    <div className="space-y-1">
+                        <SearchableSelect
+                            label="Almacén"
+                            name="almacenId"
+                            value={stockParams.almacenId}
+                            options={stockAlmacenOptions}
+                            disabled={loadingCatalogs || shouldLockStockAlmacen}
+                            placeholder={loadingCatalogs ? "Cargando almacenes..." : "Seleccione almacén"}
+                            onChange={(e) => setStockParams({ ...stockParams, almacenId: String(e.target.value) })}
+                        />
+                        {shouldLockStockAlmacen && (
+                            <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-[11px] font-semibold text-blue-700">
+                                Para productos terminados agrupados por unidad mínima se consulta todos los almacenes.
+                            </p>
+                        )}
+                    </div>
                     <SearchableSelect
                         label="Agrupado por"
                         name="tipoReporte"
@@ -407,13 +501,15 @@ export default function ReportesPage() {
         }
 
         if (['m_det', 'm_tras', 'm_dist'].includes(activeAction)) {
+            const isRotacionDetallada = activeAction === 'm_det';
+
             return (
                 <>
                     <SearchableSelect
                         label="Almacén"
                         name="almacenId"
                         value={movimientosParams.almacenId}
-                        options={almacenOptions}
+                        options={isRotacionDetallada ? almacenOptionsSinTodos : almacenOptions}
                         disabled={loadingCatalogs}
                         placeholder={loadingCatalogs ? "Cargando almacenes..." : "Seleccione almacén"}
                         onChange={(e) => setMovimientosParams({ ...movimientosParams, almacenId: String(e.target.value) })}
@@ -449,7 +545,8 @@ export default function ReportesPage() {
                                 label="Tipo Transacción"
                                 name="transaccionId"
                                 value={maestrosParams.transaccionId}
-                                options={[{ value: "0", label: "TODAS LAS TRANSACCIONES" }]}
+                                fetchCustom={fetchTransaccionOptions}
+                                fallbackLabel={transaccionOptions.find((option) => String(option.value) === String(maestrosParams.transaccionId))?.label || "TODAS LAS TRANSACCIONES"}
                                 onChange={(e) => setMaestrosParams({ ...maestrosParams, transaccionId: String(e.target.value) })}
                             />
                         </>
@@ -471,7 +568,7 @@ export default function ReportesPage() {
                     </div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-800">Centro de Reportes</h1>
                     <p className="mt-1 max-w-2xl text-sm text-slate-500">
-                        Seleccione un reporte para configurar filtros y generar el Excel.
+                        Seleccione un reporte para configurar filtros y generar Excel o PDF.
                     </p>
                 </div>
 
@@ -496,7 +593,7 @@ export default function ReportesPage() {
                         >
                             <button
                                 type="button"
-                                onClick={() => item.children ? setExpandedGroup(isExpanded ? null : item.id) : setActiveAction(item.actionId || null)}
+                                onClick={() => item.children ? setExpandedGroup(isExpanded ? null : item.id) : item.actionId && handleOpenAction(item.actionId)}
                                 className="flex w-full items-center gap-3 px-4 py-4 text-left"
                             >
                                 <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border ${item.iconClass}`}>
@@ -522,7 +619,7 @@ export default function ReportesPage() {
                                             <button
                                                 key={child.id}
                                                 type="button"
-                                                onClick={() => setActiveAction(child.id)}
+                                                onClick={() => handleOpenAction(child.id)}
                                                 className={`rounded-lg border bg-white px-3 py-3 text-left transition hover:border-slate-300 hover:shadow-sm ${activeAction === child.id ? 'border-blue-200 ring-2 ring-blue-100' : 'border-slate-200'}`}
                                             >
                                                 <span className="block text-xs font-bold uppercase text-slate-800">{child.title}</span>
@@ -578,14 +675,26 @@ export default function ReportesPage() {
 
                     <div className="border-t border-slate-100 bg-white px-5 py-4">
                         {activeAction && activeMeta && (
-                            <DownloadButton
-                                label="Generar Excel"
-                                reportId={activeAction}
-                                loading={loading}
-                                colorClass={activeMeta.buttonClass}
-                                disabled={isActionDisabled(activeAction)}
-                                onClick={() => handleActionDownload(activeAction)}
-                            />
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                <DownloadButton
+                                    label="Generar Excel"
+                                    reportId={`${activeAction}:excel`}
+                                    loading={loading}
+                                    colorClass={activeMeta.buttonClass}
+                                    disabled={isActionDisabled(activeAction)}
+                                    variant="excel"
+                                    onClick={() => handleActionDownload(activeAction, 'excel')}
+                                />
+                                <DownloadButton
+                                    label="Generar PDF"
+                                    reportId={`${activeAction}:pdf`}
+                                    loading={loading}
+                                    colorClass={activeMeta.buttonClass}
+                                    disabled={isActionDisabled(activeAction)}
+                                    variant="pdf"
+                                    onClick={() => handleActionDownload(activeAction, 'pdf')}
+                                />
+                            </div>
                         )}
                     </div>
                 </div>

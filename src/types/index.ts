@@ -7,6 +7,13 @@ export interface ApiResponse<T> {
         totalRecords: number;
         totalPages: number;
         currentPage: number;
+        pageSize?: number;
+        totalStock?: number;
+        TotalRecords?: number;
+        TotalPages?: number;
+        CurrentPage?: number;
+        PageSize?: number;
+        TotalStock?: number;
     };
     message?: string;
 }
