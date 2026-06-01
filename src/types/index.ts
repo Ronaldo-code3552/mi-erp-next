@@ -17,3 +17,4 @@ export interface ApiResponse<T> {
     };
     message?: string;
 }
+export * from './solicitudReposicion.types';

@@ -59,8 +59,6 @@ export const catalogService = {
 
                 // 🚀 LA MAGIA DE LA PAGINACIÓN INTELIGENTE
                 // Solo las tablas masivas cargarán 20 por defecto. Las demás traen 1000.
-                const catMasivos = new Set(['Cliente', 'Proveedor', 'Trabajador', 'Transportista', 'ConductorTransporte', 'AlmacenSerie', 'Producto', 'AlmacenLote']);
-                
                 // Configuración de parámetros por endpoint
                 if (endpointName === 'DocumentoIdentidadXcore') {
                     queryParams.pageSize = 1000;
@@ -81,16 +79,16 @@ export const catalogService = {
 
                 const response = await apiClient.get(fullUrl, { params: queryParams });
                 
-                const rawData = Array.isArray(response.data?.data) ? response.data.data
+                const rawData: Record<string, unknown>[] = Array.isArray(response.data?.data) ? response.data.data
                     : Array.isArray(response.data) ? response.data : [];
 
-                const formattedData: SelectOption[] = rawData.map((item: any, index: number) => {
+                const formattedData: SelectOption[] = rawData.map((item, index: number) => {
                     const endpointSpecificId =
                         endpointName === 'MotivoTraslado' ? item.motivotrasladoId
                         : endpointName === 'TipoMovimiento' ? item.tipomovimientoId
                         : endpointName === 'TipoOperacion' ? item.tipoOperacionId
                         : endpointName === 'TipoDocumentoComercial' ? item.tipodoccomercialId
-                        : endpointName === 'CuentaUsuario' ? item.cuentausuarioId
+                        : endpointName === 'CuentaUsuario' ? (item.cuentausuarioId || item.cuentaUsuarioId || item.CuentausuarioId || item.CuentaUsuarioId)
                         : endpointName === 'EstadoGuiasRemision' ? (item.Id || item.id)
                         : endpointName === 'Transportista' ? item.transportistaId
                         : endpointName === 'UnidadTransporte' ? item.unidadtransporteId
@@ -118,7 +116,8 @@ export const catalogService = {
                         item.id || item.codigo || item.serie || `fallback-${index}`
                     ).trim();
 
-                    const extractedDesc = endpointName === 'AlmacenSerie' ? item.serie : 
+                    const extractedDesc = endpointName === 'AlmacenSerie' ? item.serie :
+                        endpointName === 'CuentaUsuario' ? (item.observacion || item.usuario || item.cuentausuarioId) :
                         (item.Descripcion || item.descripcion_larga || item.descripcion || item.razon_social || 
                          item.nombres || item.nombre || item.observacion || 'Sin nombre');
                     
@@ -136,6 +135,7 @@ export const catalogService = {
                     const auxValue = String(
                         endpointName === 'AlmacenSerie' ? (item.enviarSunat || '') : 
                         endpointName === 'DetraccionBien' ? (item.tasa !== undefined ? item.tasa : '') :
+                        endpointName === 'CuentaUsuario' ? (item.usuario || '') :
                         (item.tasa || item.abreviatura || item.descripcion_corta || item.numero_doc || '')
                     ).trim();
 

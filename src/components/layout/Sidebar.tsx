@@ -12,7 +12,8 @@ import {
   IconAccessible,
   Icon3dCubeSphereOff,
   IconActivityHeartbeat,
-  IconZoomOutArea
+  IconZoomOutArea,
+  IconAdCircleOff
 } from "@tabler/icons-react";
 
 const Sidebar = () => {
@@ -30,6 +31,7 @@ const Sidebar = () => {
     {title: 'Kardex', icon: <IconTruck size={20} />, path: '/dashboard/kardex' },
     {title: 'Reportes', icon: <IconActivityHeartbeat size={20} />, path: '/dashboard/reportes' },
     {title: 'Lotes', icon: <IconZoomOutArea size={20} />, path: '/dashboard/lotes' },
+    {title: 'Solicitud Reposicion', icon: <IconAdCircleOff size={20} />, path: '/dashboard/solicitudes-reposicion' },
     {title: 'Motivo Traslado', icon: <Icon24Hours size={20} />, path: '/dashboard/motivo-traslado' },
     {title: 'Tabla Transaccion', icon: <IconAdjustmentsCode size={20} />, path: '/dashboard/tabla-transaccion' },
   ];
