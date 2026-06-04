@@ -61,8 +61,13 @@ type DetalleFormItem = {
     bienId: string;
     presentacionId: string;
     cantidad_solicitada: number;
+    cantidad_aprobada?: number;
+    cantidad_atendida?: number;
     observacion?: string;
     descripcion_aux?: string;
+    estadoId?: number;
+    estadoNombre?: string;
+    estadoDescripcion?: string;
     presentaciones_opciones?: PresentacionOption[];
 };
 
@@ -75,8 +80,20 @@ export type SolicitudReposicionFormValue = {
     detalle: DetalleFormItem[];
 };
 
+export type SolicitudReposicionReadonlyInfo = {
+    estadoId?: number;
+    estadoNombre?: string;
+    estadoDescripcion?: string;
+    fecha_aprobacion?: string;
+    solicitanteNombre?: string;
+    solicitanteUsuario?: string;
+    aprobadorNombre?: string;
+    aprobadorUsuario?: string;
+};
+
 interface SolicitudReposicionFormProps {
     initialValue?: Partial<SolicitudReposicionFormValue>;
+    readonlyInfo?: SolicitudReposicionReadonlyInfo;
     loading?: boolean;
     readOnly?: boolean;
     lockDestino?: boolean;
@@ -138,8 +155,42 @@ const SectionTitle = ({ title, icon: Icon }: { title: string; icon: ComponentTyp
     </div>
 );
 
+const formatDate = (value?: string) => {
+    if (!value) return "";
+
+    const date = new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    return date.toLocaleDateString("es-PE", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric"
+    });
+};
+
+const estadoBadgeClass = (estadoId?: number) => {
+    if (estadoId === 2) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (estadoId === 3) return "bg-red-50 text-red-700 border-red-200";
+    if (estadoId === 7) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (estadoId === 6) return "bg-orange-50 text-orange-700 border-orange-200";
+    if (estadoId === 8) return "bg-slate-100 text-slate-600 border-slate-200";
+
+    return "bg-slate-50 text-slate-600 border-slate-200";
+};
+
+const EstadoBadge = ({ estadoId, nombre, descripcion }: { estadoId?: number; nombre?: string; descripcion?: string }) => (
+    <span
+        title={descripcion || nombre || ""}
+        className={`inline-flex px-2 py-1 rounded-full border text-[10px] font-bold uppercase ${estadoBadgeClass(estadoId)}`}
+    >
+        {nombre || (estadoId ? `Estado ${estadoId}` : "-")}
+    </span>
+);
+
 export default function SolicitudReposicionForm({
     initialValue,
+    readonlyInfo,
     loading = false,
     readOnly = false,
     lockDestino = false,
@@ -163,23 +214,11 @@ export default function SolicitudReposicionForm({
     const [items, setItems] = useState<DetalleFormItem[]>([]);
 
     const { catalogs, loadingCatalogs } = useCatalogs([
-        { endpoint: "Almacen", params: { empresaId: EMPRESA_ID } },
-        { endpoint: "Producto", params: { empresaId: EMPRESA_ID } },
-        { endpoint: "CuentaUsuario", params: { filters: JSON.stringify({ estado: 1 }) } }
+        { endpoint: "Almacen", params: { empresaId: EMPRESA_ID } }
     ]);
 
     const almacenOptions = useMemo(() => {
         return getAlmacenesActivosOrdenados(catalogs["Almacen"] || []);
-    }, [catalogs]);
-
-    const usuarioOptions = useMemo(() => {
-        return (catalogs["CuentaUsuario"] || []).map((usuario: CatalogOption) => ({
-            ...usuario,
-            value: String(usuario.originalData?.cuentausuarioId || usuario.value || "").trim(),
-            key: String(usuario.originalData?.cuentausuarioId || usuario.value || "").trim(),
-            label: String(usuario.originalData?.observacion || usuario.label || "").trim(),
-            aux: String(usuario.originalData?.usuario || usuario.aux || "").trim()
-        }));
     }, [catalogs]);
 
     useEffect(() => {
@@ -198,8 +237,13 @@ export default function SolicitudReposicionForm({
             bienId: x.bienId || "",
             presentacionId: x.presentacionId || "",
             cantidad_solicitada: Number(x.cantidad_solicitada || 0),
+            cantidad_aprobada: x.cantidad_aprobada,
+            cantidad_atendida: x.cantidad_atendida,
             observacion: x.observacion || "",
             descripcion_aux: x.descripcion_aux || "",
+            estadoId: x.estadoId,
+            estadoNombre: x.estadoNombre,
+            estadoDescripcion: x.estadoDescripcion,
             presentaciones_opciones: x.presentaciones_opciones || []
         }));
 
@@ -218,21 +262,6 @@ export default function SolicitudReposicionForm({
         setFormData((prev) => ({
             ...prev,
             [name]: String(value)
-        }));
-    };
-
-    const handleUsuarioChange = (e: SelectChangeEvent) => {
-        const option = e.option;
-        const cuentausuarioId = String(
-            option?.originalData?.cuentausuarioId ||
-            option?.cuentausuarioId ||
-            e.target.value ||
-            ""
-        ).trim();
-
-        setFormData((prev) => ({
-            ...prev,
-            cuentausuarioId
         }));
     };
 
@@ -325,10 +354,6 @@ export default function SolicitudReposicionForm({
             return "El almacén destino es obligatorio.";
         }
 
-        if (!formData.cuentausuarioId || formData.cuentausuarioId.trim() === "") {
-            return "El usuario solicitante es obligatorio.";
-        }
-
         if (!formData.fecha_plazo_solicitud) {
             return "La fecha plazo es obligatoria.";
         }
@@ -377,7 +402,7 @@ export default function SolicitudReposicionForm({
             almacen_destinoId: formData.almacen_destinoId.trim(),
             fecha_plazo_solicitud: formData.fecha_plazo_solicitud,
             observacion: formData.observacion?.trim() || undefined,
-            cuentausuarioId: formData.cuentausuarioId.trim(),
+            cuentausuarioId: USER_ID,
             detalle: items.map((item) => ({
                 bienId: item.bienId.trim(),
                 presentacionId: item.presentacionId.trim(),
@@ -394,6 +419,13 @@ export default function SolicitudReposicionForm({
             setSaving(false);
         }
     };
+
+    const showDetailStatus = items.some((item) => item.estadoId || item.estadoNombre);
+    const showApprovedQuantities = items.some((item) => (
+        item.cantidad_aprobada !== undefined ||
+        item.cantidad_atendida !== undefined
+    ));
+    const approvalDate = formatDate(readonlyInfo?.fecha_aprobacion);
 
     return (
         <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-5">
@@ -429,6 +461,46 @@ export default function SolicitudReposicionForm({
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-sm">
                 <SectionTitle title="Datos de la solicitud" icon={IconBuildingStore} />
 
+                {readonlyInfo && (
+                    <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <EstadoBadge
+                                    estadoId={readonlyInfo.estadoId}
+                                    nombre={readonlyInfo.estadoNombre}
+                                    descripcion={readonlyInfo.estadoDescripcion}
+                                />
+                                {approvalDate && (
+                                    <>
+                                        <span className="hidden h-4 w-px bg-slate-200 sm:inline-block" />
+                                        <span className="text-xs font-semibold text-slate-500">
+                                            Aprobación: <span className="text-emerald-700">{approvalDate}</span>
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:gap-4 lg:text-right">
+                                {readonlyInfo.solicitanteNombre && (
+                                    <div>
+                                        <span className="font-bold uppercase text-slate-400">Solicitante</span>
+                                        <p className="font-bold text-slate-700">{readonlyInfo.solicitanteNombre}</p>
+                                        <p className="text-[11px] text-slate-400">{readonlyInfo.solicitanteUsuario || "-"}</p>
+                                    </div>
+                                )}
+
+                                {approvalDate && (
+                                    <div className="border-t border-slate-200 pt-2 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                                        <span className="font-bold uppercase text-slate-400">Aprobador</span>
+                                        <p className="font-bold text-slate-700">{readonlyInfo.aprobadorNombre || "-"}</p>
+                                        <p className="text-[11px] text-slate-400">{readonlyInfo.aprobadorUsuario || "-"}</p>
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <SearchableSelect
                         label="Almacén origen"
@@ -450,16 +522,6 @@ export default function SolicitudReposicionForm({
                         onChange={handleHeaderChange}
                     />
 
-                    <SearchableSelect
-                        label="Usuario solicitante"
-                        name="cuentausuarioId"
-                        value={formData.cuentausuarioId || ""}
-                        options={usuarioOptions}
-                        disabled={readOnly}
-                        placeholder="-- Seleccione --"
-                        onChange={handleUsuarioChange}
-                    />
-
                     <FormInput
                         label="Fecha plazo"
                         name="fecha_plazo_solicitud"
@@ -469,7 +531,7 @@ export default function SolicitudReposicionForm({
                         onChange={handleHeaderChange}
                     />
 
-                    <div className="md:col-span-2">
+                    <div className="md:col-span-3">
                         <TextArea
                             label="Observación"
                             name="observacion"
@@ -505,9 +567,12 @@ export default function SolicitudReposicionForm({
                         <table className="w-full text-left text-xs">
                             <thead className="bg-slate-50 text-slate-500 uppercase font-semibold">
                                 <tr>
-                                    <th className="p-3 w-[34%]">Producto</th>
-                                    <th className="p-3 w-[22%]">Presentación</th>
-                                    <th className="p-3 w-28 text-right">Cantidad</th>
+                                    <th className="p-3 w-[30%]">Producto</th>
+                                    <th className="p-3 w-[20%]">Presentación</th>
+                                    {showDetailStatus && <th className="p-3 w-28">Estado</th>}
+                                    <th className="p-3 w-28 text-right">Solicitada</th>
+                                    {showApprovedQuantities && <th className="p-3 w-28 text-right">Aprobada</th>}
+                                    {showApprovedQuantities && <th className="p-3 w-28 text-right">Atendida</th>}
                                     <th className="p-3">Observación</th>
                                 </tr>
                             </thead>
@@ -515,7 +580,7 @@ export default function SolicitudReposicionForm({
                             <tbody className="divide-y divide-slate-100">
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4} className="p-8 text-center text-slate-400 italic">
+                                        <td colSpan={4 + (showDetailStatus ? 1 : 0) + (showApprovedQuantities ? 2 : 0)} className="p-8 text-center text-slate-400 italic">
                                             <IconNotes size={42} className="mx-auto mb-2 opacity-20" />
                                             No hay productos agregados
                                         </td>
@@ -561,6 +626,16 @@ export default function SolicitudReposicionForm({
                                                 />
                                             </td>
 
+                                            {showDetailStatus && (
+                                                <td className="p-3">
+                                                    <EstadoBadge
+                                                        estadoId={item.estadoId}
+                                                        nombre={item.estadoNombre}
+                                                        descripcion={item.estadoDescripcion}
+                                                    />
+                                                </td>
+                                            )}
+
                                             <td className="p-3">
                                                 <input
                                                     type="number"
@@ -572,6 +647,22 @@ export default function SolicitudReposicionForm({
                                                     className="w-full border border-slate-200 p-1.5 text-right rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 bg-white shadow-sm disabled:bg-slate-100"
                                                 />
                                             </td>
+
+                                            {showApprovedQuantities && (
+                                                <td className="p-3">
+                                                    <div className="w-full border border-slate-200 bg-slate-100 p-1.5 text-right rounded font-mono text-slate-600 cursor-not-allowed">
+                                                        {Number(item.cantidad_aprobada || 0).toFixed(2)}
+                                                    </div>
+                                                </td>
+                                            )}
+
+                                            {showApprovedQuantities && (
+                                                <td className="p-3">
+                                                    <div className="w-full border border-slate-200 bg-slate-100 p-1.5 text-right rounded font-mono text-slate-600 cursor-not-allowed">
+                                                        {Number(item.cantidad_atendida || 0).toFixed(2)}
+                                                    </div>
+                                                </td>
+                                            )}
 
                                             <td className="p-3">
                                                 <div className="flex items-center gap-2">

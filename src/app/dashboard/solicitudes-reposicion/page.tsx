@@ -10,31 +10,39 @@ import {
     IconEye,
     IconFilter,
     IconRefresh,
-    IconTrash,
     IconX,
     IconBan,
     IconSearch,
     IconDotsVertical,
-    IconCheck
+    IconCheck,
+    IconLoader
 } from '@tabler/icons-react';
 
 import DataTable from '@/components/shared/DataTable';
 import FiltrosAvanzados from '@/components/filter/FiltrosAvanzados';
 import MultiSelect from '@/components/forms/MultiSelect';
+import Modal from '@/components/ui/Modal';
 import { useCrud } from '@/hooks/useCrud';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { solicitudReposicionService } from '@/services/solicitudReposicionService';
-import { SolicitudReposicionFilters, SolicitudReposicionResponse } from '@/types/solicitudReposicion.types';
+import {
+    SolicitudReposicionDetalle,
+    SolicitudReposicionFilters,
+    SolicitudReposicionResponse
+} from '@/types/solicitudReposicion.types';
 import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
 
 const EMPRESA_ID = '005';
 const USER_ID = 'CU0001';
 
 const estadoSolicitudOptions = [
-    { value: '7', label: 'EN PROCESO' },
+    { value: '1', label: 'PENDIENTE' },
+    { value: '2', label: 'APROBADO' },
     { value: '3', label: 'RECHAZADO' },
-    { value: '6', label: 'ANULADO' },
+    { value: '3', label: 'PARCIAL' },
     { value: '5', label: 'ATENDIDO' },
+    { value: '6', label: 'ANULADO' },
+    { value: '7', label: 'EN PROCESO' },
     { value: '8', label: 'CERRADO' }
 ];
 const formatDate = (value?: string) => {
@@ -67,9 +75,45 @@ const estadoBadgeClass = (estadoId?: number) => {
     return 'bg-slate-50 text-slate-600 border-slate-200';
 };
 
+const ESTADOS_DETALLE_PROCESADOS = new Set([2, 3, 4]);
+const ESTADOS_DETALLE_PROCESADOS_NOMBRE = new Set(['APROBADO', 'RECHAZADO', 'PARCIAL']);
+
+const normalizeEstadoText = (value?: string) => {
+    return String(value || '').trim().toUpperCase();
+};
+
+const isDetalleProcesado = (detalle?: SolicitudReposicionDetalle) => {
+    if (!detalle) return false;
+
+    const estadoTexto = normalizeEstadoText(detalle.estado?.nombre || detalle.estado?.descripcion);
+
+    return (
+        (typeof detalle.estadoId === 'number' && ESTADOS_DETALLE_PROCESADOS.has(detalle.estadoId)) ||
+        ESTADOS_DETALLE_PROCESADOS_NOMBRE.has(estadoTexto)
+    );
+};
+
+const shouldUseDesaprobar = (row: SolicitudReposicionResponse) => {
+    return (row.detalles || []).some(isDetalleProcesado);
+};
+
 type BasicOption = {
     value: string | number;
-    label?: string;
+    label: string;
+};
+
+type ApprovalMode = 'approve' | 'disapprove';
+
+type AprobarDetalleDraft = {
+    item: number;
+    productoLabel: string;
+    presentacionLabel: string;
+    cantidad_solicitada: number;
+    cantidad_aprobada: string;
+    observacion: string;
+    estadoNombre: string;
+    estadoDescripcion: string;
+    estadoId?: number;
 };
 
 export default function SolicitudesReposicionPage() {
@@ -77,6 +121,12 @@ export default function SolicitudesReposicionPage() {
 
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [openActionsId, setOpenActionsId] = useState<number | null>(null);
+    const [approveModalOpen, setApproveModalOpen] = useState(false);
+    const [approveLoading, setApproveLoading] = useState(false);
+    const [approveSaving, setApproveSaving] = useState(false);
+    const [approvalMode, setApprovalMode] = useState<ApprovalMode>('approve');
+    const [approveSolicitud, setApproveSolicitud] = useState<SolicitudReposicionResponse | null>(null);
+    const [approveItems, setApproveItems] = useState<AprobarDetalleDraft[]>([]);
 
     const initialFilters: SolicitudReposicionFilters = {
         FechaInicio: '',
@@ -114,21 +164,21 @@ export default function SolicitudesReposicionPage() {
     const almacenOptions = useMemo(() => {
         return getAlmacenesActivosOrdenados(catalogs['Almacen'] || []).map((x: BasicOption) => ({
             value: x.value,
-            label: x.label
+            label: x.label || ''
         }));
     }, [catalogs]);
 
     const productoOptions = useMemo(() => {
         return (catalogs['Producto'] || []).map((x: BasicOption) => ({
             value: x.value,
-            label: x.label
+            label: x.label || ''
         }));
     }, [catalogs]);
 
     const usuarioOptions = useMemo(() => {
         return (catalogs['CuentaUsuario'] || []).map((x: BasicOption) => ({
             value: x.value,
-            label: x.label
+            label: x.label || ''
         }));
     }, [catalogs]);
 
@@ -164,44 +214,151 @@ export default function SolicitudesReposicionPage() {
         fetchData(1, searchTerm, initialFilters);
     };
 
-    const handleAprobar = async (row: SolicitudReposicionResponse) => {
-        const result = await Swal.fire({
-            title: '¿Aprobar solicitud?',
-            text: `Se aprobarán las cantidades solicitadas de la solicitud #${row.id}.`,
-            icon: 'question',
-            showCancelButton: true,
-            confirmButtonText: 'Aprobar',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#16a34a'
-        });
+    const closeApproveModal = () => {
+        if (approveSaving) return;
 
-        if (!result.isConfirmed) return;
+        setApproveModalOpen(false);
+        setApproveSolicitud(null);
+        setApproveItems([]);
+        setApprovalMode('approve');
+    };
 
-        const detalleSource = row.detalles?.length
-            ? row
-            : (await solicitudReposicionService.getById(row.id)).data;
-
-        const detalles = detalleSource.detalles || [];
-
-        if (!detalles.length) {
-            toast.error('No se pudo aprobar: la solicitud no tiene detalle de productos.');
+    const openAprobarModal = async (row: SolicitudReposicionResponse, mode: ApprovalMode = 'approve') => {
+        if (mode === 'approve' && row.estadoId !== 7) {
+            toast.warning('Solo se pueden aprobar solicitudes pendientes.');
             return;
         }
 
-        const response = await solicitudReposicionService.aprobar(row.id, {
-            usuario_aprobacionId: USER_ID,
-            detalle: detalles.map((item, index) => ({
+        setApproveModalOpen(true);
+        setApproveLoading(true);
+        setApprovalMode(mode);
+        setApproveSolicitud(null);
+        setApproveItems([]);
+
+        const response = await solicitudReposicionService.getById(row.id);
+
+        if (!response.isSuccess || !response.data?.id) {
+            toast.error(response.message || 'No se pudo cargar la solicitud para aprobación.');
+            setApproveModalOpen(false);
+            setApproveLoading(false);
+            return;
+        }
+
+        const detalles = response.data.detalles || [];
+        const hasProcessedDetails = detalles.some(isDetalleProcesado);
+
+        if (mode === 'approve' && response.data.estadoId !== 7) {
+            toast.warning('La solicitud ya no está pendiente de aprobación.');
+            setApproveModalOpen(false);
+            setApproveLoading(false);
+            fetchData(meta.currentPage || 1);
+            return;
+        }
+
+        if (mode === 'disapprove' && !hasProcessedDetails) {
+            toast.warning('La solicitud no tiene productos aprobados, rechazados o parciales para desaprobar.');
+            setApproveModalOpen(false);
+            setApproveLoading(false);
+            fetchData(meta.currentPage || 1);
+            return;
+        }
+
+        if (!detalles.length) {
+            toast.error(`No se pudo ${mode === 'disapprove' ? 'desaprobar' : 'aprobar'}: la solicitud no tiene detalle de productos.`);
+            setApproveModalOpen(false);
+            setApproveLoading(false);
+            return;
+        }
+
+        setApproveSolicitud(response.data);
+        setApproveItems(detalles.map((item, index) => {
+            const cantidadSolicitada = Number(item.cantidad_solicitada || 0);
+
+            return {
                 item: Number(item.item || index + 1),
-                cantidad_aprobada: Number(item.cantidad_aprobada || item.cantidad_solicitada || 0),
-                observacion: item.observacion
+                productoLabel: item.bien?.descripcion || item.bienId || '-',
+                presentacionLabel: item.presentacion?.descripcion || item.presentacionId || '-',
+                cantidad_solicitada: cantidadSolicitada,
+                cantidad_aprobada: String(Number(item.cantidad_aprobada ?? cantidadSolicitada)),
+                observacion: item.observacion || '',
+                estadoNombre: item.estado?.nombre || (item.estadoId ? `Estado ${item.estadoId}` : '-'),
+                estadoDescripcion: item.estado?.descripcion || '',
+                estadoId: item.estadoId
+            };
+        }));
+        setApproveLoading(false);
+    };
+
+    const handleApproveItemChange = (
+        index: number,
+        field: 'cantidad_aprobada' | 'observacion',
+        value: string
+    ) => {
+        setApproveItems(prev => prev.map((item, itemIndex) => (
+            itemIndex === index
+                ? { ...item, [field]: value }
+                : item
+        )));
+    };
+
+    const handleSubmitAprobacion = async () => {
+        if (!approveSolicitud) return;
+
+        if (approvalMode === 'approve' && approveSolicitud.estadoId !== 7) {
+            toast.warning('Solo se pueden aprobar solicitudes pendientes.');
+            return;
+        }
+
+        if (approvalMode === 'disapprove' && !approveItems.some(item => (
+            (typeof item.estadoId === 'number' && ESTADOS_DETALLE_PROCESADOS.has(item.estadoId)) ||
+            ESTADOS_DETALLE_PROCESADOS_NOMBRE.has(normalizeEstadoText(item.estadoNombre))
+        ))) {
+            toast.warning('La solicitud no tiene productos aprobados, rechazados o parciales para desaprobar.');
+            return;
+        }
+
+        if (!approveItems.length) {
+            toast.error(`La solicitud no tiene productos para ${approvalMode === 'disapprove' ? 'desaprobar' : 'aprobar'}.`);
+            return;
+        }
+
+        if (approvalMode === 'approve') {
+            const invalidItem = approveItems.find(item => {
+                const cantidadAprobada = Number(item.cantidad_aprobada);
+
+                return (
+                    Number.isNaN(cantidadAprobada) ||
+                    cantidadAprobada < 0 ||
+                    cantidadAprobada > item.cantidad_solicitada
+                );
+            });
+
+            if (invalidItem) {
+                toast.error(`Revise el ítem ${invalidItem.item}: la cantidad aprobada debe estar entre 0 y ${formatNumber(invalidItem.cantidad_solicitada)}.`);
+                return;
+            }
+        }
+
+        setApproveSaving(true);
+
+        const response = await solicitudReposicionService.aprobar(approveSolicitud.id, {
+            usuario_aprobacionId: USER_ID,
+            estadoAprobacion: approvalMode === 'approve',
+            detalle: approveItems.map(item => ({
+                item: item.item,
+                cantidad_aprobada: Number(item.cantidad_aprobada || 0),
+                observacion: item.observacion.trim() || undefined
             }))
         });
 
         if (response.isSuccess) {
-            toast.success('Solicitud aprobada correctamente.');
+            toast.success(`Solicitud ${approvalMode === 'disapprove' ? 'desaprobada' : 'aprobada'} correctamente.`);
+            setApproveSaving(false);
+            closeApproveModal();
             fetchData(meta.currentPage || 1);
         } else {
-            toast.error(response.message || 'No se pudo aprobar la solicitud.');
+            toast.error(response.message || `No se pudo ${approvalMode === 'disapprove' ? 'desaprobar' : 'aprobar'} la solicitud.`);
+            setApproveSaving(false);
         }
     };
 
@@ -270,29 +427,6 @@ export default function SolicitudesReposicionPage() {
             fetchData(meta.currentPage || 1);
         } else {
             toast.error(response.message || 'No se pudo rechazar la solicitud.');
-        }
-    };
-
-    const handleDelete = async (row: SolicitudReposicionResponse) => {
-        const result = await Swal.fire({
-            title: '¿Eliminar solicitud?',
-            text: 'Solo debe eliminarse si todavía no fue procesada.',
-            icon: 'error',
-            showCancelButton: true,
-            confirmButtonText: 'Eliminar',
-            cancelButtonText: 'Cancelar',
-            confirmButtonColor: '#ef4444'
-        });
-
-        if (!result.isConfirmed) return;
-
-        const response = await solicitudReposicionService.delete(row.id);
-
-        if (response.isSuccess) {
-            toast.success('Solicitud eliminada correctamente.');
-            fetchData(meta.currentPage || 1);
-        } else {
-            toast.error(response.message || 'No se pudo eliminar la solicitud.');
         }
     };
 
@@ -370,99 +504,83 @@ export default function SolicitudesReposicionPage() {
             className: 'text-center'
         },
         {
-            header: 'Solicitado',
-            render: (row: SolicitudReposicionResponse) => formatNumber(row.total_solicitado),
-            className: 'text-right'
-        },
-        {
-            header: 'Aprobado',
-            render: (row: SolicitudReposicionResponse) => formatNumber(row.total_aprobado),
-            className: 'text-right'
-        },
-        {
-            header: 'Atendido',
-            render: (row: SolicitudReposicionResponse) => formatNumber(row.total_atendido),
-            className: 'text-right'
-        },
-        {
-            header: 'Pendiente',
-            render: (row: SolicitudReposicionResponse) => (
-                <span className={row.indicador_pendiente ? 'text-orange-600 font-bold' : 'text-slate-500'}>
-                    {formatNumber(row.total_pendiente)}
-                </span>
-            ),
-            className: 'text-right'
-        },
-        {
             header: 'Acciones',
-            render: (row: SolicitudReposicionResponse) => (
-                <div className="relative flex items-center justify-end gap-1">
-                    <button
-                        onClick={() => router.push(`/dashboard/solicitudes-reposicion/editar/${row.id}?mode=view`)}
-                        className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                        title="Ver"
-                    >
-                        <IconEye size={17} />
-                    </button>
+            render: (row: SolicitudReposicionResponse) => {
+                const canApprove = row.estadoId === 7;
+                const canDisapprove = shouldUseDesaprobar(row);
+                const canOpenActions = canApprove || canDisapprove;
+                const actionMode: ApprovalMode = canDisapprove ? 'disapprove' : 'approve';
 
-                    {row.estadoId === 7 && (
+                return (
+                    <div className="relative flex items-center justify-end gap-1">
                         <button
-                            onClick={() => router.push(`/dashboard/solicitudes-reposicion/editar/${row.id}`)}
-                            className="p-2 rounded-lg text-blue-600 hover:bg-blue-50"
-                            title="Editar"
-                        >
-                            <IconEdit size={17} />
-                        </button>
-                    )}
-
-                    {row.estadoId === 7 && (
-                        <button
-                            type="button"
-                            onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
+                            onClick={() => router.push(`/dashboard/solicitudes-reposicion/editar/${row.id}?mode=view`)}
                             className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
-                            title="Más acciones"
+                            title="Ver"
                         >
-                            <IconDotsVertical size={17} />
+                            <IconEye size={17} />
                         </button>
-                    )}
 
-                    {row.estadoId === 7 && openActionsId === row.id && (
-                        <div className="absolute right-0 top-9 z-30 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left shadow-xl">
+                        {canApprove && (
+                            <button
+                                onClick={() => router.push(`/dashboard/solicitudes-reposicion/editar/${row.id}`)}
+                                className="p-2 rounded-lg text-blue-600 hover:bg-blue-50"
+                                title="Editar"
+                            >
+                                <IconEdit size={17} />
+                            </button>
+                        )}
+
+                        {canOpenActions && (
                             <button
                                 type="button"
-                                onClick={() => { closeActionsMenu(); handleAprobar(row); }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
+                                onClick={() => setOpenActionsId(openActionsId === row.id ? null : row.id)}
+                                className="p-2 rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800"
+                                title="Más acciones"
                             >
-                                <IconCheck size={15} /> Aprobar
+                                <IconDotsVertical size={17} />
                             </button>
+                        )}
 
-                            <button
-                                type="button"
-                                onClick={() => { closeActionsMenu(); handleRechazar(row); }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
-                            >
-                                <IconX size={15} /> Rechazar
-                            </button>
+                        {canOpenActions && openActionsId === row.id && (
+                            <div className="absolute right-0 top-9 z-30 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left shadow-xl">
+                                <button
+                                    type="button"
+                                    onClick={() => { closeActionsMenu(); openAprobarModal(row, actionMode); }}
+                                    className={`flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold ${
+                                        actionMode === 'disapprove'
+                                            ? 'text-orange-700 hover:bg-orange-50'
+                                            : 'text-emerald-700 hover:bg-emerald-50'
+                                    }`}
+                                >
+                                    {actionMode === 'disapprove' ? <IconBan size={15} /> : <IconCheck size={15} />}
+                                    {actionMode === 'disapprove' ? 'Desaprobar' : 'Aprobar'}
+                                </button>
 
-                            <button
-                                type="button"
-                                onClick={() => { closeActionsMenu(); handleAnular(row); }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-orange-600 hover:bg-orange-50"
-                            >
-                                <IconBan size={15} /> Anular
-                            </button>
+                                {canApprove && !canDisapprove && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { closeActionsMenu(); handleRechazar(row); }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50"
+                                    >
+                                        <IconX size={15} /> Rechazar
+                                    </button>
+                                )}
 
-                            <button
-                                type="button"
-                                onClick={() => { closeActionsMenu(); handleDelete(row); }}
-                                className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50"
-                            >
-                                <IconTrash size={15} /> Eliminar
-                            </button>
-                        </div>
-                    )}
-                </div>
-            ),
+                                {canApprove && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { closeActionsMenu(); handleAnular(row); }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-orange-600 hover:bg-orange-50"
+                                    >
+                                        <IconBan size={15} /> Anular
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                );
+            },
             className: 'text-right'
         }
     ];
@@ -530,6 +648,191 @@ export default function SolicitudesReposicionPage() {
                 onPageChange={(page) => fetchData(page)}
                 emptyMessage="No se encontraron solicitudes de reposición"
             />
+
+            <Modal
+                isOpen={approveModalOpen}
+                onClose={closeApproveModal}
+                title={
+                    approveSolicitud
+                        ? `${approvalMode === 'disapprove' ? 'Desaprobar' : 'Aprobar'} solicitud #${approveSolicitud.id}`
+                        : `${approvalMode === 'disapprove' ? 'Desaprobar' : 'Aprobar'} solicitud`
+                }
+                size="xl"
+            >
+                {approveLoading ? (
+                    <div className="flex flex-col items-center justify-center py-16 text-blue-600">
+                        <IconLoader size={34} className="animate-spin" />
+                        <p className="mt-3 text-sm font-semibold text-slate-600">Cargando detalle de la solicitud...</p>
+                    </div>
+                ) : approveSolicitud ? (
+                    <div className="space-y-5">
+                        <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={`inline-flex px-2.5 py-1 rounded-full border text-[11px] font-bold uppercase ${estadoBadgeClass(approveSolicitud.estadoId)}`}>
+                                        {approveSolicitud.estado?.nombre || approveSolicitud.estado?.descripcion || approveSolicitud.estadoId}
+                                    </span>
+                                    <span className="text-xs font-semibold text-slate-500">
+                                        Emisión: <span className="text-slate-700">{formatDate(approveSolicitud.fecha_emision)}</span>
+                                    </span>
+                                    <span className="hidden h-4 w-px bg-slate-200 sm:inline-block" />
+                                    <span className="text-xs font-semibold text-slate-500">
+                                        Plazo: <span className="text-blue-700">{formatDate(approveSolicitud.fecha_plazo_solicitud)}</span>
+                                    </span>
+                                    {approveSolicitud.fecha_aprobacion && (
+                                        <>
+                                            <span className="hidden h-4 w-px bg-slate-200 sm:inline-block" />
+                                            <span className="text-xs font-semibold text-slate-500">
+                                                Aprobación: <span className="text-emerald-700">{formatDate(approveSolicitud.fecha_aprobacion)}</span>
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+
+                                <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:gap-4 lg:text-right">
+                                    <div>
+                                        <span className="font-bold uppercase text-slate-400">Solicitante</span>
+                                        <p className="font-bold text-slate-700">{approveSolicitud.cuentaUsuario?.observacion || approveSolicitud.cuentausuarioId}</p>
+                                        <p className="text-[11px] text-slate-400">{approveSolicitud.cuentaUsuario?.usuario || approveSolicitud.cuentausuarioId}</p>
+                                    </div>
+                                    {approveSolicitud.fecha_aprobacion && (
+                                        <div className="border-t border-slate-200 pt-2 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
+                                            <span className="font-bold uppercase text-slate-400">Aprobador</span>
+                                            <p className="font-bold text-slate-700">{approveSolicitud.usuarioAprobacion?.observacion || approveSolicitud.usuario_aprobacionId || '-'}</p>
+                                            <p className="text-[11px] text-slate-400">{approveSolicitud.usuarioAprobacion?.usuario || approveSolicitud.usuario_aprobacionId || '-'}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="rounded-lg border border-slate-200 p-3">
+                                <p className="text-[10px] font-bold uppercase text-slate-400">Almacén origen</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-700 uppercase">
+                                    {approveSolicitud.almacenOrigen?.descripcion || approveSolicitud.almacen_origenId || '-'}
+                                </p>
+                            </div>
+                            <div className="rounded-lg border border-slate-200 p-3">
+                                <p className="text-[10px] font-bold uppercase text-slate-400">Almacén destino</p>
+                                <p className="mt-1 text-sm font-semibold text-slate-700 uppercase">
+                                    {approveSolicitud.almacenDestino?.descripcion || approveSolicitud.almacen_destinoId || '-'}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className={`rounded-lg border px-3 py-2 text-xs font-semibold ${
+                            approvalMode === 'disapprove'
+                                ? 'border-orange-100 bg-orange-50 text-orange-700'
+                                : 'border-blue-100 bg-blue-50 text-blue-700'
+                        }`}>
+                            {approvalMode === 'disapprove'
+                                ? 'Esta acción desaprobará la solicitud y reiniciará el procesamiento.'
+                                : 'Ingrese una cantidad aprobada para cada producto no puede superar la cantidad solicitada.'}
+                        </div>
+
+                        <div className="overflow-x-auto rounded-lg border border-slate-200">
+                            <table className="w-full min-w-[960px] text-left text-xs">
+                                <thead className="bg-slate-50 text-slate-500 uppercase">
+                                    <tr>
+                                        <th className="p-3 w-12">#</th>
+                                        <th className="p-3">Producto</th>
+                                        <th className="p-3 w-48">Presentación</th>
+                                        <th className="p-3 w-32">Estado</th>
+                                        <th className="p-3 w-32 text-right">Solicitado</th>
+                                        <th className="p-3 w-40 text-right">Aprobado</th>
+                                        <th className="p-3 w-64">Observación</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {approveItems.map((item, index) => {
+                                        const cantidadAprobada = Number(item.cantidad_aprobada);
+                                        const isInvalid = (
+                                            Number.isNaN(cantidadAprobada) ||
+                                            cantidadAprobada < 0 ||
+                                            cantidadAprobada > item.cantidad_solicitada
+                                        );
+
+                                        return (
+                                            <tr key={`${item.item}-${index}`} className="hover:bg-slate-50 align-top">
+                                                <td className="p-3 font-mono font-bold text-slate-400">{item.item}</td>
+                                                <td className="p-3">
+                                                    <p className="font-bold text-slate-700">{item.productoLabel}</p>
+                                                </td>
+                                                <td className="p-3 text-slate-600">{item.presentacionLabel}</td>
+                                                <td className="p-3">
+                                                    <span
+                                                        title={item.estadoDescripcion || item.estadoNombre}
+                                                        className={`inline-flex px-2 py-1 rounded-full border text-[10px] font-bold uppercase ${estadoBadgeClass(item.estadoId)}`}
+                                                    >
+                                                        {item.estadoNombre}
+                                                    </span>
+                                                </td>
+                                                <td className="p-3 text-right font-mono font-bold text-slate-700">
+                                                    {formatNumber(item.cantidad_solicitada)}
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        type="number"
+                                                        min="0"
+                                                        max={item.cantidad_solicitada}
+                                                        step="0.01"
+                                                        value={item.cantidad_aprobada}
+                                                        disabled={approvalMode === 'disapprove'}
+                                                        onChange={(e) => handleApproveItemChange(index, 'cantidad_aprobada', e.target.value)}
+                                                        className={`w-full rounded-lg border px-2 py-2 text-right font-mono outline-none focus:ring-2 ${
+                                                            approvalMode === 'disapprove'
+                                                                ? 'border-slate-200 bg-slate-100 text-slate-500 cursor-not-allowed'
+                                                                : isInvalid
+                                                                ? 'border-red-300 bg-red-50 text-red-700 focus:ring-red-100'
+                                                                : 'border-slate-200 focus:border-emerald-400 focus:ring-emerald-100'
+                                                        }`}
+                                                    />
+                                                </td>
+                                                <td className="p-3">
+                                                    <input
+                                                        value={item.observacion}
+                                                        onChange={(e) => handleApproveItemChange(index, 'observacion', e.target.value)}
+                                                        placeholder="Observación opcional"
+                                                        className="w-full rounded-lg border border-slate-200 px-2 py-2 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100"
+                                                    />
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-2 border-t border-slate-100 pt-4">
+                            <button
+                                type="button"
+                                onClick={closeApproveModal}
+                                disabled={approveSaving}
+                                className="px-4 py-2 rounded-lg border border-slate-200 text-sm font-bold text-slate-600 hover:bg-slate-50 disabled:opacity-60"
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleSubmitAprobacion}
+                                disabled={approveSaving}
+                                className={`px-4 py-2 rounded-lg text-sm font-bold text-white disabled:opacity-70 flex items-center justify-center gap-2 ${
+                                    approvalMode === 'disapprove'
+                                        ? 'bg-orange-600 hover:bg-orange-700'
+                                        : 'bg-emerald-600 hover:bg-emerald-700'
+                                }`}
+                            >
+Procesar solicitud
+                            </button>
+                        </div>
+                    </div>
+                ) : (
+                    <div className="py-10 text-center text-sm text-slate-500">
+                        No se pudo cargar la solicitud.
+                    </div>
+                )}
+            </Modal>
 
             <FiltrosAvanzados
                 isOpen={isFilterOpen}

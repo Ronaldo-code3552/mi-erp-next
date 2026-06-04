@@ -18,6 +18,7 @@ export interface SolicitudReposicionDetalle {
     };
 
     estado?: {
+        nombre?: string;
         descripcion?: string;
     };
 }
@@ -169,6 +170,7 @@ export interface SolicitudReposicionDetallePayload {
 
 export interface SolicitudReposicionAprobarPayload {
     usuario_aprobacionId: string;
+    estadoAprobacion: boolean;
     detalle: SolicitudReposicionAprobarDetallePayload[];
 }
 

@@ -168,7 +168,7 @@ export const solicitudReposicionService = {
             return {
                 isSuccess: false,
                 data: null,
-                message: extractErrorMessage(error, 'Error al aprobar la solicitud de reposición')
+                message: extractErrorMessage(error, 'Error al procesar la aprobación de la solicitud de reposición')
             };
         }
     },

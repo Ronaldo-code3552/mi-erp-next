@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import SolicitudReposicionForm, {
+    SolicitudReposicionReadonlyInfo,
     SolicitudReposicionFormValue
 } from "../../components/SolicitudReposicionForm";
 
@@ -79,8 +80,13 @@ export default function EditarSolicitudReposicionPage() {
                 bienId: item.bienId || "",
                 presentacionId: item.presentacionId || "",
                 cantidad_solicitada: Number(item.cantidad_solicitada || 0),
+                cantidad_aprobada: Number(item.cantidad_aprobada || 0),
+                cantidad_atendida: Number(item.cantidad_atendida || 0),
                 observacion: item.observacion || "",
                 descripcion_aux: item.bien?.descripcion || "",
+                estadoId: item.estadoId,
+                estadoNombre: item.estado?.nombre || "",
+                estadoDescripcion: item.estado?.descripcion || "",
                 presentaciones_opciones: item.presentacionId
                     ? [
                         {
@@ -92,6 +98,21 @@ export default function EditarSolicitudReposicionPage() {
                     ]
                     : []
             }))
+        };
+    }, [solicitud]);
+
+    const readonlyInfo: SolicitudReposicionReadonlyInfo | undefined = useMemo(() => {
+        if (!solicitud) return undefined;
+
+        return {
+            estadoId: solicitud.estadoId,
+            estadoNombre: solicitud.estado?.nombre || solicitud.estado?.descripcion || "",
+            estadoDescripcion: solicitud.estado?.descripcion || "",
+            fecha_aprobacion: solicitud.fecha_aprobacion,
+            solicitanteNombre: solicitud.cuentaUsuario?.observacion || solicitud.cuentausuarioId,
+            solicitanteUsuario: solicitud.cuentaUsuario?.usuario || solicitud.cuentausuarioId,
+            aprobadorNombre: solicitud.usuarioAprobacion?.observacion || solicitud.usuario_aprobacionId || "",
+            aprobadorUsuario: solicitud.usuarioAprobacion?.usuario || solicitud.usuario_aprobacionId || ""
         };
     }, [solicitud]);
 
@@ -152,6 +173,7 @@ export default function EditarSolicitudReposicionPage() {
             }
             submitText="Actualizar solicitud"
             initialValue={initialValue}
+            readonlyInfo={readonlyInfo}
             readOnly={!isEditable}
             lockDestino={true}
             loading={loading}

@@ -37,7 +37,6 @@ export default function CrearSolicitudReposicionPage() {
                 almacen_destinoId: "",
                 fecha_plazo_solicitud: todayString(),
                 observacion: "",
-                cuentausuarioId: "CU0001",
                 detalle: []
             }}
             onBack={() => router.push("/dashboard/solicitudes-reposicion")}
