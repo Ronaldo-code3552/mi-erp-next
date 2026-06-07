@@ -10,7 +10,7 @@ import {
     SolicitudReposicionUpdatePayload
 } from '@/types/solicitudReposicion.types';
 
-const buildFilterCsv = (value?: string[]) => {
+const buildFilterCsv = (value?: Array<string | number>) => {
     if (!Array.isArray(value) || value.length === 0) return null;
 
     const clean = value
@@ -65,6 +65,7 @@ export const solicitudReposicionService = {
             if (filters.FechaFin) params.append('FechaFin', filters.FechaFin);
 
             const filtroEstado = buildFilterCsv(filters.FiltroEstado);
+            const filtroEstadoDetalle = buildFilterCsv(filters.FiltroEstadoDetalle);
             const filtroAlmacenOrigen = buildFilterCsv(filters.FiltroAlmacenOrigen);
             const filtroAlmacenDestino = buildFilterCsv(filters.FiltroAlmacenDestino);
             const filtroCuentaUsuario = buildFilterCsv(filters.FiltroCuentaUsuario);
@@ -73,6 +74,7 @@ export const solicitudReposicionService = {
             const filtroPresentacion = buildFilterCsv(filters.FiltroPresentacion);
 
             if (filtroEstado) params.append('FiltroEstado', filtroEstado);
+            if (filtroEstadoDetalle) params.append('FiltroEstadoDetalle', filtroEstadoDetalle);
             if (filtroAlmacenOrigen) params.append('FiltroAlmacenOrigen', filtroAlmacenOrigen);
             if (filtroAlmacenDestino) params.append('FiltroAlmacenDestino', filtroAlmacenDestino);
             if (filtroCuentaUsuario) params.append('FiltroCuentaUsuario', filtroCuentaUsuario);
@@ -111,6 +113,21 @@ export const solicitudReposicionService = {
                 isSuccess: false,
                 data: {} as SolicitudReposicionResponse,
                 message: extractErrorMessage(error, 'Error al obtener la solicitud de reposición')
+            };
+        }
+    },
+
+    imprimir: async (
+        id: string | number
+    ): Promise<ApiResponse<{ fileName?: string; base64?: string }>> => {
+        try {
+            const response = await apiClient.get(`/almacen/solicitudes-reposicion/${id}/imprimir`);
+            return response.data;
+        } catch (error: unknown) {
+            return {
+                isSuccess: false,
+                data: {},
+                message: extractErrorMessage(error, 'Error al generar la impresión de la solicitud de reposición')
             };
         }
     },

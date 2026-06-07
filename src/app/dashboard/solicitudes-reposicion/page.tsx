@@ -15,7 +15,8 @@ import {
     IconSearch,
     IconDotsVertical,
     IconCheck,
-    IconLoader
+    IconLoader,
+    IconPrinter
 } from '@tabler/icons-react';
 
 import DataTable from '@/components/shared/DataTable';
@@ -66,6 +67,36 @@ const formatNumber = (value?: number) => {
     });
 };
 
+const openPdfFromBase64 = (base64Raw: string, fileName?: string) => {
+    const base64 = base64Raw.includes('base64,')
+        ? base64Raw.split('base64,').pop() || ''
+        : base64Raw;
+
+    if (!base64) {
+        throw new Error('El documento no contiene base64 válido.');
+    }
+
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+
+    for (let i = 0; i < byteCharacters.length; i++) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+
+    const blob = new Blob([new Uint8Array(byteNumbers)], { type: 'application/pdf' });
+    const fileUrl = URL.createObjectURL(blob);
+    const opened = window.open(fileUrl, '_blank');
+
+    if (!opened) {
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.download = fileName || 'SolicitudReposicion.pdf';
+        link.click();
+    }
+
+    window.setTimeout(() => URL.revokeObjectURL(fileUrl), 30000);
+};
+
 const estadoBadgeClass = (estadoId?: number) => {
     if (estadoId === 7) return 'bg-blue-50 text-blue-700 border-blue-200';
     if (estadoId === 3) return 'bg-red-50 text-red-700 border-red-200';
@@ -93,8 +124,32 @@ const isDetalleProcesado = (detalle?: SolicitudReposicionDetalle) => {
     );
 };
 
+const getDetalleEstadoId = (detalle?: { estadoId?: number | string }) => {
+    const estadoId = Number(detalle?.estadoId);
+    return Number.isNaN(estadoId) ? null : estadoId;
+};
+
+const hasDetalleEstado = (row: Pick<SolicitudReposicionResponse, 'detalles'>, estados: number[]) => {
+    const allowedEstados = new Set(estados);
+
+    return (row.detalles || []).some((detalle) => {
+        const estadoId = getDetalleEstadoId(detalle);
+        return estadoId !== null && allowedEstados.has(estadoId);
+    });
+};
+
+const allDetallesEstado = (row: Pick<SolicitudReposicionResponse, 'detalles'>, estados: number[]) => {
+    const detalles = row.detalles || [];
+    const allowedEstados = new Set(estados);
+
+    return detalles.length > 0 && detalles.every((detalle) => {
+        const estadoId = getDetalleEstadoId(detalle);
+        return estadoId !== null && allowedEstados.has(estadoId);
+    });
+};
+
 const shouldUseDesaprobar = (row: SolicitudReposicionResponse) => {
-    return (row.detalles || []).some(isDetalleProcesado);
+    return (row.detalles || []).some(isDetalleProcesado) && !hasDetalleEstado(row, [5]);
 };
 
 type BasicOption = {
@@ -127,6 +182,7 @@ export default function SolicitudesReposicionPage() {
     const [approvalMode, setApprovalMode] = useState<ApprovalMode>('approve');
     const [approveSolicitud, setApproveSolicitud] = useState<SolicitudReposicionResponse | null>(null);
     const [approveItems, setApproveItems] = useState<AprobarDetalleDraft[]>([]);
+    const [printingId, setPrintingId] = useState<number | null>(null);
 
     const initialFilters: SolicitudReposicionFilters = {
         FechaInicio: '',
@@ -224,7 +280,7 @@ export default function SolicitudesReposicionPage() {
     };
 
     const openAprobarModal = async (row: SolicitudReposicionResponse, mode: ApprovalMode = 'approve') => {
-        if (mode === 'approve' && row.estadoId !== 7) {
+        if (mode === 'approve' && (row.estadoId !== 7 || !allDetallesEstado(row, [1]))) {
             toast.warning('Solo se pueden aprobar solicitudes pendientes.');
             return;
         }
@@ -246,9 +302,18 @@ export default function SolicitudesReposicionPage() {
 
         const detalles = response.data.detalles || [];
         const hasProcessedDetails = detalles.some(isDetalleProcesado);
+        const hasAttendedDetails = hasDetalleEstado(response.data, [5]);
 
-        if (mode === 'approve' && response.data.estadoId !== 7) {
+        if (mode === 'approve' && (response.data.estadoId !== 7 || !allDetallesEstado(response.data, [1]))) {
             toast.warning('La solicitud ya no está pendiente de aprobación.');
+            setApproveModalOpen(false);
+            setApproveLoading(false);
+            fetchData(meta.currentPage || 1);
+            return;
+        }
+
+        if (mode === 'disapprove' && hasAttendedDetails) {
+            toast.warning('No se puede desaprobar una solicitud con detalles atendidos.');
             setApproveModalOpen(false);
             setApproveLoading(false);
             fetchData(meta.currentPage || 1);
@@ -304,7 +369,7 @@ export default function SolicitudesReposicionPage() {
     const handleSubmitAprobacion = async () => {
         if (!approveSolicitud) return;
 
-        if (approvalMode === 'approve' && approveSolicitud.estadoId !== 7) {
+        if (approvalMode === 'approve' && (approveSolicitud.estadoId !== 7 || !allDetallesEstado(approveSolicitud, [1]))) {
             toast.warning('Solo se pueden aprobar solicitudes pendientes.');
             return;
         }
@@ -314,6 +379,11 @@ export default function SolicitudesReposicionPage() {
             ESTADOS_DETALLE_PROCESADOS_NOMBRE.has(normalizeEstadoText(item.estadoNombre))
         ))) {
             toast.warning('La solicitud no tiene productos aprobados, rechazados o parciales para desaprobar.');
+            return;
+        }
+
+        if (approvalMode === 'disapprove' && approveItems.some(item => getDetalleEstadoId(item) === 5)) {
+            toast.warning('No se puede desaprobar una solicitud con detalles atendidos.');
             return;
         }
 
@@ -430,6 +500,30 @@ export default function SolicitudesReposicionPage() {
         }
     };
 
+    const handleImprimir = async (row: SolicitudReposicionResponse) => {
+        if (printingId === row.id) return;
+
+        setPrintingId(row.id);
+
+        try {
+            const response = await solicitudReposicionService.imprimir(row.id);
+            const base64 = String(response.data?.base64 || '').trim();
+
+            if (!response.isSuccess || !base64) {
+                toast.error(response.message || 'No se pudo generar el PDF de la solicitud.');
+                return;
+            }
+
+            openPdfFromBase64(base64, response.data?.fileName || `SOLICITUD-REPOSICION-${row.id}.pdf`);
+            toast.success(response.message || 'Documento generado correctamente.');
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : 'Error al imprimir la solicitud.';
+            toast.error(message);
+        } finally {
+            setPrintingId(null);
+        }
+    };
+
     const closeActionsMenu = () => setOpenActionsId(null);
 
     const columns = [
@@ -506,9 +600,14 @@ export default function SolicitudesReposicionPage() {
         {
             header: 'Acciones',
             render: (row: SolicitudReposicionResponse) => {
-                const canApprove = row.estadoId === 7;
+                const allDetailsPending = allDetallesEstado(row, [1]);
+                const canEdit = allDetailsPending;
+                const canApprove = row.estadoId === 7 && allDetailsPending;
                 const canDisapprove = shouldUseDesaprobar(row);
-                const canOpenActions = canApprove || canDisapprove;
+                const canReject = allDetailsPending;
+                const canAnnul = allDetallesEstado(row, [1, 3]);
+                const canOpenApproveAction = canApprove || canDisapprove;
+                const canOpenActions = canOpenApproveAction || canReject || canAnnul;
                 const actionMode: ApprovalMode = canDisapprove ? 'disapprove' : 'approve';
 
                 return (
@@ -521,7 +620,7 @@ export default function SolicitudesReposicionPage() {
                             <IconEye size={17} />
                         </button>
 
-                        {canApprove && (
+                        {canEdit && (
                             <button
                                 onClick={() => router.push(`/dashboard/solicitudes-reposicion/editar/${row.id}`)}
                                 className="p-2 rounded-lg text-blue-600 hover:bg-blue-50"
@@ -530,6 +629,20 @@ export default function SolicitudesReposicionPage() {
                                 <IconEdit size={17} />
                             </button>
                         )}
+
+                        <button
+                            type="button"
+                            onClick={() => handleImprimir(row)}
+                            disabled={printingId === row.id}
+                            className="p-2 rounded-lg text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 disabled:opacity-60"
+                            title="Imprimir"
+                        >
+                            {printingId === row.id ? (
+                                <IconLoader size={17} className="animate-spin" />
+                            ) : (
+                                <IconPrinter size={17} />
+                            )}
+                        </button>
 
                         {canOpenActions && (
                             <button
@@ -544,20 +657,22 @@ export default function SolicitudesReposicionPage() {
 
                         {canOpenActions && openActionsId === row.id && (
                             <div className="absolute right-0 top-9 z-30 w-40 overflow-hidden rounded-lg border border-slate-200 bg-white py-1 text-left shadow-xl">
-                                <button
-                                    type="button"
-                                    onClick={() => { closeActionsMenu(); openAprobarModal(row, actionMode); }}
-                                    className={`flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold ${
-                                        actionMode === 'disapprove'
-                                            ? 'text-orange-700 hover:bg-orange-50'
-                                            : 'text-emerald-700 hover:bg-emerald-50'
-                                    }`}
-                                >
-                                    {actionMode === 'disapprove' ? <IconBan size={15} /> : <IconCheck size={15} />}
-                                    {actionMode === 'disapprove' ? 'Desaprobar' : 'Aprobar'}
-                                </button>
+                                {canOpenApproveAction && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { closeActionsMenu(); openAprobarModal(row, actionMode); }}
+                                        className={`flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold ${
+                                            actionMode === 'disapprove'
+                                                ? 'text-orange-700 hover:bg-orange-50'
+                                                : 'text-emerald-700 hover:bg-emerald-50'
+                                        }`}
+                                    >
+                                        {actionMode === 'disapprove' ? <IconBan size={15} /> : <IconCheck size={15} />}
+                                        {actionMode === 'disapprove' ? 'Desaprobar' : 'Aprobar'}
+                                    </button>
+                                )}
 
-                                {canApprove && !canDisapprove && (
+                                {canReject && (
                                     <button
                                         type="button"
                                         onClick={() => { closeActionsMenu(); handleRechazar(row); }}
@@ -567,7 +682,7 @@ export default function SolicitudesReposicionPage() {
                                     </button>
                                 )}
 
-                                {canApprove && (
+                                {canAnnul && (
                                     <button
                                         type="button"
                                         onClick={() => { closeActionsMenu(); handleAnular(row); }}

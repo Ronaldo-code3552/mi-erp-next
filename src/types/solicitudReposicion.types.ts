@@ -137,6 +137,7 @@ export interface SolicitudReposicionFilters {
     FechaFin?: string;
 
     FiltroEstado?: string[];
+    FiltroEstadoDetalle?: string[];
     FiltroAlmacenOrigen?: string[];
     FiltroAlmacenDestino?: string[];
     FiltroCuentaUsuario?: string[];

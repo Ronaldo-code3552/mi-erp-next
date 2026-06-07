@@ -8,6 +8,7 @@ import { format, subMonths } from 'date-fns';
 
 import { documentoCompraService } from '@/services/documentoCompraService';
 import { guiaRemisionService } from '@/services/guiaRemisionService';
+import { solicitudReposicionService } from '@/services/solicitudReposicionService';
 import documentoVentaService from '@/services/documentoVentaService';
 
 interface ImportarDocumentoModalProps {
@@ -22,6 +23,7 @@ interface ImportarDocumentoModalProps {
         isBonificacion?: boolean; // 🚀 REGLA PARA SABER SI LLAMAMOS AL ENDPOINT SB
         isSalidaVenta?: boolean;  // 🚀 REGLA PARA SABER SI LLAMAMOS AL ENDPOINT SV
         isConsignacion?: boolean; // 🚀 AGREGAR AQUÍ
+        isSolicitudReposicion?: boolean;
     };
     catalogoTiposDoc: any[];
     onImport: (cabecera: any, detalles: any[]) => void;
@@ -55,6 +57,7 @@ export default function ImportarDocumentoModal({
         .map(d => ({ key: d.value, value: d.value, label: d.label }));
 
     const esGuiaActual = ['X031', 'X029'].includes(tipoDocId);
+    const esSolicitudReposicion = tipoDocId === 'SOLICITUD_REPOSICION';
     const esNotaCredito = ['X037', 'X077'].includes(tipoDocId); 
     const esVentaGlobal = ['X037', 'X077', 'X038', 'X028', 'X007', 'X066'].includes(tipoDocId);
 
@@ -82,7 +85,28 @@ export default function ImportarDocumentoModal({
         try {
             let res: any;
 
-            if (esNotaCredito) {
+            if (esSolicitudReposicion) {
+                const response = await solicitudReposicionService.getAll(
+                    pageToFetch,
+                    pageSize,
+                    searchTerm,
+                    {
+                        FechaInicio: fechaInicio,
+                        FechaFin: fechaFin,
+                        FiltroEstado: ['7'],
+                        FiltroEstadoDetalle: [2, 4]
+                    }
+                );
+                const meta = response.meta as { totalRecords?: number; TotalRecords?: number } | undefined;
+
+                res = {
+                    isSuccess: response.isSuccess,
+                    data: response.data || [],
+                    meta: response.meta,
+                    totalRecords: meta?.totalRecords || meta?.TotalRecords || 0,
+                    message: response.message
+                };
+            } else if (esNotaCredito) {
                 // 🚀 CASO: DEVOLUCIÓN DE VENTAS (DV)
                 const filtrosVenta: any = {
                     tipoDocumento: [tipoDocId], // ✅ Corregido a minúscula
@@ -166,7 +190,9 @@ export default function ImportarDocumentoModal({
     };
 
     const handleViewDetail = async (doc: any) => {
-        const docId = esGuiaActual 
+        const docId = esSolicitudReposicion
+            ? doc.id
+            : esGuiaActual 
             ? doc.guiasremisionId 
             : (esVentaGlobal ? doc.documentoventaId : doc.documentocompraId);
 
@@ -178,7 +204,10 @@ export default function ImportarDocumentoModal({
         try {
             let docData = null;
 
-            if (esGuiaActual) {
+            if (esSolicitudReposicion) {
+                const res = await solicitudReposicionService.getById(docId);
+                if (res.isSuccess) docData = res.data;
+            } else if (esGuiaActual) {
                 const res = await guiaRemisionService.getById(docId);
                 if (res.isSuccess) docData = res.data;
             } else if (esVentaGlobal) {
@@ -189,7 +218,7 @@ export default function ImportarDocumentoModal({
             }
 
             if (docData) {
-                setSelectedDocData({ ...docData, isGuia: esGuiaActual, isVenta: esVentaGlobal });
+                setSelectedDocData({ ...docData, isGuia: esGuiaActual, isVenta: esVentaGlobal, isSolicitudReposicion: esSolicitudReposicion });
             } else {
                 toast.error("No se pudo cargar el detalle del documento.");
                 setDetailModalOpen(false);
@@ -203,7 +232,9 @@ export default function ImportarDocumentoModal({
     };
 
     const handleSelectDocument = async (doc: any) => {
-        const docId = esGuiaActual 
+        const docId = esSolicitudReposicion
+            ? doc.id
+            : esGuiaActual 
             ? doc.guiasremisionId 
             : (esVentaGlobal ? doc.documentoventaId : doc.documentocompraId);
 
@@ -212,7 +243,10 @@ export default function ImportarDocumentoModal({
         try {
             let docData = null;
 
-            if (esGuiaActual) {
+            if (esSolicitudReposicion) {
+                const res = await solicitudReposicionService.getById(docId);
+                if (res.isSuccess) docData = res.data;
+            } else if (esGuiaActual) {
                 const res = await guiaRemisionService.getById(docId);
                 if (res.isSuccess) docData = res.data;
             } else if (esVentaGlobal) {
@@ -233,7 +267,9 @@ export default function ImportarDocumentoModal({
     };
 
     const totalPages = Math.ceil(totalRecords / pageSize);
-    const entidadDescripcionDetalle = selectedDocData?.proveedor?.descripcion || selectedDocData?.cliente?.descripcion || 'Sin Especificar';
+    const entidadDescripcionDetalle = selectedDocData?.isSolicitudReposicion
+        ? `${selectedDocData?.almacenOrigen?.descripcion || '-'} -> ${selectedDocData?.almacenDestino?.descripcion || '-'}`
+        : selectedDocData?.proveedor?.descripcion || selectedDocData?.cliente?.descripcion || 'Sin Especificar';
     const entidadDocumentoDetalle = selectedDocData?.proveedor?.numero_doc || selectedDocData?.proveedor?.numDocIdent || selectedDocData?.cliente?.numero_doc || selectedDocData?.cliente?.numDocIdent || '';
 
     return (
@@ -290,7 +326,7 @@ export default function ImportarDocumentoModal({
                                     <tr>
                                         <th className="p-3">Documento</th>
                                         <th className="p-3">Fecha</th>
-                                        {esGuiaActual ? (
+                                        {esGuiaActual || esSolicitudReposicion ? (
                                             <>
                                                 <th className="p-3">Origen / Destino</th>
                                                 <th className="p-3 text-center">Estado</th>
@@ -319,15 +355,15 @@ export default function ImportarDocumentoModal({
                                         </tr>
                                     ) : (
                                         data.map((doc, idx) => {
-                                            const docNumber = doc.numero || doc.correlativo || '';
+                                            const docNumber = esSolicitudReposicion ? doc.id : (doc.numero || doc.correlativo || '');
                                             const serie = doc.serie || '';
-                                            const docName = `${serie}-${docNumber}`;
+                                            const docName = esSolicitudReposicion ? `SOL-REP-${docNumber}` : `${serie}-${docNumber}`;
                                             const fecha = doc.fecha_doc || doc.fecha_emision || '';
-                                            const estadoDoc = doc.estado || 'PENDIENTE';
+                                            const estadoDoc = doc.estado?.nombre || doc.estado || 'PENDIENTE';
 
                                             const provName = doc.proveedor?.descripcion || doc.cliente?.descripcion || doc.clienteDesc || doc.proveedornombre || 'Sin Entidad';
-                                            const monto = Number(doc.total || doc.saldo || 0).toFixed(2);
-                                            const origen = doc.almacenInicio?.descripcion || doc.punto_partida || 'N/A';
+                                            const monto = Number(esSolicitudReposicion ? (doc.total_pendiente || doc.total_aprobado || 0) : (doc.total || doc.saldo || 0)).toFixed(2);
+                                            const origen = doc.almacenOrigen?.descripcion || doc.almacenInicio?.descripcion || doc.punto_partida || 'N/A';
                                             const destino = doc.almacenDestino?.descripcion || doc.punto_llegada || 'N/A';
 
                                             return (
@@ -335,7 +371,7 @@ export default function ImportarDocumentoModal({
                                                     <td className="p-3 font-mono font-bold text-slate-700">{docName}</td>
                                                     <td className="p-3 text-slate-600">{fecha ? format(new Date(fecha), 'dd/MM/yyyy') : ''}</td>
                                                     
-                                                    {esGuiaActual ? (
+                                                    {esGuiaActual || esSolicitudReposicion ? (
                                                         <>
                                                             <td className="p-3 text-slate-600">
                                                                 <span className="block font-bold text-[10px] text-slate-400">DE: {origen}</span>
@@ -420,7 +456,9 @@ export default function ImportarDocumentoModal({
                                 <div>
                                     <p className="font-bold text-slate-400 uppercase mb-1">Documento</p>
                                     <p className="font-mono font-bold text-slate-800 text-sm">
-                                        {selectedDocData.tipoDocumentoComercial?.abreviatura || 'DOC'} {selectedDocData.serie}-{selectedDocData.numero || selectedDocData.correlativo}
+                                        {selectedDocData.isSolicitudReposicion
+                                            ? `SOL-REP-${selectedDocData.id}`
+                                            : `${selectedDocData.tipoDocumentoComercial?.abreviatura || 'DOC'} ${selectedDocData.serie}-${selectedDocData.numero || selectedDocData.correlativo}`}
                                     </p>
                                 </div>
                                 <div>
@@ -430,12 +468,25 @@ export default function ImportarDocumentoModal({
                                     </p>
                                 </div>
                                 <div className="md:col-span-2">
-                                    <p className="font-bold text-slate-400 uppercase mb-1">Entidad (Proveedor/Cliente)</p>
+                                    <p className="font-bold text-slate-400 uppercase mb-1">
+                                        {selectedDocData.isSolicitudReposicion ? 'Almacenes' : 'Entidad (Proveedor/Cliente)'}
+                                    </p>
                                     <p className="font-bold text-slate-800 truncate" title={entidadDescripcionDetalle}>
                                         {entidadDocumentoDetalle ? `${entidadDocumentoDetalle} - ` : ''}{entidadDescripcionDetalle}
                                     </p>
                                 </div>
-                                {!selectedDocData.isGuia && (
+                                {selectedDocData.isSolicitudReposicion ? (
+                                    <>
+                                        <div>
+                                            <p className="font-bold text-slate-400 uppercase mb-1">Total aprobado</p>
+                                            <p className="font-semibold text-emerald-700">{Number(selectedDocData.total_aprobado || 0).toFixed(2)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="font-bold text-slate-400 uppercase mb-1">Pendiente</p>
+                                            <p className="font-semibold text-blue-700">{Number(selectedDocData.total_pendiente || 0).toFixed(2)}</p>
+                                        </div>
+                                    </>
+                                ) : !selectedDocData.isGuia && (
                                     <>
                                         <div>
                                             <p className="font-bold text-slate-400 uppercase mb-1">Moneda</p>
@@ -469,7 +520,7 @@ export default function ImportarDocumentoModal({
                                                 <th className="p-3">Presentación</th>
                                                 <th className="p-3 text-right">Cant. Total</th>
                                                 <th className="p-3 text-right text-emerald-600">Saldo Pendiente</th>
-                                                {!selectedDocData.isGuia && (
+                                                {!selectedDocData.isGuia && !selectedDocData.isSolicitudReposicion && (
                                                     <>
                                                         <th className="p-3 text-right">Precio U.</th>
                                                         <th className="p-3 text-right">Importe</th>
@@ -479,8 +530,8 @@ export default function ImportarDocumentoModal({
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {(selectedDocData.detalles || []).map((det: any, i: number) => {
-                                                const cant = Number(det.cantidad || 0);
-                                                const saldo = Number(det.saldoTemporal ?? det.saldo_temporal ?? det.saldoCantidad ?? det.saldo_cantidad ?? cant);
+                                                const cant = Number(selectedDocData.isSolicitudReposicion ? (det.cantidad_aprobada ?? det.cantidad_solicitada) : (det.cantidad || 0));
+                                                const saldo = Number(selectedDocData.isSolicitudReposicion ? (det.saldo_pendiente ?? det.cantidad_aprobada ?? cant) : (det.saldoTemporal ?? det.saldo_temporal ?? det.saldoCantidad ?? det.saldo_cantidad ?? cant));
                                                 
                                                 return (
                                                     <tr key={i} className="hover:bg-slate-50">
@@ -492,7 +543,7 @@ export default function ImportarDocumentoModal({
                                                         <td className="p-3 text-slate-600">{det.presentacion?.descripcion || det.presentacionDesc || '-'}</td>
                                                         <td className="p-3 text-right font-mono text-slate-600">{cant.toFixed(2)}</td>
                                                         <td className="p-3 text-right font-mono font-bold text-emerald-600">{saldo.toFixed(2)}</td>
-                                                        {!selectedDocData.isGuia && (
+                                                        {!selectedDocData.isGuia && !selectedDocData.isSolicitudReposicion && (
                                                             <>
                                                                 <td className="p-3 text-right text-slate-600">{Number(det.costo || det.precio || 0).toFixed(4)}</td>
                                                                 <td className="p-3 text-right font-semibold text-slate-700">{Number(det.importe || 0).toFixed(2)}</td>

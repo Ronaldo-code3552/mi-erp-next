@@ -108,7 +108,7 @@ export default function CrearGuiaPage() {
     const [transportistaToEdit, setTransportistaToEdit] = useState<any>(null);
 
     const [showDocModal, setShowDocModal] = useState(false);
-    const [importedReferenceDoc, setImportedReferenceDoc] = useState<{ id: string; type: 'COMPRA' | 'VENTA'; } | null>(null);
+    const [importedReferenceDoc, setImportedReferenceDoc] = useState<{ id: string; type: 'COMPRA' | 'VENTA' | 'SOLICITUD_REPOSICION'; } | null>(null);
     
     // 🚀 ESTADOS FALLBACK Y DICCIONARIO DE DIRECCIONES
     const [proveedorNombreImportado, setProveedorNombreImportado] = useState<string>('');
@@ -333,7 +333,7 @@ export default function CrearGuiaPage() {
             case 'MT00005': return { showProv: true, showCli: false, showDestAlmacen: false, start: 'ALM_ORIG', end: 'PROV', refType: 'COMPRA' };
             case 'MT00013': return { showProv: false, showCli: true, showDestAlmacen: false, start: 'ALM_ORIG', end: 'CLI', allowManual: true, refType: 'VENTA' };
             case 'MT00007': return { showProv: true, showCli: false, showDestAlmacen: false, start: 'ALM_ORIG', end: 'PROV', refType: 'COMPRA' };
-            case 'MT00006': return { showProv: false, showCli: true, showDestAlmacen: true, start: 'ALM_ORIG', end: 'ALM_DEST', refType: 'VENTA' }; 
+            case 'MT00006': return { showProv: false, showCli: true, showDestAlmacen: true, start: 'ALM_ORIG', end: 'ALM_DEST', refType: 'SOLICITUD_REPOSICION' }; 
             default: return { showProv: false, showCli: false, showDestAlmacen: false, start: '', end: '', allowManual: false, refType: '' };
         }
     };
@@ -348,7 +348,7 @@ export default function CrearGuiaPage() {
     // - "Soportado": se muestra el bloque y se permite importar.
     // - "Obligatorio": se valida solo en ciertas series / cuando se envía a SUNAT (ver handleSubmit).
     // Regla especial: MT00002 => Documento Referencia debe ser OPCIONAL (nunca obligatorio).
-    const REFERENCE_SUPPORTED_MOTIVOS = ['MT00001', 'MT00002', 'MT00003', 'MT00004', 'MT00013'];
+    const REFERENCE_SUPPORTED_MOTIVOS = ['MT00001', 'MT00002', 'MT00003', 'MT00004', 'MT00006', 'MT00013'];
     const REFERENCE_REQUIRED_MOTIVOS = ['MT00001', 'MT00003', 'MT00004', 'MT00013'];
     const supportsDocumentReference = REFERENCE_SUPPORTED_MOTIVOS.includes(formData.motivotrasladoId || '');
     const requiresDocumentReference = REFERENCE_REQUIRED_MOTIVOS.includes(formData.motivotrasladoId || '');
@@ -517,7 +517,7 @@ export default function CrearGuiaPage() {
             try {
                 const res = await presentacionService.getByBien(value, true);
                 
-                let opcionesUM: any[] = [];
+                const opcionesUM: any[] = [];
                 const unidadBaseKey = p.raw?.unidadmedidaId || 'NIU';
                 let hasBaseUnitInPresentations = false;
 
@@ -657,6 +657,44 @@ export default function CrearGuiaPage() {
         });
     };
 
+    const mapSolicitudReposicionDetallesToGuiaItems = (solicitud: any): GuiaRemisionDetalle[] => {
+        if (!Array.isArray(solicitud?.detalles)) return [];
+
+        return solicitud.detalles
+            .filter((detalle: any) => Number(detalle?.saldo_pendiente ?? detalle?.cantidad_aprobada ?? 0) > 0)
+            .map((detalle: any, idx: number) => {
+                const bienIdLimpio = detalle?.bienId ? String(detalle.bienId).trim() : '';
+                const presentacionIdLimpia = detalle?.presentacionId ? String(detalle.presentacionId).trim() : '';
+                const cantidadNum = Number(detalle?.saldo_pendiente ?? detalle?.cantidad_aprobada ?? 0) || 0;
+
+                return {
+                    item: idx + 1,
+                    bienId: bienIdLimpio,
+                    presentacionId: presentacionIdLimpia || null,
+                    cantidad: cantidadNum,
+                    conversion_total: cantidadNum,
+                    precio: 0,
+                    costo: 0,
+                    importe: 0,
+                    Saldo_cantidad: cantidadNum,
+                    descuento_producto: 0,
+                    afecto_inafecto: false,
+                    observacion: `Solicitud Reposición #${solicitud.id}`,
+                    documentoId: solicitud.id,
+                    tabla_documento: 'SOLICITUD_REPOSICION',
+                    saldo_temporal: cantidadNum,
+                    descripcion_aux: detalle?.bien?.descripcion || '',
+                    unidad_aux: presentacionIdLimpia,
+                    unidades_opciones: [{
+                        key: presentacionIdLimpia,
+                        value: detalle?.presentacion?.descripcion || presentacionIdLimpia || '-',
+                        presentacionId: presentacionIdLimpia || null,
+                        cantidad_pres: 1
+                    }]
+                } as any;
+            });
+    };
+
     const applyImportedCompraDocument = (compra: DocumentoCompra) => {
         if (!compra?.documentocompraId) return toast.error('Documento de compra inválido');
 
@@ -737,7 +775,61 @@ export default function CrearGuiaPage() {
         toast.success('Documento de venta importado');
     };
 
+    const applyImportedSolicitudReposicion = (solicitud: any) => {
+        if (!solicitud?.id) return toast.error('Solicitud de reposición inválida');
+
+        const detallesAprobados = (solicitud.detalles || []).filter((detalle: any) => {
+            const estadoNombre = String(detalle?.estado?.nombre || '').trim().toUpperCase();
+            return Number(detalle?.saldo_pendiente ?? detalle?.cantidad_aprobada ?? 0) > 0 && (
+                detalle?.estadoId === 2 ||
+                detalle?.estadoId === 4 ||
+                estadoNombre === 'APROBADO' ||
+                estadoNombre === 'PARCIAL'
+            );
+        });
+
+        if (!detallesAprobados.length) {
+            toast.error('La solicitud no tiene productos aprobados pendientes para transportar.');
+            return;
+        }
+
+        const referencia = `SOL-REP-${solicitud.id}`;
+        const almacenOrigenId = String(solicitud.almacen_origenId || '').trim();
+        const almacenDestinoId = String(solicitud.almacen_destinoId || '').trim();
+
+        setDocRefComponents({ serie: 'SOL-REP', numero: String(solicitud.id) });
+
+        setFormData((prev) => ({
+            ...prev,
+            id_almacen_inicio: almacenOrigenId || prev.id_almacen_inicio,
+            id_almacen_destino: almacenDestinoId || prev.id_almacen_destino,
+            documentoReferencia: referencia,
+            documentoReferenciaTipo: prev.documentoReferenciaTipo,
+            doc_referencia: 'SOLICITUD_REPOSICION',
+            doc_referencia_numero: String(solicitud.id)
+        }));
+
+        const mappedItems = mapSolicitudReposicionDetallesToGuiaItems({
+            ...solicitud,
+            detalles: detallesAprobados
+        });
+
+        const allowedItems = filterImportableItems(mappedItems);
+        if (allowedItems.length > 0) {
+            setItems(allowedItems);
+        }
+
+        setImportedReferenceDoc({ id: String(solicitud.id), type: 'SOLICITUD_REPOSICION' });
+        setShowDocModal(false);
+        toast.success('Solicitud de reposición importada');
+    };
+
     const handleImportedReferenceDocument = (cabecera: any) => {
+        if (currentRules.refType === 'SOLICITUD_REPOSICION') {
+            applyImportedSolicitudReposicion(cabecera);
+            return;
+        }
+
         if (currentRules.refType === 'COMPRA') {
             applyImportedCompraDocument(cabecera as DocumentoCompra);
             return;
@@ -1013,7 +1105,10 @@ export default function CrearGuiaPage() {
                         presentacionId: selectedUM?.presentacionId || null,
                         item: idx + 1, cantidad: cantidadNum, conversion_total: conversionTotal, precio: 0, costo: 0, importe: 0, Saldo_cantidad: cantidadNum,
                         descuento_producto: Number((item as any).descuento_producto ?? 0), afecto_inafecto: afectoInafectoBool,
-                        observacion: (item as any).observacion ?? 'KG', documentoId: null, tabla_documento: 'GUIAS_REMISION', saldo_temporal: cantidadNum
+                        observacion: (item as any).observacion ?? 'KG',
+                        documentoId: (item as any).documentoId ?? null,
+                        tabla_documento: (item as any).tabla_documento ?? 'GUIAS_REMISION',
+                        saldo_temporal: (item as any).saldo_temporal ?? cantidadNum
                     };
                 })
             };
@@ -1110,6 +1205,15 @@ export default function CrearGuiaPage() {
     };
 
     const filteredDocSearchTypes = useMemo(() => {
+        if (currentRules.refType === 'SOLICITUD_REPOSICION') {
+            return [{
+                key: 'SOLICITUD_REPOSICION',
+                value: 'SOLICITUD_REPOSICION',
+                label: 'Solicitud Reposición',
+                originalData: { tabla_referencia: 'SOLICITUD_REPOSICION' }
+            }];
+        }
+
         const tiposDisponibles = catalogs['TipoDocumentoComercial'] || [];
         const motivo = formData.motivotrasladoId;
         let filtroAux = "";
@@ -1117,14 +1221,15 @@ export default function CrearGuiaPage() {
         else if (['MT00001', 'MT00002', 'MT00004', 'MT00013'].includes(motivo || '')) filtroAux = "DOCUMENTO_VENTA";
         if (!filtroAux) return [];
         return tiposDisponibles.filter((t: any) => t.originalData?.tabla_referencia && t.originalData.tabla_referencia.toUpperCase() === filtroAux);
-    }, [formData.motivotrasladoId, catalogs]);
+    }, [formData.motivotrasladoId, catalogs, currentRules.refType]);
 
     const importModalRules = useMemo(() => ({
         filtrosVenta: null,
         allowedDocTypes: filteredDocSearchTypes.map((t: any) => String(t.value || '').trim()).filter(Boolean),
         tipoCompraFiltro: null,
         filtrosGuia: null,
-        isSalidaVenta: currentRules.refType === 'VENTA'
+        isSalidaVenta: currentRules.refType === 'VENTA',
+        isSolicitudReposicion: currentRules.refType === 'SOLICITUD_REPOSICION'
     }), [filteredDocSearchTypes, currentRules.refType]);
 
     return (
@@ -1345,24 +1450,33 @@ export default function CrearGuiaPage() {
                                         Opcional para este motivo
                                     </div>
                                 )}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo Documento</label>
-                                    <select 
-                                        name="documentoReferenciaTipo" 
-                                        value={formData.documentoReferenciaTipo || ''} 
-                                        onChange={handleChange} 
-                                        className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white"
-                                    >
-                                        <option value="">-- SEL --</option>
-                                        {documentoReferenciaTipoJSON.map((t: any) => (
-                                            <option key={t.key} value={t.codSunat}>{t.value}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <FormInput label="Serie Ref." placeholder="F001" value={docRefParts.serie} onChange={(e:any) => handleDocRefChange('serie', e.target.value)} />
-                                    <FormInput label="Número Ref." placeholder="000458" value={docRefParts.numero} onChange={(e:any) => handleDocRefChange('numero', e.target.value)} />
-                                </div>
+                                {currentRules.refType === 'SOLICITUD_REPOSICION' ? (
+                                    <div className="grid grid-cols-1 gap-3">
+                                        <FormInput label="Tipo Documento" value="Solicitud Reposición" disabled />
+                                        <FormInput label="Referencia" value={formData.documentoReferencia || ''} disabled />
+                                    </div>
+                                ) : (
+                                    <>
+                                        <div className="flex flex-col gap-1.5">
+                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo Documento</label>
+                                            <select 
+                                                name="documentoReferenciaTipo" 
+                                                value={formData.documentoReferenciaTipo || ''} 
+                                                onChange={handleChange} 
+                                                className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white"
+                                            >
+                                                <option value="">-- SEL --</option>
+                                                {documentoReferenciaTipoJSON.map((t: any) => (
+                                                    <option key={t.key} value={t.codSunat}>{t.value}</option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <FormInput label="Serie Ref." placeholder="F001" value={docRefParts.serie} onChange={(e:any) => handleDocRefChange('serie', e.target.value)} />
+                                            <FormInput label="Número Ref." placeholder="000458" value={docRefParts.numero} onChange={(e:any) => handleDocRefChange('numero', e.target.value)} />
+                                        </div>
+                                    </>
+                                )}
                                 <div className="text-[10px] text-slate-400 text-right italic truncate">Ref: {formData.documentoReferencia}</div>
                             </div>
                             
@@ -1555,7 +1669,7 @@ export default function CrearGuiaPage() {
                     onClose={() => setShowDocModal(false)}
                     empresaId={EMPRESA_ID}
                     transaccionRules={importModalRules as any}
-                    catalogoTiposDoc={catalogs['TipoDocumentoComercial'] || []}
+                    catalogoTiposDoc={currentRules.refType === 'SOLICITUD_REPOSICION' ? filteredDocSearchTypes : (catalogs['TipoDocumentoComercial'] || [])}
                     onImport={handleImportedReferenceDocument}
                     soloStock={true}
                 />
