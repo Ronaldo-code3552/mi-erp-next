@@ -93,8 +93,7 @@ export default function ImportarDocumentoModal({
                     {
                         FechaInicio: fechaInicio,
                         FechaFin: fechaFin,
-                        FiltroEstado: ['7'],
-                        FiltroEstadoDetalle: [2, 4]
+                        FiltroEstado: ['POR ATENDER']
                     }
                 );
                 const meta = response.meta as { totalRecords?: number; TotalRecords?: number } | undefined;
@@ -362,7 +361,7 @@ export default function ImportarDocumentoModal({
                                             const estadoDoc = doc.estado?.nombre || doc.estado || 'PENDIENTE';
 
                                             const provName = doc.proveedor?.descripcion || doc.cliente?.descripcion || doc.clienteDesc || doc.proveedornombre || 'Sin Entidad';
-                                            const monto = Number(esSolicitudReposicion ? (doc.total_pendiente || doc.total_aprobado || 0) : (doc.total || doc.saldo || 0)).toFixed(2);
+                                            const monto = Number(esSolicitudReposicion ? (doc.total_pendiente || 0) : (doc.total || doc.saldo || 0)).toFixed(2);
                                             const origen = doc.almacenOrigen?.descripcion || doc.almacenInicio?.descripcion || doc.punto_partida || 'N/A';
                                             const destino = doc.almacenDestino?.descripcion || doc.punto_llegada || 'N/A';
 
@@ -478,8 +477,8 @@ export default function ImportarDocumentoModal({
                                 {selectedDocData.isSolicitudReposicion ? (
                                     <>
                                         <div>
-                                            <p className="font-bold text-slate-400 uppercase mb-1">Total aprobado</p>
-                                            <p className="font-semibold text-emerald-700">{Number(selectedDocData.total_aprobado || 0).toFixed(2)}</p>
+                                            <p className="font-bold text-slate-400 uppercase mb-1">Atendido</p>
+                                            <p className="font-semibold text-emerald-700">{Number(selectedDocData.total_atendido || 0).toFixed(2)}</p>
                                         </div>
                                         <div>
                                             <p className="font-bold text-slate-400 uppercase mb-1">Pendiente</p>
@@ -530,8 +529,8 @@ export default function ImportarDocumentoModal({
                                         </thead>
                                         <tbody className="divide-y divide-slate-100">
                                             {(selectedDocData.detalles || []).map((det: any, i: number) => {
-                                                const cant = Number(selectedDocData.isSolicitudReposicion ? (det.cantidad_aprobada ?? det.cantidad_solicitada) : (det.cantidad || 0));
-                                                const saldo = Number(selectedDocData.isSolicitudReposicion ? (det.saldo_pendiente ?? det.cantidad_aprobada ?? cant) : (det.saldoTemporal ?? det.saldo_temporal ?? det.saldoCantidad ?? det.saldo_cantidad ?? cant));
+                                                const cant = Number(selectedDocData.isSolicitudReposicion ? (det.cantidad_solicitada || 0) : (det.cantidad || 0));
+                                                const saldo = Number(selectedDocData.isSolicitudReposicion ? (det.saldo_pendiente ?? cant) : (det.saldoTemporal ?? det.saldo_temporal ?? det.saldoCantidad ?? det.saldo_cantidad ?? cant));
                                                 
                                                 return (
                                                     <tr key={i} className="hover:bg-slate-50">

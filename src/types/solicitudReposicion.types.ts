@@ -3,22 +3,15 @@ export interface SolicitudReposicionDetalle {
     bienId: string;
     presentacionId: string;
     cantidad_solicitada: number;
-    cantidad_aprobada?: number;
     cantidad_atendida?: number;
     saldo_pendiente?: number;
     observacion?: string;
-    estadoId?: number;
 
     bien?: {
         descripcion?: string;
     };
 
     presentacion?: {
-        descripcion?: string;
-    };
-
-    estado?: {
-        nombre?: string;
         descripcion?: string;
     };
 }
@@ -124,7 +117,6 @@ export interface SolicitudReposicionResponse {
 
     total_items?: number;
     total_solicitado?: number;
-    total_aprobado?: number;
     total_atendido?: number;
     total_pendiente?: number;
     indicador_pendiente?: boolean;
@@ -137,7 +129,6 @@ export interface SolicitudReposicionFilters {
     FechaFin?: string;
 
     FiltroEstado?: string[];
-    FiltroEstadoDetalle?: string[];
     FiltroAlmacenOrigen?: string[];
     FiltroAlmacenDestino?: string[];
     FiltroCuentaUsuario?: string[];
@@ -147,7 +138,7 @@ export interface SolicitudReposicionFilters {
 }
 
 export interface SolicitudReposicionCreatePayload {
-    almacen_origenId?: string;
+    almacen_origenId?: string | null;
     almacen_destinoId: string;
     fecha_plazo_solicitud: string;
     observacion?: string;
@@ -156,7 +147,7 @@ export interface SolicitudReposicionCreatePayload {
 }
 
 export interface SolicitudReposicionUpdatePayload {
-    almacen_origenId?: string;
+    almacen_origenId?: string | null;
     fecha_plazo_solicitud: string;
     observacion?: string;
     detalle: SolicitudReposicionDetallePayload[];
@@ -171,14 +162,6 @@ export interface SolicitudReposicionDetallePayload {
 
 export interface SolicitudReposicionAprobarPayload {
     usuario_aprobacionId: string;
-    estadoAprobacion: boolean;
-    detalle: SolicitudReposicionAprobarDetallePayload[];
-}
-
-export interface SolicitudReposicionAprobarDetallePayload {
-    item: number;
-    cantidad_aprobada: number;
-    observacion?: string;
 }
 
 export interface SolicitudReposicionRechazarPayload {

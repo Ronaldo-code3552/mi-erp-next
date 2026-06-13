@@ -26,6 +26,28 @@ const toDateInput = (value?: string) => {
     return date.toISOString().slice(0, 10);
 };
 
+const normalizeEstado = (value?: string | number) => {
+    return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toUpperCase();
+};
+
+const getEstadoNombre = (solicitud: SolicitudReposicionResponse) => {
+    return solicitud.estado?.nombre || solicitud.estado?.descripcion || (solicitud.estadoId ? `Estado ${solicitud.estadoId}` : "");
+};
+
+const isPorAprobar = (solicitud: SolicitudReposicionResponse) => {
+    const estado = normalizeEstado(getEstadoNombre(solicitud));
+    return estado === "POR APROBAR" || estado === "ESTADO 1";
+};
+
+const isPorAtender = (solicitud: SolicitudReposicionResponse) => {
+    const estado = normalizeEstado(getEstadoNombre(solicitud));
+    return estado === "POR ATENDER" || estado === "ESTADO 2";
+};
+
 export default function EditarSolicitudReposicionPage() {
     const router = useRouter();
     const params = useParams();
@@ -38,7 +60,7 @@ export default function EditarSolicitudReposicionPage() {
     const [solicitud, setSolicitud] = useState<SolicitudReposicionResponse | null>(null);
 
     const isViewMode = mode === "view";
-    const isEditable = solicitud?.estadoId === 7 && !isViewMode;
+    const isEditable = Boolean(solicitud && (isPorAprobar(solicitud) || isPorAtender(solicitud)) && !isViewMode);
 
     useEffect(() => {
         const fetchSolicitud = async () => {
@@ -80,13 +102,10 @@ export default function EditarSolicitudReposicionPage() {
                 bienId: item.bienId || "",
                 presentacionId: item.presentacionId || "",
                 cantidad_solicitada: Number(item.cantidad_solicitada || 0),
-                cantidad_aprobada: Number(item.cantidad_aprobada || 0),
                 cantidad_atendida: Number(item.cantidad_atendida || 0),
+                saldo_pendiente: item.saldo_pendiente,
                 observacion: item.observacion || "",
                 descripcion_aux: item.bien?.descripcion || "",
-                estadoId: item.estadoId,
-                estadoNombre: item.estado?.nombre || "",
-                estadoDescripcion: item.estado?.descripcion || "",
                 presentaciones_opciones: item.presentacionId
                     ? [
                         {
@@ -168,7 +187,7 @@ export default function EditarSolicitudReposicionPage() {
             title={isViewMode ? `Ver Solicitud #${solicitud.id}` : `Editar Solicitud #${solicitud.id}`}
             subtitle={
                 isEditable
-                    ? "Puede modificar la cabecera permitida y el detalle mientras la solicitud esté EN PROCESO."
+                    ? "Puede modificar la cabecera permitida y el detalle mientras la solicitud esté POR APROBAR o POR ATENDER."
                     : "Esta solicitud no puede editarse porque ya no está en estado editable."
             }
             submitText="Actualizar solicitud"

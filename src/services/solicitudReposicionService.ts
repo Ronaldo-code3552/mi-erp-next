@@ -65,7 +65,6 @@ export const solicitudReposicionService = {
             if (filters.FechaFin) params.append('FechaFin', filters.FechaFin);
 
             const filtroEstado = buildFilterCsv(filters.FiltroEstado);
-            const filtroEstadoDetalle = buildFilterCsv(filters.FiltroEstadoDetalle);
             const filtroAlmacenOrigen = buildFilterCsv(filters.FiltroAlmacenOrigen);
             const filtroAlmacenDestino = buildFilterCsv(filters.FiltroAlmacenDestino);
             const filtroCuentaUsuario = buildFilterCsv(filters.FiltroCuentaUsuario);
@@ -74,7 +73,6 @@ export const solicitudReposicionService = {
             const filtroPresentacion = buildFilterCsv(filters.FiltroPresentacion);
 
             if (filtroEstado) params.append('FiltroEstado', filtroEstado);
-            if (filtroEstadoDetalle) params.append('FiltroEstadoDetalle', filtroEstadoDetalle);
             if (filtroAlmacenOrigen) params.append('FiltroAlmacenOrigen', filtroAlmacenOrigen);
             if (filtroAlmacenDestino) params.append('FiltroAlmacenDestino', filtroAlmacenDestino);
             if (filtroCuentaUsuario) params.append('FiltroCuentaUsuario', filtroCuentaUsuario);
@@ -157,19 +155,6 @@ export const solicitudReposicionService = {
                 isSuccess: false,
                 data: null,
                 message: extractErrorMessage(error, 'Error al actualizar la solicitud de reposición')
-            };
-        }
-    },
-
-    delete: async (id: string | number): Promise<ApiResponse<unknown>> => {
-        try {
-            const response = await apiClient.delete(`/almacen/solicitudes-reposicion/${id}`);
-            return response.data;
-        } catch (error: unknown) {
-            return {
-                isSuccess: false,
-                data: null,
-                message: extractErrorMessage(error, 'Error al eliminar la solicitud de reposición')
             };
         }
     },

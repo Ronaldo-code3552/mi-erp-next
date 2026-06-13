@@ -661,11 +661,11 @@ export default function CrearGuiaPage() {
         if (!Array.isArray(solicitud?.detalles)) return [];
 
         return solicitud.detalles
-            .filter((detalle: any) => Number(detalle?.saldo_pendiente ?? detalle?.cantidad_aprobada ?? 0) > 0)
+            .filter((detalle: any) => Number(detalle?.saldo_pendiente ?? detalle?.cantidad_solicitada ?? 0) > 0)
             .map((detalle: any, idx: number) => {
                 const bienIdLimpio = detalle?.bienId ? String(detalle.bienId).trim() : '';
                 const presentacionIdLimpia = detalle?.presentacionId ? String(detalle.presentacionId).trim() : '';
-                const cantidadNum = Number(detalle?.saldo_pendiente ?? detalle?.cantidad_aprobada ?? 0) || 0;
+                const cantidadNum = Number(detalle?.saldo_pendiente ?? detalle?.cantidad_solicitada ?? 0) || 0;
 
                 return {
                     item: idx + 1,
@@ -778,18 +778,12 @@ export default function CrearGuiaPage() {
     const applyImportedSolicitudReposicion = (solicitud: any) => {
         if (!solicitud?.id) return toast.error('Solicitud de reposición inválida');
 
-        const detallesAprobados = (solicitud.detalles || []).filter((detalle: any) => {
-            const estadoNombre = String(detalle?.estado?.nombre || '').trim().toUpperCase();
-            return Number(detalle?.saldo_pendiente ?? detalle?.cantidad_aprobada ?? 0) > 0 && (
-                detalle?.estadoId === 2 ||
-                detalle?.estadoId === 4 ||
-                estadoNombre === 'APROBADO' ||
-                estadoNombre === 'PARCIAL'
-            );
-        });
+        const detallesPendientes = (solicitud.detalles || []).filter((detalle: any) =>
+            Number(detalle?.saldo_pendiente ?? detalle?.cantidad_solicitada ?? 0) > 0
+        );
 
-        if (!detallesAprobados.length) {
-            toast.error('La solicitud no tiene productos aprobados pendientes para transportar.');
+        if (!detallesPendientes.length) {
+            toast.error('La solicitud no tiene productos pendientes para transportar.');
             return;
         }
 
@@ -811,7 +805,7 @@ export default function CrearGuiaPage() {
 
         const mappedItems = mapSolicitudReposicionDetallesToGuiaItems({
             ...solicitud,
-            detalles: detallesAprobados
+            detalles: detallesPendientes
         });
 
         const allowedItems = filterImportableItems(mappedItems);

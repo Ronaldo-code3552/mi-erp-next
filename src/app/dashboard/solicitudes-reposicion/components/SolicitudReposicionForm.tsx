@@ -61,18 +61,15 @@ type DetalleFormItem = {
     bienId: string;
     presentacionId: string;
     cantidad_solicitada: number;
-    cantidad_aprobada?: number;
     cantidad_atendida?: number;
+    saldo_pendiente?: number;
     observacion?: string;
     descripcion_aux?: string;
-    estadoId?: number;
-    estadoNombre?: string;
-    estadoDescripcion?: string;
     presentaciones_opciones?: PresentacionOption[];
 };
 
 export type SolicitudReposicionFormValue = {
-    almacen_origenId?: string;
+    almacen_origenId?: string | null;
     almacen_destinoId: string;
     fecha_plazo_solicitud: string;
     observacion?: string;
@@ -170,11 +167,11 @@ const formatDate = (value?: string) => {
 };
 
 const estadoBadgeClass = (estadoId?: number) => {
-    if (estadoId === 2) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (estadoId === 1) return "bg-amber-50 text-amber-700 border-amber-200";
+    if (estadoId === 2) return "bg-blue-50 text-blue-700 border-blue-200";
     if (estadoId === 3) return "bg-red-50 text-red-700 border-red-200";
-    if (estadoId === 7) return "bg-blue-50 text-blue-700 border-blue-200";
+    if (estadoId === 5) return "bg-emerald-50 text-emerald-700 border-emerald-200";
     if (estadoId === 6) return "bg-orange-50 text-orange-700 border-orange-200";
-    if (estadoId === 8) return "bg-slate-100 text-slate-600 border-slate-200";
 
     return "bg-slate-50 text-slate-600 border-slate-200";
 };
@@ -187,6 +184,19 @@ const EstadoBadge = ({ estadoId, nombre, descripcion }: { estadoId?: number; nom
         {nombre || (estadoId ? `Estado ${estadoId}` : "-")}
     </span>
 );
+
+const normalizeEstado = (value?: string | number) => {
+    return String(value || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toUpperCase();
+};
+
+const isReadonlyInfoPorAtender = (readonlyInfo?: SolicitudReposicionReadonlyInfo) => {
+    const estado = normalizeEstado(readonlyInfo?.estadoNombre || readonlyInfo?.estadoDescripcion || readonlyInfo?.estadoId);
+    return estado === "POR ATENDER" || estado === "ESTADO 2";
+};
 
 export default function SolicitudReposicionForm({
     initialValue,
@@ -237,13 +247,10 @@ export default function SolicitudReposicionForm({
             bienId: x.bienId || "",
             presentacionId: x.presentacionId || "",
             cantidad_solicitada: Number(x.cantidad_solicitada || 0),
-            cantidad_aprobada: x.cantidad_aprobada,
             cantidad_atendida: x.cantidad_atendida,
+            saldo_pendiente: x.saldo_pendiente,
             observacion: x.observacion || "",
             descripcion_aux: x.descripcion_aux || "",
-            estadoId: x.estadoId,
-            estadoNombre: x.estadoNombre,
-            estadoDescripcion: x.estadoDescripcion,
             presentaciones_opciones: x.presentaciones_opciones || []
         }));
 
@@ -276,7 +283,7 @@ export default function SolicitudReposicionForm({
             const opciones: PresentacionOption[] = (response.data || []).map((p: PresentacionResponse) => ({
                 key: String(p.presentacionId || "").trim(),
                 value: String(p.presentacionId || "").trim(),
-                label: p.descripcion || p.unidadmedidaId || p.presentacionId,
+                label: String(p.descripcion || p.unidadmedidaId || p.presentacionId || ""),
                 presentacionId: String(p.presentacionId || "").trim()
             }));
 
@@ -316,6 +323,10 @@ export default function SolicitudReposicionForm({
 
     const handleRemoveItem = (index: number) => {
         if (readOnly) return;
+        if (isReadonlyInfoPorAtender(readonlyInfo) && Number(items[index]?.cantidad_atendida || 0) > 0) {
+            toast.warning("No puede eliminar un ítem que ya tiene cantidad atendida.");
+            return;
+        }
         setItems((prev) => prev.filter((_, i) => i !== index));
     };
 
@@ -328,8 +339,14 @@ export default function SolicitudReposicionForm({
 
             if (field === "cantidad_solicitada") {
                 const qty = Number(value);
+                const cantidadAtendida = Number(current.cantidad_atendida || 0);
 
-                current.cantidad_solicitada = qty > 0 ? qty : 1;
+                if (isReadonlyInfoPorAtender(readonlyInfo) && cantidadAtendida > 0 && qty < cantidadAtendida) {
+                    toast.warning("La cantidad solicitada no puede ser menor que la cantidad atendida.");
+                    current.cantidad_solicitada = cantidadAtendida;
+                } else {
+                    current.cantidad_solicitada = qty > 0 ? qty : 1;
+                }
             } else if (field === "bienId") {
                 current.bienId = String(value || "").trim();
                 current.presentacionId = "";
@@ -374,6 +391,12 @@ export default function SolicitudReposicionForm({
             return "La cantidad solicitada debe ser mayor que cero.";
         }
 
+        const invalidAtendida = items.find((x) => Number(x.cantidad_solicitada) < Number(x.cantidad_atendida || 0));
+
+        if (invalidAtendida) {
+            return "La cantidad solicitada no puede ser menor que la cantidad atendida.";
+        }
+
         const duplicados = items
             .map((x) => `${x.bienId.trim()}|${x.presentacionId.trim()}`)
             .some((key, index, arr) => arr.indexOf(key) !== index);
@@ -397,8 +420,11 @@ export default function SolicitudReposicionForm({
             return;
         }
 
+        const origenActual = formData.almacen_origenId?.trim() || "";
+        const origenInicial = initialValue?.almacen_origenId?.trim() || "";
+
         const payload: SolicitudReposicionCreatePayload = {
-            almacen_origenId: formData.almacen_origenId?.trim() || undefined,
+            almacen_origenId: origenActual || (origenInicial ? "" : null),
             almacen_destinoId: formData.almacen_destinoId.trim(),
             fecha_plazo_solicitud: formData.fecha_plazo_solicitud,
             observacion: formData.observacion?.trim() || undefined,
@@ -420,11 +446,8 @@ export default function SolicitudReposicionForm({
         }
     };
 
-    const showDetailStatus = items.some((item) => item.estadoId || item.estadoNombre);
-    const showApprovedQuantities = items.some((item) => (
-        item.cantidad_aprobada !== undefined ||
-        item.cantidad_atendida !== undefined
-    ));
+    const showAttendedQuantities = items.some((item) => item.cantidad_atendida !== undefined);
+    const showPendingQuantities = items.some((item) => item.saldo_pendiente !== undefined);
     const approvalDate = formatDate(readonlyInfo?.fecha_aprobacion);
 
     return (
@@ -569,10 +592,9 @@ export default function SolicitudReposicionForm({
                                 <tr>
                                     <th className="p-3 w-[30%]">Producto</th>
                                     <th className="p-3 w-[20%]">Presentación</th>
-                                    {showDetailStatus && <th className="p-3 w-28">Estado</th>}
                                     <th className="p-3 w-28 text-right">Solicitada</th>
-                                    {showApprovedQuantities && <th className="p-3 w-28 text-right">Aprobada</th>}
-                                    {showApprovedQuantities && <th className="p-3 w-28 text-right">Atendida</th>}
+                                    {showAttendedQuantities && <th className="p-3 w-28 text-right">Atendida</th>}
+                                    {showPendingQuantities && <th className="p-3 w-28 text-right">Pendiente</th>}
                                     <th className="p-3">Observación</th>
                                 </tr>
                             </thead>
@@ -580,13 +602,17 @@ export default function SolicitudReposicionForm({
                             <tbody className="divide-y divide-slate-100">
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4 + (showDetailStatus ? 1 : 0) + (showApprovedQuantities ? 2 : 0)} className="p-8 text-center text-slate-400 italic">
+                                        <td colSpan={4 + (showAttendedQuantities ? 1 : 0) + (showPendingQuantities ? 1 : 0)} className="p-8 text-center text-slate-400 italic">
                                             <IconNotes size={42} className="mx-auto mb-2 opacity-20" />
                                             No hay productos agregados
                                         </td>
                                     </tr>
                                 ) : (
-                                    items.map((item, index) => (
+                                    items.map((item, index) => {
+                                        const cantidadAtendida = Number(item.cantidad_atendida || 0);
+                                        const fullyAttended = isReadonlyInfoPorAtender(readonlyInfo) && cantidadAtendida > 0 && cantidadAtendida >= Number(item.cantidad_solicitada || 0);
+
+                                        return (
                                         <tr key={index} className="hover:bg-slate-50 transition-colors align-top">
                                             <td className="p-3">
                                                 <SearchableSelect
@@ -607,7 +633,7 @@ export default function SolicitudReposicionForm({
                                                             raw: producto
                                                         }));
                                                     }}
-                                                    disabled={readOnly}
+                                                    disabled={readOnly || fullyAttended}
                                                     fallbackLabel={item.descripcion_aux}
                                                     placeholder="Buscar producto..."
                                                     onChange={(e: SelectChangeEvent) => {
@@ -620,46 +646,36 @@ export default function SolicitudReposicionForm({
                                                 <SearchableSelect
                                                     value={item.presentacionId}
                                                     options={item.presentaciones_opciones || []}
-                                                    disabled={readOnly || !item.bienId}
+                                                    disabled={readOnly || !item.bienId || fullyAttended}
                                                     placeholder="Presentación"
                                                     onChange={(e) => handleItemChange(index, "presentacionId", e.target.value)}
                                                 />
                                             </td>
-
-                                            {showDetailStatus && (
-                                                <td className="p-3">
-                                                    <EstadoBadge
-                                                        estadoId={item.estadoId}
-                                                        nombre={item.estadoNombre}
-                                                        descripcion={item.estadoDescripcion}
-                                                    />
-                                                </td>
-                                            )}
 
                                             <td className="p-3">
                                                 <input
                                                     type="number"
                                                     min="0.0001"
                                                     step="0.0001"
-                                                    disabled={readOnly}
+                                                    disabled={readOnly || fullyAttended}
                                                     value={item.cantidad_solicitada}
                                                     onChange={(e) => handleItemChange(index, "cantidad_solicitada", e.target.value)}
                                                     className="w-full border border-slate-200 p-1.5 text-right rounded outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400 bg-white shadow-sm disabled:bg-slate-100"
                                                 />
                                             </td>
 
-                                            {showApprovedQuantities && (
+                                            {showAttendedQuantities && (
                                                 <td className="p-3">
                                                     <div className="w-full border border-slate-200 bg-slate-100 p-1.5 text-right rounded font-mono text-slate-600 cursor-not-allowed">
-                                                        {Number(item.cantidad_aprobada || 0).toFixed(2)}
+                                                        {Number(item.cantidad_atendida || 0).toFixed(2)}
                                                     </div>
                                                 </td>
                                             )}
 
-                                            {showApprovedQuantities && (
+                                            {showPendingQuantities && (
                                                 <td className="p-3">
                                                     <div className="w-full border border-slate-200 bg-slate-100 p-1.5 text-right rounded font-mono text-slate-600 cursor-not-allowed">
-                                                        {Number(item.cantidad_atendida || 0).toFixed(2)}
+                                                        {Number(item.saldo_pendiente || 0).toFixed(2)}
                                                     </div>
                                                 </td>
                                             )}
@@ -677,7 +693,8 @@ export default function SolicitudReposicionForm({
                                                     <button
                                                         type="button"
                                                         onClick={() => handleRemoveItem(index)}
-                                                        className="p-1.5 transition-colors rounded text-slate-400 hover:bg-red-50 hover:text-red-500"
+                                                        disabled={isReadonlyInfoPorAtender(readonlyInfo) && cantidadAtendida > 0}
+                                                        className="p-1.5 transition-colors rounded text-slate-400 hover:bg-red-50 hover:text-red-500 disabled:opacity-40 disabled:cursor-not-allowed"
                                                         title="Quitar producto"
                                                     >
                                                         <IconTrash size={16} />
@@ -686,7 +703,8 @@ export default function SolicitudReposicionForm({
                                                 </div>
                                             </td>
                                         </tr>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>
