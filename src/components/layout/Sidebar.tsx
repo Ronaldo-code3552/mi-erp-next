@@ -3,17 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { 
-  IconPackage, 
-  IconUsers, 
-  IconTruck, 
-  IconActivity,
-  Icon24Hours,
-  IconAdjustmentsCode,
-  IconAccessible,
-  Icon3dCubeSphereOff,
-  IconActivityHeartbeat,
-  IconZoomOutArea,
-  IconAdCircleOff
+  IconArchive,
+  IconClipboardList,
+  IconFileArrowLeft,
+  IconFileArrowRight,
+  IconFileInvoice,
+  IconPackageImport,
+  IconPackages,
+  IconReportAnalytics,
+  IconRoute,
+  IconSteeringWheel,
+  IconTableOptions,
+  IconTruck,
+  IconTruckDelivery
 } from "@tabler/icons-react";
 
 const Sidebar = () => {
@@ -21,19 +23,19 @@ const Sidebar = () => {
 
   // IMPORTANTE: He actualizado los 'path' para que coincidan con tu carpeta 'app/dashboard'
   const menuItems = [
-    { title: 'Inventario / Productos', icon: <IconPackage size={20} />, path: '/dashboard/productos' },
-    { title: 'Maestro Conductores', icon: <IconUsers size={20} />, path: '/dashboard/conductores' },
-    { title: 'Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/transportistas' },
-    { title: 'Unidad Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/unidad-transporte' }, // Ojo: verifica si tu carpeta se llama 'unidadtrasportistas' o 'unidad-transporte', puse la del tree que me diste.
-    {title: 'Guias Remision', icon: <IconActivity size={20} />, path: '/dashboard/guias-remision' },
-    {title: 'Notas de Entrada', icon: <IconAccessible size={20} />, path: '/dashboard/notas-ingreso' },
-    {title: 'Notas de Salida', icon: <Icon3dCubeSphereOff size={20} />, path: '/dashboard/notas-salida' },
-    {title: 'Kardex', icon: <IconTruck size={20} />, path: '/dashboard/kardex' },
-    {title: 'Reportes', icon: <IconActivityHeartbeat size={20} />, path: '/dashboard/reportes' },
-    {title: 'Lotes', icon: <IconZoomOutArea size={20} />, path: '/dashboard/lotes' },
-    {title: 'Solicitud Reposicion', icon: <IconAdCircleOff size={20} />, path: '/dashboard/solicitudes-reposicion' },
-    {title: 'Motivo Traslado', icon: <Icon24Hours size={20} />, path: '/dashboard/motivo-traslado' },
-    {title: 'Tabla Transaccion', icon: <IconAdjustmentsCode size={20} />, path: '/dashboard/tabla-transaccion' },
+    { title: 'Inventario / Productos', icon: <IconPackages size={20} />, path: '/dashboard/productos' },
+    { title: 'Maestro Conductores', icon: <IconSteeringWheel size={20} />, path: '/dashboard/conductores' },
+    { title: 'Transportistas', icon: <IconTruckDelivery size={20} />, path: '/dashboard/transportistas' },
+    { title: 'Unidad Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/unidad-transporte' },
+    { title: 'Guias Remision', icon: <IconFileInvoice size={20} />, path: '/dashboard/guias-remision' },
+    { title: 'Notas de Entrada', icon: <IconFileArrowLeft size={20} />, path: '/dashboard/notas-ingreso' },
+    { title: 'Notas de Salida', icon: <IconFileArrowRight size={20} />, path: '/dashboard/notas-salida' },
+    { title: 'Kardex', icon: <IconClipboardList size={20} />, path: '/dashboard/kardex' },
+    { title: 'Reportes', icon: <IconReportAnalytics size={20} />, path: '/dashboard/reportes' },
+    { title: 'Lotes', icon: <IconArchive size={20} />, path: '/dashboard/lotes' },
+    { title: 'Solicitud Reposicion', icon: <IconPackageImport size={20} />, path: '/dashboard/solicitudes-reposicion' },
+    { title: 'Motivo Traslado', icon: <IconRoute size={20} />, path: '/dashboard/motivo-traslado' },
+    { title: 'Tabla Transaccion', icon: <IconTableOptions size={20} />, path: '/dashboard/tabla-transaccion' },
   ];
 
   return (

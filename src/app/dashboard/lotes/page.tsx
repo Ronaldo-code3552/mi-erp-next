@@ -20,7 +20,7 @@ import LoteDetalleEditor from './components/LoteDetalleEditor';
 import { 
     IconPlus, IconSearch, IconEdit,
     IconDeviceFloppy, IconLoader, IconEye, IconPackage,
-    IconChevronLeft, IconChevronRight, IconBan, IconX
+    IconChevronLeft, IconChevronRight, IconBan, IconX, IconEraser
 } from '@tabler/icons-react';
 import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
 
@@ -548,76 +548,75 @@ export default function LotesPage() {
 
             {/* --- PANEL DE FILTROS --- */}
             <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 mb-6 space-y-4">
-                <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[auto_minmax(320px,1fr)] lg:items-center">
                     <button 
                         onClick={abrirModalNuevo} 
-                        className="bg-cyan-500 hover:bg-cyan-600 text-white px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors shadow-sm"
+                        className="bg-cyan-500 hover:bg-cyan-600 text-white px-4 py-2.5 rounded-lg font-bold flex items-center justify-center gap-2 transition-colors shadow-sm lg:w-fit"
                         title="Nuevo lote"
                     >
                         <IconPlus size={18} /> Nuevo Lote
                     </button>
 
-                    <div className="flex gap-2 w-full md:w-auto">
-                        <div className="relative w-full md:w-64">
-                            <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                            <input 
-                                type="text" 
-                                placeholder="Búsqueda General" 
-                                className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm outline-none focus:border-blue-500"
-                                value={filtros.comodin}
-                                onChange={e => setFiltros({ ...filtros, comodin: e.target.value })}
-                            />
-                        </div>
+                    <div className="relative w-full">
+                        <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                        <input 
+                            type="text" 
+                            placeholder="Buscar por lote, descripción, código importación..." 
+                            className="w-full pl-9 pr-3 py-2.5 border border-slate-300 rounded-lg text-sm outline-none transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-50"
+                            value={filtros.comodin}
+                            onChange={e => setFiltros({ ...filtros, comodin: e.target.value })}
+                        />
                     </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 pt-4 border-t border-slate-100">
-                    <SearchableSelect 
-                        label="Almacén"
-                        name="almacenId"
-                        options={almacenOptions}
-                        value={filtros.almacenId}
-                        onChange={(e) => setFiltros({ ...filtros, almacenId: String(e.target.value) })}
-                        disabled={loadingCatalogs}
-                    />
+                <div className="grid grid-cols-1 gap-4 pt-4 border-t border-slate-100 md:grid-cols-2 xl:grid-cols-12">
+                    <div className="xl:col-span-2">
+                        <SearchableSelect 
+                            label="Almacén"
+                            name="almacenId"
+                            options={almacenOptions}
+                            value={filtros.almacenId}
+                            onChange={(e) => setFiltros({ ...filtros, almacenId: String(e.target.value) })}
+                            disabled={loadingCatalogs}
+                        />
+                    </div>
 
-                    <div className="flex gap-2 items-end">
-                        <div className="flex-1 min-w-0">
-                            <SearchableSelect 
-                                label="Búsqueda por Producto"
-                                name="productoId"
-                                value={filtros.productoId}
-                                fallbackLabel={filtros.productoLabel}
-                                onChange={(e) => {
-                                    const option = (e as unknown as { option?: SelectOption }).option;
-                                    handleProductoSelect(String(e.target.value), String(option?.label || ""));
-                                }}
-                                fetchCustom={async (term) => {
-                                    const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, { condicion_estado: ['STOCK'] }, true);
-                                    return res.isSuccess ? (res.data || []).map((p: { bienId?: string | number; descripcion?: string; codigo_existencia?: string | number }) => ({
-                                        key: String(p.bienId || '').trim(),
-                                        value: String(p.bienId || '').trim(),
-                                        label: String(p.descripcion || '').trim(),
-                                        aux: String(p.codigo_existencia || '').trim()
-                                    })) : [];
-                                }}
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            onClick={limpiarProductoFiltro}
-                            disabled={!filtros.productoId}
-                            className="h-[38px] w-[38px] rounded-lg border border-slate-200 bg-white text-slate-400 transition-colors hover:bg-slate-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-40 flex items-center justify-center"
-                            title="Limpiar producto"
-                        >
-                            <IconX size={16} />
-                        </button>
+                    <div className="relative min-w-0 xl:col-span-4">
+                        <SearchableSelect 
+                            label="Búsqueda por Producto"
+                            name="productoId"
+                            value={filtros.productoId}
+                            fallbackLabel={filtros.productoLabel}
+                            onChange={(e) => {
+                                const option = (e as unknown as { option?: SelectOption }).option;
+                                handleProductoSelect(String(e.target.value), String(option?.label || ""));
+                            }}
+                            fetchCustom={async (term) => {
+                                const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, { condicion_estado: ['STOCK'] }, true);
+                                return res.isSuccess ? (res.data || []).map((p: { bienId?: string | number; descripcion?: string; codigo_existencia?: string | number }) => ({
+                                    key: String(p.bienId || '').trim(),
+                                    value: String(p.bienId || '').trim(),
+                                    label: String(p.descripcion || '').trim(),
+                                    aux: String(p.codigo_existencia || '').trim()
+                                })) : [];
+                            }}
+                        />
+                        {filtros.productoId && (
+                            <button
+                                type="button"
+                                onClick={limpiarProductoFiltro}
+                                className="absolute right-1 top-0 rounded-md bg-rose-50 p-1 text-rose-600 transition-all hover:bg-rose-100 active:scale-95"
+                                title="Volver a todos los productos del almacén"
+                            >
+                                <IconX size={13} />
+                            </button>
+                        )}
                     </div>
                     
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-1.5 xl:col-span-2">
                         <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Presentación</label>
                         <select 
-                            className="border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white"
+                            className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50 disabled:text-slate-400"
                             value={filtros.presentacionId}
                             onChange={e => setFiltros({ ...filtros, presentacionId: e.target.value })}
                             disabled={!filtros.productoId}
@@ -627,11 +626,10 @@ export default function LotesPage() {
                         </select>
                     </div>
 
-                    <div className="flex gap-2 items-end">
-                        <div className="flex-1 flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Estado</label>
-                            <select 
-                            className="border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white"
+                    <div className="flex flex-col gap-1.5 xl:col-span-2">
+                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Estado</label>
+                        <select 
+                            className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white transition-colors focus:border-blue-500 focus:ring-2 focus:ring-blue-50 disabled:bg-slate-50 disabled:text-slate-400"
                             value={filtros.estado}
                             onChange={e => setFiltros({ ...filtros, estado: e.target.value })}
                             disabled={loadingEstados}
@@ -641,24 +639,18 @@ export default function LotesPage() {
                                 <option key={estado.estado} value={estado.estado}>{estado.estado}</option>
                             ))}
                         </select>
-                        </div>
                     </div>
 
-                    <button 
-                        onClick={() => cargarGrilla(1)}
-                        className="bg-slate-800 hover:bg-slate-900 text-white px-4 py-2.5 rounded-lg transition-colors flex items-center justify-center h-[38px] self-end"
-                        title="Filtrar"
-                    >
-                        <IconSearch size={18} />
-                    </button>
-
-                    <button
-                        type="button"
-                        onClick={limpiarFiltros}
-                        className="h-[38px] self-end rounded-lg border border-slate-200 bg-white px-4 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600"
-                    >
-                        Limpiar
-                    </button>
+                    <div className="flex justify-end self-end xl:col-span-2">
+                        <button
+                            type="button"
+                            onClick={limpiarFiltros}
+                            className="h-[38px] w-[38px] rounded-xl border border-rose-100 bg-rose-50 text-rose-700 shadow-sm transition-all hover:bg-rose-100 active:scale-95 flex items-center justify-center"
+                            title="Limpiar filtros"
+                        >
+                            <IconEraser size={16} />
+                        </button>
+                    </div>
                 </div>
             </div>
 
