@@ -108,7 +108,6 @@ export default function CrearNotaIngresoPage() {
     const [selectedLoteData, setSelectedLoteData] = useState<any | null>(null);
 
     const { catalogs, loadingCatalogs } = useCatalogs([
-        'Moneda',
         { endpoint: 'Almacen', params: { empresaId: EMPRESA_ID } },
         'TipoDocumentoComercial', 
         'MotivoTraslado', 
@@ -291,7 +290,7 @@ export default function CrearNotaIngresoPage() {
             doc_referencia: tablaReferencia,       
             doc_referencia_numero: realDocId,      
             proveedorId: provIdLimpio,
-            monedaId: '001',
+            monedaId: cabecera.monedaId || '001',
             tipo_cambio: cabecera.tipo_cambio || cabecera.tipoCambio || 1,
         }));
         
@@ -808,6 +807,7 @@ export default function CrearNotaIngresoPage() {
                                                         />
                                                     </td>
                                                     <td className="p-3">
+                                                        <div className={isImportedData ? "rounded-lg bg-slate-50 [&>div>div]:bg-slate-50 [&>div>div]:text-slate-400 [&>div>div]:border-slate-200" : ""}>
                                                         <SearchableSelect 
                                                             options={item.unidades_opciones?.map((u: any) => ({
                                                                 key: u.presentacionId || u.key,
@@ -818,6 +818,7 @@ export default function CrearNotaIngresoPage() {
                                                             onChange={(e: any) => handleItemChange(idx, 'presentacionId', e.target.value)}
                                                             disabled={isImportedData || !item.unidades_opciones || item.unidades_opciones.length === 0}
                                                         />
+                                                        </div>
                                                     </td>
                                                     <td className="p-3">
                                                         <input 
@@ -908,18 +909,6 @@ export default function CrearNotaIngresoPage() {
                                     />
                                 </div>
                             )}
-
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Moneda</label>
-                                <select 
-                                    name="monedaId" value={formData.monedaId} onChange={handleChange}
-                                    className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                >
-                                    {catalogs['Moneda']?.map((m: any) => (
-                                        <option key={m.value} value={m.value}>{m.label}</option>
-                                    ))}
-                                </select>
-                            </div>
 
                             <div className="pt-4 border-t border-slate-100">
                                 <FormInput 

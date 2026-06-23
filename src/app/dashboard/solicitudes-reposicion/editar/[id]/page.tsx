@@ -128,6 +128,7 @@ export default function EditarSolicitudReposicionPage() {
             estadoNombre: solicitud.estado?.nombre || solicitud.estado?.descripcion || "",
             estadoDescripcion: solicitud.estado?.descripcion || "",
             fecha_aprobacion: solicitud.fecha_aprobacion,
+            motivo_rechazo: solicitud.motivo_rechazo || "",
             solicitanteNombre: solicitud.cuentaUsuario?.observacion || solicitud.cuentausuarioId,
             solicitanteUsuario: solicitud.cuentaUsuario?.usuario || solicitud.cuentausuarioId,
             aprobadorNombre: solicitud.usuarioAprobacion?.observacion || solicitud.usuario_aprobacionId || "",
@@ -153,12 +154,7 @@ export default function EditarSolicitudReposicionPage() {
         }
 
         toast.success("Solicitud actualizada correctamente.");
-
-        const refreshed = await solicitudReposicionService.getById(id);
-
-        if (refreshed.isSuccess) {
-            setSolicitud(refreshed.data);
-        }
+        router.push("/dashboard/solicitudes-reposicion");
     };
 
     if (loading) {

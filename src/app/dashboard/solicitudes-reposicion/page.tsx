@@ -55,13 +55,6 @@ const formatDate = (value?: string) => {
     });
 };
 
-const formatNumber = (value?: number) => {
-    return Number(value || 0).toLocaleString('es-PE', {
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2
-    });
-};
-
 const openPdfFromBase64 = (base64Raw: string, fileName?: string) => {
     const base64 = base64Raw.includes('base64,')
         ? base64Raw.split('base64,').pop() || ''
@@ -106,27 +99,27 @@ const getEstadoNombre = (row: Pick<SolicitudReposicionResponse, 'estado' | 'esta
 
 const isPorAprobar = (row: Pick<SolicitudReposicionResponse, 'estado' | 'estadoId'>) => {
     const estado = normalizeEstado(getEstadoNombre(row));
-    return estado === 'POR APROBAR' || estado === 'ESTADO 1';
+    return row.estadoId === 1 || estado === 'POR APROBAR' || estado === 'ESTADO 1';
 };
 
 const isPorAtender = (row: Pick<SolicitudReposicionResponse, 'estado' | 'estadoId'>) => {
     const estado = normalizeEstado(getEstadoNombre(row));
-    return estado === 'POR ATENDER' || estado === 'ESTADO 2';
+    return row.estadoId === 2 || estado === 'POR ATENDER' || estado === 'ESTADO 2';
 };
 
 const isAtendido = (row: Pick<SolicitudReposicionResponse, 'estado' | 'estadoId'>) => {
     const estado = normalizeEstado(getEstadoNombre(row));
-    return estado === 'ATENDIDO' || estado === 'ESTADO 5';
+    return row.estadoId === 3 || estado === 'ATENDIDO' || estado === 'ESTADO 3';
 };
 
 const isRechazado = (row: Pick<SolicitudReposicionResponse, 'estado' | 'estadoId'>) => {
     const estado = normalizeEstado(getEstadoNombre(row));
-    return estado === 'RECHAZADO' || estado === 'ESTADO 3';
+    return row.estadoId === 4 || estado === 'RECHAZADO' || estado === 'ESTADO 4';
 };
 
 const isAnulado = (row: Pick<SolicitudReposicionResponse, 'estado' | 'estadoId'>) => {
     const estado = normalizeEstado(getEstadoNombre(row));
-    return estado === 'ANULADO' || estado === 'ESTADO 6';
+    return row.estadoId === 5 || estado === 'ANULADO' || estado === 'ESTADO 5';
 };
 
 const estadoBadgeClass = (row: Pick<SolicitudReposicionResponse, 'estado' | 'estadoId'>) => {
@@ -177,6 +170,7 @@ export default function SolicitudesReposicionPage() {
         null,
         initialFilters
     );
+    const [draftFilters, setDraftFilters] = useState<SolicitudReposicionFilters>(initialFilters);
 
     const { catalogs, loadingCatalogs } = useCatalogs([
         { endpoint: 'Almacen', params: { empresaId: EMPRESA_ID } },
@@ -232,7 +226,18 @@ export default function SolicitudesReposicionPage() {
         fetchData(1, searchTerm, filters);
     };
 
+    const handleOpenFilters = () => {
+        setDraftFilters(filters as SolicitudReposicionFilters);
+        setIsFilterOpen(true);
+    };
+
+    const handleApplyFilters = () => {
+        setFilters(draftFilters);
+        fetchData(1, searchTerm, draftFilters);
+    };
+
     const handleClearFilters = () => {
+        setDraftFilters(initialFilters);
         setFilters(initialFilters);
         fetchData(1, searchTerm, initialFilters);
     };
@@ -256,7 +261,8 @@ export default function SolicitudesReposicionPage() {
         if (!result.isConfirmed) return;
 
         const response = await solicitudReposicionService.aprobar(row.id, {
-            usuario_aprobacionId: USER_ID
+            usuario_aprobacionId: USER_ID,
+            AprobarDesaprobarEstado: true
         });
 
         if (response.isSuccess) {
@@ -264,6 +270,37 @@ export default function SolicitudesReposicionPage() {
             fetchData(meta.currentPage || 1);
         } else {
             toast.error(response.message || 'No se pudo aprobar la solicitud.');
+        }
+    };
+
+    const handleDesaprobar = async (row: SolicitudReposicionResponse) => {
+        if (!isPorAtender(row)) {
+            toast.warning('Solo se pueden desaprobar solicitudes por atender.');
+            return;
+        }
+
+        const result = await Swal.fire({
+            title: '¿Desaprobar solicitud?',
+            text: 'La solicitud volverá a quedar disponible para revisión.',
+            icon: 'warning',
+            showCancelButton: true,
+            confirmButtonText: 'Desaprobar',
+            cancelButtonText: 'Cancelar',
+            confirmButtonColor: '#f59e0b'
+        });
+
+        if (!result.isConfirmed) return;
+
+        const response = await solicitudReposicionService.aprobar(row.id, {
+            usuario_aprobacionId: USER_ID,
+            AprobarDesaprobarEstado: false
+        });
+
+        if (response.isSuccess) {
+            toast.success('Solicitud desaprobada correctamente.');
+            fetchData(meta.currentPage || 1);
+        } else {
+            toast.error(response.message || 'No se pudo desaprobar la solicitud.');
         }
     };
 
@@ -436,11 +473,12 @@ export default function SolicitudesReposicionPage() {
         {
             header: 'Acciones',
             render: (row: SolicitudReposicionResponse) => {
-                const canEdit = isPorAprobar(row) || isPorAtender(row);
+                const canEdit = isPorAprobar(row);
                 const canApprove = isPorAprobar(row);
+                const canDisapprove = isPorAtender(row);
                 const canReject = isPorAprobar(row);
                 const canAnnul = isPorAprobar(row) || isPorAtender(row);
-                const canOpenActions = canApprove || canReject || canAnnul;
+                const canOpenActions = canApprove || canDisapprove || canReject || canAnnul;
 
                 return (
                     <div className="relative flex items-center justify-end gap-1">
@@ -496,6 +534,16 @@ export default function SolicitudesReposicionPage() {
                                         className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-emerald-700 hover:bg-emerald-50"
                                     >
                                         <IconCheck size={15} /> Aprobar
+                                    </button>
+                                )}
+
+                                {canDisapprove && (
+                                    <button
+                                        type="button"
+                                        onClick={() => { closeActionsMenu(); handleDesaprobar(row); }}
+                                        className="flex w-full items-center gap-2 px-3 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50"
+                                    >
+                                        <IconX size={15} /> Desaprobar
                                     </button>
                                 )}
 
@@ -569,7 +617,7 @@ export default function SolicitudesReposicionPage() {
                 </form>
 
                 <button
-                    onClick={() => setIsFilterOpen(true)}
+                    onClick={handleOpenFilters}
                     className="px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-600 hover:bg-slate-50 flex items-center gap-2"
                 >
                     <IconFilter size={18} />
@@ -594,7 +642,7 @@ export default function SolicitudesReposicionPage() {
             <FiltrosAvanzados
                 isOpen={isFilterOpen}
                 onClose={() => setIsFilterOpen(false)}
-                onApply={() => fetchData(1, searchTerm, filters)}
+                onApply={handleApplyFilters}
                 onClear={handleClearFilters}
                 totalActive={totalFiltrosActivos}
             >
@@ -603,8 +651,8 @@ export default function SolicitudesReposicionPage() {
                         <label className="text-xs font-bold text-slate-500 uppercase ml-1">Fecha inicio</label>
                         <input
                             type="date"
-                            value={(filters as SolicitudReposicionFilters).FechaInicio || ''}
-                            onChange={(e) => setFilters((prev: SolicitudReposicionFilters) => ({
+                            value={draftFilters.FechaInicio || ''}
+                            onChange={(e) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                                 ...prev,
                                 FechaInicio: e.target.value
                             }))}
@@ -616,8 +664,8 @@ export default function SolicitudesReposicionPage() {
                         <label className="text-xs font-bold text-slate-500 uppercase ml-1">Fecha fin</label>
                         <input
                             type="date"
-                            value={(filters as SolicitudReposicionFilters).FechaFin || ''}
-                            onChange={(e) => setFilters((prev: SolicitudReposicionFilters) => ({
+                            value={draftFilters.FechaFin || ''}
+                            onChange={(e) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                                 ...prev,
                                 FechaFin: e.target.value
                             }))}
@@ -628,8 +676,8 @@ export default function SolicitudesReposicionPage() {
                     <MultiSelect
                         label="Estado"
                         options={estadoSolicitudOptions}
-                        value={(filters as SolicitudReposicionFilters).FiltroEstado || []}
-                        onChange={(value) => setFilters((prev: SolicitudReposicionFilters) => ({
+                        value={draftFilters.FiltroEstado || []}
+                        onChange={(value) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                             ...prev,
                             FiltroEstado: value.map(String)
                         }))}
@@ -638,8 +686,8 @@ export default function SolicitudesReposicionPage() {
                     <MultiSelect
                         label="Almacén origen"
                         options={almacenOptions}
-                        value={(filters as SolicitudReposicionFilters).FiltroAlmacenOrigen || []}
-                        onChange={(value) => setFilters((prev: SolicitudReposicionFilters) => ({
+                        value={draftFilters.FiltroAlmacenOrigen || []}
+                        onChange={(value) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                             ...prev,
                             FiltroAlmacenOrigen: value.map(String)
                         }))}
@@ -648,8 +696,8 @@ export default function SolicitudesReposicionPage() {
                     <MultiSelect
                         label="Almacén destino"
                         options={almacenOptions}
-                        value={(filters as SolicitudReposicionFilters).FiltroAlmacenDestino || []}
-                        onChange={(value) => setFilters((prev: SolicitudReposicionFilters) => ({
+                        value={draftFilters.FiltroAlmacenDestino || []}
+                        onChange={(value) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                             ...prev,
                             FiltroAlmacenDestino: value.map(String)
                         }))}
@@ -658,8 +706,8 @@ export default function SolicitudesReposicionPage() {
                     <MultiSelect
                         label="Usuario solicitante"
                         options={usuarioOptions}
-                        value={(filters as SolicitudReposicionFilters).FiltroCuentaUsuario || []}
-                        onChange={(value) => setFilters((prev: SolicitudReposicionFilters) => ({
+                        value={draftFilters.FiltroCuentaUsuario || []}
+                        onChange={(value) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                             ...prev,
                             FiltroCuentaUsuario: value.map(String)
                         }))}
@@ -668,8 +716,8 @@ export default function SolicitudesReposicionPage() {
                     <MultiSelect
                         label="Producto"
                         options={productoOptions}
-                        value={(filters as SolicitudReposicionFilters).FiltroBien || []}
-                        onChange={(value) => setFilters((prev: SolicitudReposicionFilters) => ({
+                        value={draftFilters.FiltroBien || []}
+                        onChange={(value) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                             ...prev,
                             FiltroBien: value.map(String)
                         }))}

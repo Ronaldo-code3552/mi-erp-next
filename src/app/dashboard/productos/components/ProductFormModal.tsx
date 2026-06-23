@@ -49,7 +49,7 @@ const FormInput = ({ label, className, ...props }: any) => (
     <div className="flex flex-col gap-1.5">
         <label className="text-[10px] font-black text-slate-500 uppercase ml-1">{label}</label>
         <input 
-            className={`w-full border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 ${className || ''}`}
+            className={`w-full border border-slate-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 ${className || ''}`}
             {...props}
         />
     </div>
@@ -114,6 +114,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
     const handleInputChange = (e: any) => {
         if (isReadOnly) return;
         const { name, value, type, checked } = e.target;
+
+        if (name === 'detraccion_porcentaje') return;
 
         if (name === 'precio' || name === 'costo' || name === 'detraccion_porcentaje') {
             if (value === '') {
@@ -250,21 +252,21 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
             title={isReadOnly ? "Detalle de Producto (Bloqueado)" : productToEdit ? `Editando: ${productToEdit.descripcion}` : "Registrar Nuevo Producto"} 
             size="xl"
         >
-            <div className="flex border-b mb-6 -mx-6 px-6 bg-white sticky top-0 z-10 overflow-x-auto">
+            <div className="flex border-b mb-4 -mx-6 px-6 bg-white sticky top-0 z-10 overflow-x-auto">
                 <TabButton id="general" label="GENERALES" icon={IconInfoCircle} activeTab={activeTab} onClick={setActiveTab} />
                 <TabButton id="economico" label="ECONÓMICO" icon={IconCurrencyDollar} activeTab={activeTab} onClick={setActiveTab} />
                 <TabButton id="clasificacion" label="CLASIFICACIÓN" icon={IconTags} activeTab={activeTab} onClick={setActiveTab} />
                 <TabButton id="otros" label="CONFIGURACIÓN" icon={IconSettings} activeTab={activeTab} onClick={setActiveTab} />
             </div>
 
-            <form onSubmit={handleSubmit} className="h-[68vh] flex flex-col">
-                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-6 pb-6">
+            <form onSubmit={handleSubmit} className="h-[60vh] min-h-[500px] max-h-[620px] flex flex-col">
+                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-5 pb-5">
                 {/* --- PESTAÑA GENERAL (Mismo código, no toca catálogos) --- */}
                 {activeTab === 'general' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         {/* ... Código de pestaña general intacto ... */}
                         <div className="md:col-span-2">
-                            <FormInput label="Descripción del Producto *" name="descripcion" required disabled={isReadOnly} value={formData.descripcion || ''} onChange={handleInputChange} className="border-2 border-slate-100 p-3 rounded-xl uppercase font-semibold text-slate-700" />
+                            <FormInput label="Descripción del Producto *" name="descripcion" required disabled={isReadOnly} value={formData.descripcion || ''} onChange={handleInputChange} className="border-2 border-slate-100 p-2.5 rounded-xl uppercase font-semibold text-slate-700" />
                         </div>
                         <FormInput label="Código Interno" name="codigo_existencia" value={formData.codigo_existencia || ''} onChange={handleInputChange} disabled={isReadOnly} />
                         <FormInput label="Código de Barras" name="codigo_barra" value={formData.codigo_barra || ''} onChange={handleInputChange} disabled={isReadOnly} />
@@ -280,18 +282,28 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
 
                 {/* --- PESTAÑA ECONÓMICA --- */}
                 {activeTab === 'economico' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
                         {/* ... (Inputs de Precio y Costo intactos) ... */}
-                        <div className={`p-4 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-emerald-50/40 border-emerald-100'}`}>
+                        <div className={`p-3 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-emerald-50/40 border-emerald-100'}`}>
                             <label className="text-[10px] font-black text-emerald-700 uppercase">Precio Venta (S/)</label>
-                            <input type="number" min="0" step="0.01" name="precio" className="w-full bg-transparent text-2xl font-black text-emerald-900 outline-none" value={formData.precio} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
+                            <input type="number" min="0" step="0.01" name="precio" className="w-full bg-transparent text-xl font-black text-emerald-900 outline-none" value={formData.precio} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
                         </div>
-                        <div className={`p-4 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-rose-50/40 border-rose-100'}`}>
+                        <div className={`p-3 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-rose-50/40 border-rose-100'}`}>
                             <label className="text-[10px] font-black text-rose-700 uppercase">Costo Compra (S/)</label>
-                            <input type="number" min="0" step="0.01" name="costo" className="w-full bg-transparent text-2xl font-black text-rose-900 outline-none" value={formData.costo} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
+                            <input type="number" min="0" step="0.01" name="costo" className="w-full bg-transparent text-xl font-black text-rose-900 outline-none" value={formData.costo} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
                         </div>
                         <div className="md:col-span-1">
-                            <FormInput label="% Detracción" name="detraccion_porcentaje" type="number" min="0" step="0.01" value={formData.detraccion_porcentaje} onChange={handleInputChange} disabled={isReadOnly} />
+                            <FormInput
+                                label="% Detracción"
+                                name="detraccion_porcentaje"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={formData.detraccion_porcentaje}
+                                onChange={handleInputChange}
+                                disabled
+                                title="Este porcentaje se calcula desde el Tipo de Detracción."
+                            />
                         </div>
                         
                         <div className="md:col-span-2">
@@ -379,7 +391,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 value={formData.condicion_estado || 'STOCK'} 
                                 onChange={handleInputChange} 
                                 disabled={isReadOnly}
-                                className="w-full border border-slate-200 p-2.5 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                                className="w-full border border-slate-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all disabled:bg-slate-50 disabled:text-slate-400"
                             >
                                 {/* 🚀 Usamos el Array estático */}
                                 {CONDICION_ESTADO_OPTIONS.map((opt) => (
@@ -391,7 +403,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                             <label className="text-[10px] font-black text-slate-500 uppercase ml-1">Observaciones</label>
                             <textarea 
                                 name="observacion" rows={3} disabled={isReadOnly}
-                                className="w-full border border-slate-200 p-2.5 rounded-lg outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
+                                className="w-full border border-slate-200 p-2 rounded-lg outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400"
                                 value={formData.observacion || ''} onChange={handleInputChange}
                             />
                         </div>
@@ -401,7 +413,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
 
                 {/* --- FOOTER --- */}
                 {!isReadOnly && (
-                    <div className="border-t pt-4 mt-2 bg-white">
+                    <div className="border-t pt-3 mt-2 bg-white">
                         <div className="flex justify-end gap-3">
                         <button type="button" onClick={onClose} className="px-6 py-2.5 text-xs font-black text-slate-400 hover:text-slate-600 transition-colors uppercase tracking-widest">
                             Cancelar

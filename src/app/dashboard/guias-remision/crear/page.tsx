@@ -81,7 +81,6 @@ export default function CrearGuiaPage() {
         'UnidadMedida',
         { endpoint: 'AlmacenSerie', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'Almacen', params: { empresaId: EMPRESA_ID } },
-        { endpoint: 'Transportista', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'UnidadTransporte', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'ConductorTransporte', params: { empresaId: EMPRESA_ID } }
     ]);
@@ -89,8 +88,9 @@ export default function CrearGuiaPage() {
     const initialFormData: Partial<GuiaRemisionPayload> = {
         empresaId: EMPRESA_ID, cuentausuarioId: USER_ID, tipodoccomercialId: '', 
         tipomovimientoId: 'S', serie: '', correlativo: '', fecha_emision: todayStr, 
-        fecha_traslado: todayStr, fecha_doc: todayStr, doc_referencia:'', 
+        fecha_traslado: todayStr, fecha_doc: todayStr, fecha_entrega: null, doc_referencia:'', 
         doc_referencia_numero: '', documentoReferencia: '', documentoReferenciaTipo: '', 
+        solicitudReposicionId: null,
         foto_guiaremision: '', monedaId: '001', tipo_cambio: 1.0, estado: 'REGISTRADO',
         estado_documento_sunat: 'PENDIENTEXML', incluye_igv: true, clienteId: '',
         proveedorId: '', puntoventaId: '', trabajadorId: '', id_almacen_inicio: ALMACEN_ID, 
@@ -116,13 +116,11 @@ export default function CrearGuiaPage() {
     const [addressDictionary, setAddressDictionary] = useState<Record<string, string>>({});
 
     const [transportistaOptions, setTransportistaOptions] = useState<any[]>([]);
-    const [transportistaSearchTerm, setTransportistaSearchTerm] = useState('');
     const [unidadTransporteOptions, setUnidadTransporteOptions] = useState<any[]>([]);
     const [unidadTransporteSearchTerm, setUnidadTransporteSearchTerm] = useState('');
     const [conductorOptions, setConductorOptions] = useState<any[]>([]);
     const [conductorSearchTerm, setConductorSearchTerm] = useState('');
     
-    const transportistaCatalog = useMemo(() => catalogs['Transportista'] || [], [catalogs]);
     const unidadTransporteCatalog = useMemo(() => catalogs['UnidadTransporte'] || [], [catalogs]);
     const conductorCatalog = useMemo(() => catalogs['ConductorTransporte'] || [], [catalogs]);
 
@@ -344,6 +342,30 @@ export default function CrearGuiaPage() {
         return (selectedSerie?.originalData?.enviarSunat || '').toUpperCase() === 'SI';
     }, [filteredSeries, formData.serie]);
 
+    const selectedTransportistaOption = useMemo(() => {
+        const selectedId = String(formData.transportistaId || '').trim();
+        return transportistaOptions.find((option: any) => String(option?.value || '').trim() === selectedId);
+    }, [formData.transportistaId, transportistaOptions]);
+
+    const selectedTransportistaNumeroDoc = String(
+        selectedTransportistaOption?.raw?.numero_doc ||
+        selectedTransportistaOption?.originalData?.numero_doc ||
+        selectedTransportistaOption?.numero_doc ||
+        selectedTransportistaOption?.aux ||
+        ''
+    ).trim();
+
+    const fechaEntregaObligatoria = Boolean(
+        shouldSendToSunat &&
+        formData.transportistaId &&
+        selectedTransportistaNumeroDoc !== EMPRESA_RUC_CLIENTE
+    );
+
+    useEffect(() => {
+        if (shouldSendToSunat || !formData.fecha_entrega) return;
+        setFormData(prev => ({ ...prev, fecha_entrega: null }));
+    }, [formData.fecha_entrega, shouldSendToSunat]);
+
     // Documento Referencia:
     // - "Soportado": se muestra el bloque y se permite importar.
     // - "Obligatorio": se valida solo en ciertas series / cuando se envía a SUNAT (ver handleSubmit).
@@ -440,6 +462,12 @@ export default function CrearGuiaPage() {
 
     const handleChange = (e: any) => {
         const { name, value } = e.target;
+        if (name === 'transportistaId' && e.option) {
+            const rawTransportista = e.option.raw || e.option.originalData || e.option;
+            const selectedOption = mapTransportistaToOption(rawTransportista);
+            setTransportistaOptions(prev => upsertOptionByValue(prev, selectedOption, { prepend: true }));
+        }
+
         if ((name === 'clienteId' || name === 'proveedorId') && e.option) {
             // 1. Guardamos la dirección
             const dir = e.option.originalData?.direccion || e.option.originalData?.direccionCompleta || '';
@@ -466,7 +494,7 @@ export default function CrearGuiaPage() {
                 [name]: value,
                 clienteId: '',
                 proveedorId: '', id_almacen_destino: '', otro_motivo_traslado: '',
-                ...(supportsReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '' })
+                ...(supportsReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '', solicitudReposicionId: null })
             }));
             
             if (!supportsReference) {
@@ -606,7 +634,7 @@ export default function CrearGuiaPage() {
                 descuento_producto: Number(detalle?.descuentoProducto ?? 0), 
                 afecto_inafecto: Boolean(detalle?.afectoInafecto),
                 observacion: detalle?.observacion ?? '', 
-                documentoId: compra.documentocompraId, 
+                documentoId: compra.documentocompraId ? String(compra.documentocompraId).trim() : '', 
                 tabla_documento: 'DOCUMENTO_COMPRA',
                 saldo_temporal: Number(detalle?.saldoTemporal ?? cantidadNum), 
                 descripcion_aux: detalle?.bien?.descripcion || '',
@@ -642,7 +670,7 @@ export default function CrearGuiaPage() {
                 descuento_producto: Number(detalle?.descuentoProducto ?? 0), 
                 afecto_inafecto: Boolean(detalle?.afectoInafecto),
                 observacion: detalle?.observacion ?? '', 
-                documentoId: venta.documentoventaId, 
+                documentoId: venta.documentoventaId ? String(venta.documentoventaId).trim() : '', 
                 tabla_documento: 'DOCUMENTO_VENTA',
                 saldo_temporal: Number(detalle?.saldoTemporal ?? cantidadNum), 
                 descripcion_aux: detalle?.bien?.descripcion || '',
@@ -680,7 +708,7 @@ export default function CrearGuiaPage() {
                     descuento_producto: 0,
                     afecto_inafecto: false,
                     observacion: `Solicitud Reposición #${solicitud.id}`,
-                    documentoId: solicitud.id,
+                    documentoId: solicitud.id ? String(solicitud.id).trim() : '',
                     tabla_documento: 'SOLICITUD_REPOSICION',
                     saldo_temporal: cantidadNum,
                     descripcion_aux: detalle?.bien?.descripcion || '',
@@ -721,7 +749,8 @@ export default function CrearGuiaPage() {
             documentoReferencia: referencia || prev.documentoReferencia,
             documentoReferenciaTipo: refTypeOption?.codSunat || prev.documentoReferenciaTipo,
             doc_referencia: refTypeOption?.aux || prev.doc_referencia,
-            doc_referencia_numero: compra.documentocompraId || prev.doc_referencia_numero
+            doc_referencia_numero: compra.documentocompraId || prev.doc_referencia_numero,
+            solicitudReposicionId: null
         }));
 
         const mappedItems = mapCompraDetallesToGuiaItems(compra);
@@ -761,7 +790,8 @@ export default function CrearGuiaPage() {
             documentoReferencia: referencia || prev.documentoReferencia,
             documentoReferenciaTipo: refTypeOption?.codSunat || prev.documentoReferenciaTipo,
             doc_referencia: refTypeOption?.aux || prev.doc_referencia,
-            doc_referencia_numero: venta.documentoventaId || prev.doc_referencia_numero
+            doc_referencia_numero: venta.documentoventaId || prev.doc_referencia_numero,
+            solicitudReposicionId: null
         }));
 
         const mappedItems = mapVentaDetallesToGuiaItems(venta);
@@ -787,20 +817,20 @@ export default function CrearGuiaPage() {
             return;
         }
 
-        const referencia = `SOL-REP-${solicitud.id}`;
         const almacenOrigenId = String(solicitud.almacen_origenId || '').trim();
         const almacenDestinoId = String(solicitud.almacen_destinoId || '').trim();
 
-        setDocRefComponents({ serie: 'SOL-REP', numero: String(solicitud.id) });
+        setDocRefComponents({ serie: '', numero: '' });
 
         setFormData((prev) => ({
             ...prev,
             id_almacen_inicio: almacenOrigenId || prev.id_almacen_inicio,
             id_almacen_destino: almacenDestinoId || prev.id_almacen_destino,
-            documentoReferencia: referencia,
-            documentoReferenciaTipo: prev.documentoReferenciaTipo,
-            doc_referencia: 'SOLICITUD_REPOSICION',
-            doc_referencia_numero: String(solicitud.id)
+            documentoReferencia: '',
+            documentoReferenciaTipo: '',
+            doc_referencia: '',
+            doc_referencia_numero: '',
+            solicitudReposicionId: Number(solicitud.id)
         }));
 
         const mappedItems = mapSolicitudReposicionDetallesToGuiaItems({
@@ -859,66 +889,25 @@ export default function CrearGuiaPage() {
         toast.success('Importación limpiada.');
     };
 
-    const mergeTransportistaOptions = (...lists: any[][]) => {
-        const seen = new Set<string>();
-        const result: any[] = [];
-        lists.flat().forEach((opt: any) => {
-            const id = String(opt?.value || '').trim();
-            if (!id || seen.has(id)) return;
-            seen.add(id);
-            result.push(opt);
-        });
-        return result;
+    const mapTransportistaToOption = (transportista: any) => {
+        const id = String(transportista?.transportistaId || '').trim();
+        const numeroDoc = String(transportista?.numero_doc || '').trim();
+
+        return {
+            key: id,
+            value: id,
+            label: String(transportista?.descripcion || '').trim(),
+            aux: numeroDoc,
+            numero_doc: numeroDoc,
+            raw: transportista,
+            originalData: transportista
+        };
     };
 
-    const sameTransportistaIds = (a: any[], b: any[]) => {
-        if (a.length !== b.length) return false;
-        for (let i = 0; i < a.length; i++) {
-            if (String(a[i]?.value || '').trim() !== String(b[i]?.value || '').trim()) return false;
-        }
-        return true;
-    };
-
-    useEffect(() => {
-        if (transportistaSearchTerm.trim()) return;
-        const catalogRows = transportistaCatalog as any[];
-        setTransportistaOptions(prev => {
-            const selectedId = String(formData.transportistaId || '').trim();
-            const selectedFromPrev = prev.find((x: any) => String(x.value || '').trim() === selectedId);
-            const selectedFromCatalog = catalogRows.find((x: any) => String(x.value || '').trim() === selectedId);
-
-            const next = mergeTransportistaOptions(
-                selectedFromPrev ? [selectedFromPrev] : [],
-                selectedFromCatalog ? [selectedFromCatalog] : [],
-                catalogRows
-            );
-
-            return sameTransportistaIds(prev, next) ? prev : next;
-        });
-    }, [transportistaCatalog, formData.transportistaId, transportistaSearchTerm]);
-
-    const handleTransportistaSearch = async (term: string) => {
-        setTransportistaSearchTerm(term);
-        try {
-            const results = await catalogService.getDynamicCatalog('Transportista', {
-                empresaId: EMPRESA_ID,
-                pageSize: 100,
-                term: term || undefined
-            });
-            setTransportistaOptions(prev => {
-                const selectedId = String(formData.transportistaId || '').trim();
-                const selectedFromPrev = prev.find((x: any) => String(x.value || '').trim() === selectedId);
-                const selectedFromCatalog = (transportistaCatalog || []).find((x: any) => String(x.value || '').trim() === selectedId);
-
-                const next = mergeTransportistaOptions(
-                    selectedFromPrev ? [selectedFromPrev] : [],
-                    selectedFromCatalog ? [selectedFromCatalog] : [],
-                    results as any[]
-                );
-
-                return sameTransportistaIds(prev, next) ? prev : next;
-            });
-        } catch { }
+    const fetchTransportistaOptions = async (term: string) => {
+        const response = await transportistaService.getByEmpresa(EMPRESA_ID, 1, 20, term || '');
+        if (!response.isSuccess) return [];
+        return (response.data || []).map(mapTransportistaToOption);
     };
 
     const mergeUnidadTransporteOptions = (...lists: any[][]) => {
@@ -1064,6 +1053,9 @@ export default function CrearGuiaPage() {
             return toast.error("Seleccione un Almacén Destino");
         }
         if (!String(formData.transportistaId || '').trim()) return toast.error("Seleccione una Empresa de Transporte");
+        if (fechaEntregaObligatoria && !String(formData.fecha_entrega || '').trim()) {
+            return toast.error("La fecha de entrega es obligatoria para transportistas externos.");
+        }
         if (!String(formData.unidadTransporteId || '').trim()) return toast.error("Seleccione un Vehículo / Placa");
         if (!String(formData.conductorId || '').trim()) return toast.error("Seleccione un Conductor");
 
@@ -1084,9 +1076,13 @@ export default function CrearGuiaPage() {
         try {
             const payload: GuiaRemisionPayload = {
                 ...formData as GuiaRemisionPayload,
+                fecha_entrega: shouldSendToSunat && formData.fecha_entrega ? formData.fecha_entrega : null,
+                solicitudReposicionId: importedReferenceDoc?.type === 'SOLICITUD_REPOSICION'
+                    ? Number(importedReferenceDoc.id)
+                    : null,
                 puntoventaId: '',
                 trabajadorId: '',
-                ...(supportsDocumentReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '' }),
+                ...(supportsDocumentReference ? {} : { documentoReferencia: '', documentoReferenciaTipo: '', doc_referencia: '', doc_referencia_numero: '', solicitudReposicionId: null }),
                 detalles: items.map((item, idx) => {
                     const cantidadNum = Number(item.cantidad) || 0;
                     const selectedUM = item.unidades_opciones?.find((u: any) => u.key === item.unidad_aux);
@@ -1094,13 +1090,15 @@ export default function CrearGuiaPage() {
                     const conversionTotal = parseFloat((cantidadNum * factorPresentacion).toFixed(2));
                     const afectoInafectoBool = typeof (item as any).afecto_inafecto === 'boolean' ? (item as any).afecto_inafecto : (item as any).afecto_inafecto === 1 || (item as any).afecto_inafecto === 'true';
 
+                    const documentoId = (item as any).documentoId;
+
                     return {
                         bienId: item.bienId,
                         presentacionId: selectedUM?.presentacionId || null,
                         item: idx + 1, cantidad: cantidadNum, conversion_total: conversionTotal, precio: 0, costo: 0, importe: 0, Saldo_cantidad: cantidadNum,
                         descuento_producto: Number((item as any).descuento_producto ?? 0), afecto_inafecto: afectoInafectoBool,
                         observacion: (item as any).observacion ?? 'KG',
-                        documentoId: (item as any).documentoId ?? null,
+                        documentoId: documentoId !== undefined && documentoId !== null ? String(documentoId).trim() : null,
                         tabla_documento: (item as any).tabla_documento ?? 'GUIAS_REMISION',
                         saldo_temporal: (item as any).saldo_temporal ?? cantidadNum
                     };
@@ -1242,14 +1240,6 @@ export default function CrearGuiaPage() {
                 <div className="flex gap-3 items-center">
                     {canSearchDocument && (
                         <div className="flex items-center gap-2">
-                            <button 
-                                type="button" 
-                                onClick={handleOpenDocSearch}
-                                disabled={!!importedReferenceDoc}
-                                className="px-4 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 shadow-sm border border-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <IconSearch size={18} /> Importar Doc.
-                            </button>
                             {importedReferenceDoc && (
                                 <button
                                     type="button"
@@ -1260,6 +1250,14 @@ export default function CrearGuiaPage() {
                                     <IconX size={16} />
                                 </button>
                             )}
+                            <button 
+                                type="button" 
+                                onClick={handleOpenDocSearch}
+                                disabled={!!importedReferenceDoc}
+                                className="px-4 py-2.5 rounded-xl bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 shadow-sm border border-indigo-100 flex items-center gap-2 transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <IconSearch size={18} /> Importar Doc.
+                            </button>
                         </div>
                     )}
                     <button 
@@ -1343,9 +1341,19 @@ export default function CrearGuiaPage() {
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className={shouldSendToSunat ? "grid grid-cols-1 gap-4 md:grid-cols-3" : "grid grid-cols-1 gap-4 md:grid-cols-2"}>
                                 <FormInput label="Fecha Documento" type="date" name="fecha_doc" value={formData.fecha_doc} onChange={handleChange} />
                                 <FormInput label="Fecha Traslado" type="date" name="fecha_traslado" value={formData.fecha_traslado} onChange={handleChange} min={formData.fecha_emision} />
+                                {shouldSendToSunat && (
+                                    <FormInput
+                                        label={fechaEntregaObligatoria ? "Fecha Entrega *" : "Fecha Entrega (Opcional)"}
+                                        type="date"
+                                        name="fecha_entrega"
+                                        value={formData.fecha_entrega}
+                                        onChange={handleChange}
+                                        min={formData.fecha_traslado}
+                                    />
+                                )}
                             </div>
                         </div>
                     </div>
@@ -1444,33 +1452,24 @@ export default function CrearGuiaPage() {
                                         Opcional para este motivo
                                     </div>
                                 )}
-                                {currentRules.refType === 'SOLICITUD_REPOSICION' ? (
-                                    <div className="grid grid-cols-1 gap-3">
-                                        <FormInput label="Tipo Documento" value="Solicitud Reposición" disabled />
-                                        <FormInput label="Referencia" value={formData.documentoReferencia || ''} disabled />
-                                    </div>
-                                ) : (
-                                    <>
-                                        <div className="flex flex-col gap-1.5">
-                                            <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo Documento</label>
-                                            <select 
-                                                name="documentoReferenciaTipo" 
-                                                value={formData.documentoReferenciaTipo || ''} 
-                                                onChange={handleChange} 
-                                                className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white"
-                                            >
-                                                <option value="">-- SEL --</option>
-                                                {documentoReferenciaTipoJSON.map((t: any) => (
-                                                    <option key={t.key} value={t.codSunat}>{t.value}</option>
-                                                ))}
-                                            </select>
-                                        </div>
-                                        <div className="grid grid-cols-2 gap-3">
-                                            <FormInput label="Serie Ref." placeholder="F001" value={docRefParts.serie} onChange={(e:any) => handleDocRefChange('serie', e.target.value)} />
-                                            <FormInput label="Número Ref." placeholder="000458" value={docRefParts.numero} onChange={(e:any) => handleDocRefChange('numero', e.target.value)} />
-                                        </div>
-                                    </>
-                                )}
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase">Tipo Documento</label>
+                                    <select 
+                                        name="documentoReferenciaTipo" 
+                                        value={formData.documentoReferenciaTipo || ''} 
+                                        onChange={handleChange} 
+                                        className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none bg-white"
+                                    >
+                                        <option value="">-- SEL --</option>
+                                        {documentoReferenciaTipoJSON.map((t: any) => (
+                                            <option key={t.key} value={t.codSunat}>{t.value}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <FormInput label="Serie Ref." placeholder="F001" value={docRefParts.serie} onChange={(e:any) => handleDocRefChange('serie', e.target.value)} />
+                                    <FormInput label="Número Ref." placeholder="000458" value={docRefParts.numero} onChange={(e:any) => handleDocRefChange('numero', e.target.value)} />
+                                </div>
                                 <div className="text-[10px] text-slate-400 text-right italic truncate">Ref: {formData.documentoReferencia}</div>
                             </div>
                             
@@ -1590,9 +1589,10 @@ export default function CrearGuiaPage() {
                                 <div className="flex-1 min-w-0">
                                     <SearchableSelect 
                                         label="Empresa Transporte" name="transportistaId" 
-                                        options={transportistaOptions}
+                                        fetchCustom={fetchTransportistaOptions}
                                         value={formData.transportistaId || ''} onChange={handleChange}
-                                        onSearchChange={handleTransportistaSearch}
+                                        fallbackLabel={selectedTransportistaOption?.label}
+                                        placeholder="Buscar transportista por nombre o RUC"
                                     />
                                 </div>
                                 <div className="flex gap-1 items-end pb-0.5 mt-5 shrink-0">

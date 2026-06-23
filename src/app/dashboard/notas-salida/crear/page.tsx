@@ -124,7 +124,6 @@ export default function CrearNotaSalidaPage() {
 
     // Carga de Catálogos
     const { catalogs, loadingCatalogs } = useCatalogs([
-        'Moneda',
         'TipoDocumentoComercial',
         { endpoint: 'TablaTransacciones', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'Almacen', params: { empresaId: EMPRESA_ID } },
@@ -242,7 +241,7 @@ export default function CrearNotaSalidaPage() {
     }, [formData.transaccionId]);
 
     const transaccionOptions = useMemo(() => {
-        let opciones = catalogs['TablaTransaccionesPerfil'] || [];
+        const opciones = catalogs['TablaTransaccionesPerfil'] || [];
         return opciones.filter((t: any) => 
             t.originalData?.tipomovimientoId === "S" && String(t.value).trim() !== "DP"
         );
@@ -373,7 +372,7 @@ export default function CrearNotaSalidaPage() {
             const enrichedItems: InternalNotaSalidaDetalle[] = await Promise.all(
                 detallesImportados.map(async (det: any, index: number) => {
                     const pId = String(det.bienId).trim();
-                    let productoLabel = det.bien?.descripcion || det.bienDesc || 'Producto Desconocido';
+                    const productoLabel = det.bien?.descripcion || det.bienDesc || 'Producto Desconocido';
                     
                     let opcionesUM: any[] = [];
                     try {
@@ -1396,7 +1395,11 @@ export default function CrearNotaSalidaPage() {
                                                     </td>
                                                     <td className="p-3">
                                                         <select 
-                                                            className="w-full border border-slate-200 p-1.5 rounded outline-none focus:ring-1 focus:ring-blue-400 bg-white shadow-sm"
+                                                            className={`w-full border p-1.5 rounded outline-none focus:ring-1 shadow-sm transition-colors ${
+                                                                isImportedData
+                                                                    ? 'border-slate-200 bg-slate-50 text-slate-400 cursor-not-allowed'
+                                                                    : 'border-slate-200 focus:ring-blue-400 bg-white'
+                                                            }`}
                                                             value={item.presentacionId || ''} 
                                                             onChange={(e: any) => handleItemChange(idx, 'presentacionId', e.target.value)}
                                                             disabled={isImportedData || !item.unidades_opciones || item.unidades_opciones.length === 0}
@@ -1497,18 +1500,6 @@ export default function CrearNotaSalidaPage() {
                                     />
                                 </div>
                             )}
-
-                            <div className="flex flex-col gap-1.5">
-                                <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Moneda</label>
-                                <select 
-                                    name="monedaId" value={formData.monedaId} onChange={handleChange}
-                                    className="w-full border border-slate-200 p-2.5 rounded-lg text-xs outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                                >
-                                    {catalogs['Moneda']?.map((m: any) => (
-                                        <option key={m.value} value={m.value}>{m.label}</option>
-                                    ))}
-                                </select>
-                            </div>
 
                             <div className="pt-4 border-t border-slate-100">
                                 <FormInput 

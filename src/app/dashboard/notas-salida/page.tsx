@@ -422,7 +422,7 @@ export default function NotasSalidaPage() {
                                 Puede consultar por empresa o filtrar por un almacén específico.
                             </p>
                             <SearchableSelect
-                                label="Almacén (Opcional)"
+                                label="Almacén"
                                 name="almacenId"
                                 options={almacenOptions}
                                 value={tempSelectedAlmacenId}
@@ -433,7 +433,7 @@ export default function NotasSalidaPage() {
                                 <span className={`inline-block h-2.5 w-2.5 rounded-full ${tempSelectedAlmacenId ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                                 {tempSelectedAlmacenId
                                     ? 'Filtrará por almacén seleccionado al aplicar.'
-                                    : `Consultará toda la empresa (${EMPRESA_ID}).`}
+                                    : `Consultará toda la empresa.`}
                             </div>
                         </div>
 

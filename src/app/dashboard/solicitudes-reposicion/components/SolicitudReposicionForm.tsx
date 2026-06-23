@@ -15,6 +15,7 @@ import {
 
 import SearchableSelect from "@/components/forms/SearchableSelect";
 import { useCatalogs } from "@/hooks/useCatalogs";
+import { almacenLoteService } from "@/services/almacenLoteService";
 import { presentacionService } from "@/services/presentacionService";
 import { productoService } from "@/services/productoService";
 import { SolicitudReposicionCreatePayload } from "@/types/solicitudReposicion.types";
@@ -63,6 +64,8 @@ type DetalleFormItem = {
     cantidad_solicitada: number;
     cantidad_atendida?: number;
     saldo_pendiente?: number;
+    stock_real_pres?: number | null;
+    loading_stock?: boolean;
     observacion?: string;
     descripcion_aux?: string;
     presentaciones_opciones?: PresentacionOption[];
@@ -82,6 +85,7 @@ export type SolicitudReposicionReadonlyInfo = {
     estadoNombre?: string;
     estadoDescripcion?: string;
     fecha_aprobacion?: string;
+    motivo_rechazo?: string;
     solicitanteNombre?: string;
     solicitanteUsuario?: string;
     aprobadorNombre?: string;
@@ -169,9 +173,9 @@ const formatDate = (value?: string) => {
 const estadoBadgeClass = (estadoId?: number) => {
     if (estadoId === 1) return "bg-amber-50 text-amber-700 border-amber-200";
     if (estadoId === 2) return "bg-blue-50 text-blue-700 border-blue-200";
-    if (estadoId === 3) return "bg-red-50 text-red-700 border-red-200";
-    if (estadoId === 5) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-    if (estadoId === 6) return "bg-orange-50 text-orange-700 border-orange-200";
+    if (estadoId === 3) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    if (estadoId === 4) return "bg-red-50 text-red-700 border-red-200";
+    if (estadoId === 5) return "bg-orange-50 text-orange-700 border-orange-200";
 
     return "bg-slate-50 text-slate-600 border-slate-200";
 };
@@ -196,6 +200,26 @@ const normalizeEstado = (value?: string | number) => {
 const isReadonlyInfoPorAtender = (readonlyInfo?: SolicitudReposicionReadonlyInfo) => {
     const estado = normalizeEstado(readonlyInfo?.estadoNombre || readonlyInfo?.estadoDescripcion || readonlyInfo?.estadoId);
     return estado === "POR ATENDER" || estado === "ESTADO 2";
+};
+
+const getActionUserLabel = (estadoId?: number) => {
+    if (estadoId === 4) return "Rechazado por";
+    if (estadoId === 5) return "Anulado por";
+    return "Aprobador";
+};
+
+const getActionDateLabel = (estadoId?: number) => {
+    if (estadoId === 4) return "Rechazo";
+    if (estadoId === 5) return "Anulación";
+    return "Aprobación";
+};
+
+const shouldShowActionUser = (readonlyInfo?: SolicitudReposicionReadonlyInfo) => {
+    return [2, 3, 4, 5].includes(Number(readonlyInfo?.estadoId || 0));
+};
+
+const shouldShowRejectReason = (readonlyInfo?: SolicitudReposicionReadonlyInfo) => {
+    return [4, 5].includes(Number(readonlyInfo?.estadoId || 0)) && Boolean(readonlyInfo?.motivo_rechazo?.trim());
 };
 
 export default function SolicitudReposicionForm({
@@ -231,6 +255,14 @@ export default function SolicitudReposicionForm({
         return getAlmacenesActivosOrdenados(catalogs["Almacen"] || []);
     }, [catalogs]);
 
+    const almacenDestinoOptions = useMemo(() => {
+        const origenId = String(formData.almacen_origenId || "").trim();
+
+        if (!origenId) return almacenOptions;
+
+        return almacenOptions.filter((option) => String(option.value || "").trim() !== origenId);
+    }, [almacenOptions, formData.almacen_origenId]);
+
     useEffect(() => {
         if (!initialValue) return;
 
@@ -249,6 +281,8 @@ export default function SolicitudReposicionForm({
             cantidad_solicitada: Number(x.cantidad_solicitada || 0),
             cantidad_atendida: x.cantidad_atendida,
             saldo_pendiente: x.saldo_pendiente,
+            stock_real_pres: x.stock_real_pres,
+            loading_stock: false,
             observacion: x.observacion || "",
             descripcion_aux: x.descripcion_aux || "",
             presentaciones_opciones: x.presentaciones_opciones || []
@@ -261,15 +295,69 @@ export default function SolicitudReposicionForm({
                 cargarPresentaciones(item.bienId, index, item.presentacionId);
             }
         });
+        // Se hidrata solo cuando cambia la solicitud inicial; las consultas posteriores se disparan por cambios del usuario.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [initialValue]);
+
+    const consultarStockPresentacion = async (index: number, almacenId?: string | null, presentacionId?: string | number) => {
+        const almacen = String(almacenId || "").trim();
+        const presentacion = String(presentacionId || "").trim();
+
+        if (!almacen || !presentacion) {
+            setItems((prev) => prev.map((item, itemIndex) => (
+                itemIndex === index
+                    ? { ...item, stock_real_pres: null, loading_stock: false }
+                    : item
+            )));
+            return;
+        }
+
+        setItems((prev) => prev.map((item, itemIndex) => (
+            itemIndex === index
+                ? { ...item, loading_stock: true }
+                : item
+        )));
+
+        try {
+            const response = await almacenLoteService.getStockPresentacion(almacen, presentacion);
+            const stock = Number(response.data?.[0]?.stock_real_pres ?? 0);
+
+            setItems((prev) => prev.map((item, itemIndex) => (
+                itemIndex === index
+                    ? { ...item, stock_real_pres: stock, loading_stock: false }
+                    : item
+            )));
+        } catch {
+            setItems((prev) => prev.map((item, itemIndex) => (
+                itemIndex === index
+                    ? { ...item, stock_real_pres: null, loading_stock: false }
+                    : item
+            )));
+        }
+    };
+
+    const consultarStocksPorAlmacen = (almacenId: string, sourceItems: DetalleFormItem[]) => {
+        sourceItems.forEach((item, index) => {
+            if (item.presentacionId) {
+                void consultarStockPresentacion(index, almacenId, item.presentacionId);
+            }
+        });
+    };
 
     const handleHeaderChange = (e: { target: { name?: string; value: string | number } }) => {
         const { name, value } = e.target;
         if (!name) return;
         setFormData((prev) => ({
             ...prev,
-            [name]: String(value)
+            [name]: String(value),
+            ...(name === "almacen_origenId" && String(value).trim() === String(prev.almacen_destinoId || "").trim()
+                ? { almacen_destinoId: "" }
+                : {})
         }));
+
+        if (name === "almacen_origenId") {
+            consultarStocksPorAlmacen(String(value || "").trim(), items);
+        }
     };
 
     const cargarPresentaciones = async (
@@ -287,6 +375,8 @@ export default function SolicitudReposicionForm({
                 presentacionId: String(p.presentacionId || "").trim()
             }));
 
+            const nextPresentacionId = selectedPresentacionId || opciones[0]?.presentacionId || "";
+
             setItems((prev) => {
                 const updated = [...prev];
 
@@ -295,11 +385,15 @@ export default function SolicitudReposicionForm({
                 updated[index] = {
                     ...updated[index],
                     presentaciones_opciones: opciones,
-                    presentacionId: selectedPresentacionId || opciones[0]?.presentacionId || ""
+                    presentacionId: nextPresentacionId
                 };
 
                 return updated;
             });
+
+            if (nextPresentacionId) {
+                await consultarStockPresentacion(index, formData.almacen_origenId, nextPresentacionId);
+            }
         } catch {
             toast.error("Error al cargar presentaciones del producto.");
         }
@@ -352,6 +446,8 @@ export default function SolicitudReposicionForm({
                 current.presentacionId = "";
                 current.descripcion_aux = option?.label || "";
                 current.presentaciones_opciones = [];
+                current.stock_real_pres = null;
+                current.loading_stock = false;
             } else {
                 updated[index] = { ...current, [field]: String(value) };
                 return updated;
@@ -364,11 +460,23 @@ export default function SolicitudReposicionForm({
         if (field === "bienId" && value) {
             await cargarPresentaciones(String(value).trim(), index);
         }
+
+        if (field === "presentacionId") {
+            await consultarStockPresentacion(index, formData.almacen_origenId, value);
+        }
     };
 
     const validarFormulario = () => {
+        if (!formData.almacen_origenId || formData.almacen_origenId.trim() === "") {
+            return "El almacén origen es obligatorio.";
+        }
+
         if (!formData.almacen_destinoId || formData.almacen_destinoId.trim() === "") {
             return "El almacén destino es obligatorio.";
+        }
+
+        if (formData.almacen_origenId.trim() === formData.almacen_destinoId.trim()) {
+            return "El almacén origen no puede ser igual al almacén destino.";
         }
 
         if (!formData.fecha_plazo_solicitud) {
@@ -420,11 +528,10 @@ export default function SolicitudReposicionForm({
             return;
         }
 
-        const origenActual = formData.almacen_origenId?.trim() || "";
-        const origenInicial = initialValue?.almacen_origenId?.trim() || "";
+        const origenActual = formData.almacen_origenId.trim();
 
         const payload: SolicitudReposicionCreatePayload = {
-            almacen_origenId: origenActual || (origenInicial ? "" : null),
+            almacen_origenId: origenActual,
             almacen_destinoId: formData.almacen_destinoId.trim(),
             fecha_plazo_solicitud: formData.fecha_plazo_solicitud,
             observacion: formData.observacion?.trim() || undefined,
@@ -449,6 +556,10 @@ export default function SolicitudReposicionForm({
     const showAttendedQuantities = items.some((item) => item.cantidad_atendida !== undefined);
     const showPendingQuantities = items.some((item) => item.saldo_pendiente !== undefined);
     const approvalDate = formatDate(readonlyInfo?.fecha_aprobacion);
+    const actionUserLabel = getActionUserLabel(readonlyInfo?.estadoId);
+    const actionDateLabel = getActionDateLabel(readonlyInfo?.estadoId);
+    const showActionUser = readOnly && shouldShowActionUser(readonlyInfo);
+    const showRejectReason = readOnly && shouldShowRejectReason(readonlyInfo);
 
     return (
         <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-5">
@@ -493,11 +604,11 @@ export default function SolicitudReposicionForm({
                                     nombre={readonlyInfo.estadoNombre}
                                     descripcion={readonlyInfo.estadoDescripcion}
                                 />
-                                {approvalDate && (
+                                {showActionUser && approvalDate && (
                                     <>
                                         <span className="hidden h-4 w-px bg-slate-200 sm:inline-block" />
                                         <span className="text-xs font-semibold text-slate-500">
-                                            Aprobación: <span className="text-emerald-700">{approvalDate}</span>
+                                            {actionDateLabel}: <span className="text-emerald-700">{approvalDate}</span>
                                         </span>
                                     </>
                                 )}
@@ -512,15 +623,22 @@ export default function SolicitudReposicionForm({
                                     </div>
                                 )}
 
-                                {approvalDate && (
+                                {showActionUser && (
                                     <div className="border-t border-slate-200 pt-2 sm:border-l sm:border-t-0 sm:pl-4 sm:pt-0">
-                                        <span className="font-bold uppercase text-slate-400">Aprobador</span>
+                                        <span className="font-bold uppercase text-slate-400">{actionUserLabel}</span>
                                         <p className="font-bold text-slate-700">{readonlyInfo.aprobadorNombre || "-"}</p>
                                         <p className="text-[11px] text-slate-400">{readonlyInfo.aprobadorUsuario || "-"}</p>
                                     </div>
                                 )}
                             </div>
                         </div>
+
+                        {showRejectReason && (
+                            <div className="mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">
+                                <span className="font-bold uppercase">Motivo</span>
+                                <p className="mt-1 whitespace-pre-wrap font-semibold">{readonlyInfo.motivo_rechazo}</p>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -531,7 +649,7 @@ export default function SolicitudReposicionForm({
                         value={formData.almacen_origenId || ""}
                         options={almacenOptions}
                         disabled={readOnly}
-                        placeholder="-- Opcional --"
+                        placeholder="-- Seleccione --"
                         onChange={handleHeaderChange}
                     />
 
@@ -539,7 +657,7 @@ export default function SolicitudReposicionForm({
                         label="Almacén destino"
                         name="almacen_destinoId"
                         value={formData.almacen_destinoId || ""}
-                        options={almacenOptions}
+                        options={almacenDestinoOptions}
                         disabled={readOnly || lockDestino}
                         placeholder="-- Seleccione --"
                         onChange={handleHeaderChange}
@@ -592,6 +710,7 @@ export default function SolicitudReposicionForm({
                                 <tr>
                                     <th className="p-3 w-[30%]">Producto</th>
                                     <th className="p-3 w-[20%]">Presentación</th>
+                                    <th className="p-3 w-28 text-right">Stock disponible</th>
                                     <th className="p-3 w-28 text-right">Solicitada</th>
                                     {showAttendedQuantities && <th className="p-3 w-28 text-right">Atendida</th>}
                                     {showPendingQuantities && <th className="p-3 w-28 text-right">Pendiente</th>}
@@ -602,7 +721,7 @@ export default function SolicitudReposicionForm({
                             <tbody className="divide-y divide-slate-100">
                                 {items.length === 0 ? (
                                     <tr>
-                                        <td colSpan={4 + (showAttendedQuantities ? 1 : 0) + (showPendingQuantities ? 1 : 0)} className="p-8 text-center text-slate-400 italic">
+                                        <td colSpan={5 + (showAttendedQuantities ? 1 : 0) + (showPendingQuantities ? 1 : 0)} className="p-8 text-center text-slate-400 italic">
                                             <IconNotes size={42} className="mx-auto mb-2 opacity-20" />
                                             No hay productos agregados
                                         </td>
@@ -650,6 +769,16 @@ export default function SolicitudReposicionForm({
                                                     placeholder="Presentación"
                                                     onChange={(e) => handleItemChange(index, "presentacionId", e.target.value)}
                                                 />
+                                            </td>
+
+                                            <td className="p-3">
+                                                <div className="w-full border border-slate-200 bg-slate-100 p-1.5 text-right rounded font-mono text-slate-600 cursor-not-allowed">
+                                                    {item.loading_stock
+                                                        ? "Consultando..."
+                                                        : item.stock_real_pres !== undefined && item.stock_real_pres !== null
+                                                            ? Number(item.stock_real_pres || 0).toFixed(2)
+                                                            : "-"}
+                                                </div>
                                             </td>
 
                                             <td className="p-3">

@@ -34,6 +34,7 @@ export interface GuiaRemisionPayload {
     fecha_emision: string | Date; // ISO String
     fecha_doc?: string | Date;
     fecha_traslado: string | Date;
+    fecha_entrega?: string | Date | null;
     serie: string;
     correlativo?: string;
     clienteId: string;
@@ -61,16 +62,19 @@ export interface GuiaRemisionPayload {
     estado_documento_sunat?: string;
     documentoReferencia?: string;
     documentoReferenciaTipo?: string;
+    solicitudReposicionId?: number | null;
 
     detalles: GuiaRemisionDetalle[];
 }
 
 // --- 2. LO QUE RECIBIMOS DEL BACKEND (GET) ---
 // Esta interfaz refleja la estructura anidada del JSON que me mostraste
-export interface GuiaRemisionResponse {
+export interface GuiaRemisionResponse extends Partial<GuiaRemisionPayload> {
     guiasremisionId: string;
     fecha_emision: string;
+    fecha_doc?: string;
     fecha_traslado: string;
+    fecha_entrega?: string | null;
     serie: string;
     correlativo: string;
     estado: string;
@@ -108,6 +112,7 @@ export interface GuiaRemisionResponse {
     almacenDestino?: {
         descripcion: string;
     };
+    detalles?: GuiaRemisionDetalle[];
 }
 
 export interface GuiaRemisionFiltros {

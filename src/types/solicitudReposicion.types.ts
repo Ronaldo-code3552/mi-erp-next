@@ -162,6 +162,7 @@ export interface SolicitudReposicionDetallePayload {
 
 export interface SolicitudReposicionAprobarPayload {
     usuario_aprobacionId: string;
+    AprobarDesaprobarEstado: boolean;
 }
 
 export interface SolicitudReposicionRechazarPayload {

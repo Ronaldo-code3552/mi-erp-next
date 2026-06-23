@@ -85,7 +85,7 @@ export const guiaRemisionService = {
     },
 
     // 3. Obtener por ID (Para Editar / Importar)
-    getById: async (id: string): Promise<ApiResponse<any>> => {
+    getById: async (id: string): Promise<ApiResponse<GuiaRemisionResponse>> => {
         const response = await apiClient.get(`/GuiaRemision/${id}`);
         return response.data;
     },

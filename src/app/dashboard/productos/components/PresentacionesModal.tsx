@@ -138,6 +138,8 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
         if (index === 0) {
             if (field === 'unidadmedidaId' || field === 'cantidad' || field === 'estado') return;
         }
+        const currentRow = rows[index];
+        if (field === 'estado' && currentRow?.isNew && !currentRow?.presentacionId) return;
 
         const newRows = [...rows];
         newRows[index][field] = field === 'unidadmedidaId'
@@ -226,7 +228,7 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                     descripcion: row.descripcion, 
                     cantidad: cantidadFinal,
                     unidadmedidaId: row.unidadmedidaId,
-                    estado: row.estado
+                    estado: row.presentacionId ? row.estado : true
                 };
                 try {
                     if (row.presentacionId) {
@@ -331,12 +333,22 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
 
                                     {/* ESTADO */}
                                     <td className="p-2 text-center">
+                                        {(() => {
+                                            const isNewRow = row.isNew && !row.presentacionId;
+                                            const isStateLocked = idx === 0 || isNewRow;
+                                            const title = isNewRow
+                                                ? "Las nuevas presentaciones se crean activas."
+                                                : row.estado
+                                                    ? "Activo (clic para anular)"
+                                                    : "Anulado (clic para activar)";
+
+                                            return (
                                         <button
                                             type="button"
                                             onClick={() => handleCellChange(idx, 'estado', !row.estado)}
-                                            disabled={idx === 0}
+                                            disabled={isStateLocked}
                                             className="px-2 py-1 rounded-lg hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                            title={row.estado ? "Activo (clic para anular)" : "Anulado (clic para activar)"}
+                                            title={title}
                                         >
                                             <div className="flex items-center justify-center gap-2">
                                                 <span
@@ -361,6 +373,8 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                                                 </span>
                                             </div>
                                         </button>
+                                            );
+                                        })()}
                                     </td>
 
                                     {/* ACCIONES */}

@@ -93,7 +93,7 @@ export default function ImportarDocumentoModal({
                     {
                         FechaInicio: fechaInicio,
                         FechaFin: fechaFin,
-                        FiltroEstado: ['POR ATENDER']
+                        FiltroEstado: ['2']
                     }
                 );
                 const meta = response.meta as { totalRecords?: number; TotalRecords?: number } | undefined;

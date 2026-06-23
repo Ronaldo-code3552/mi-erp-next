@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { format, parseISO } from 'date-fns'; 
+import { format, parseISO, subMonths } from 'date-fns'; 
 import { toast } from "sonner"; 
 import Swal from 'sweetalert2';
 
@@ -26,6 +26,9 @@ import {
 
 export default function NotasIngresoPage() {
     const EMPRESA_ID = "005";
+    const today = new Date();
+    const defaultFechaFin = format(today, 'yyyy-MM-dd');
+    const defaultFechaInicio = format(subMonths(today, 1), 'yyyy-MM-dd');
 
     // Mapeo exacto con los filtros que armamos en notaIngresoService.ts
     const initialFilters = { 
@@ -34,8 +37,8 @@ export default function NotasIngresoPage() {
         tipocomercialJson: [],
         monedaJson: [],
         usuarioJson: [],
-        fecha_inicio: "", 
-        fecha_fin: ""
+        fecha_inicio: defaultFechaInicio, 
+        fecha_fin: defaultFechaFin
     };
 
     const [selectedAlmacenId, setSelectedAlmacenId] = useState("");
@@ -445,7 +448,7 @@ export default function NotasIngresoPage() {
                                 Puede consultar por empresa o filtrar por un almacén específico.
                             </p>
                             <SearchableSelect
-                                label="Almacén (Opcional)"
+                                label="Almacén"
                                 name="almacenId"
                                 options={almacenOptions}
                                 value={tempSelectedAlmacenId}
@@ -456,7 +459,7 @@ export default function NotasIngresoPage() {
                                 <span className={`inline-block h-2.5 w-2.5 rounded-full ${tempSelectedAlmacenId ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                                 {tempSelectedAlmacenId
                                     ? 'Filtrará por almacén seleccionado al aplicar.'
-                                    : `Consultará toda la empresa (${EMPRESA_ID}).`}
+                                    : `Consultará toda la empresa.`}
                             </div>
                         </div>
 
