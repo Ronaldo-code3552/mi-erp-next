@@ -2,7 +2,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { format, subDays } from 'date-fns'; 
+import { format } from 'date-fns'; 
 import { toast } from "sonner"; 
 
 import { useCrud } from "@/hooks/useCrud";
@@ -18,14 +18,11 @@ import MultiSelect from "@/components/forms/MultiSelect";
 import { 
     IconFileInvoice, IconRefresh, IconSearch, IconFilter, 
     IconEye, IconBan, IconPlus, IconTruckDelivery, IconMapPin, IconCalendar,
-    IconPrinter 
+    IconPrinter, IconShieldCheck, IconLoader2
 } from '@tabler/icons-react';
 
 export default function GuiasRemisionPage() {
     const EMPRESA_ID = "005";
-
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const thirtyDaysAgoStr = format(subDays(new Date(), 30), 'yyyy-MM-dd');
 
     const initialFilters = { 
         estadoJson: [], 
@@ -52,6 +49,7 @@ export default function GuiasRemisionPage() {
     const [tempFilters, setTempFilters] = useState<any>(initialFilters);
     const [showFilters, setShowFilters] = useState(false);
     const [printingId, setPrintingId] = useState<string | null>(null);
+    const [validatingSunatId, setValidatingSunatId] = useState<string | null>(null);
     const debouncedSearch = useDebounce(searchTerm, 500);
 
     // 🚀 MAGIA: Reemplazamos el SP Tóxico con las llamadas a los microservicios
@@ -76,6 +74,64 @@ export default function GuiasRemisionPage() {
     const handleOpenSidebar = () => { setTempFilters(filters); setShowFilters(true); };
     const handleApplyFilters = () => { setFilters(tempFilters); setShowFilters(false); };
     const handleClearFilters = () => { setTempFilters(initialFilters); setFilters(initialFilters); };
+
+    const showSunatValidationMessage = (message: string) => {
+        const normalized = message.toLowerCase();
+
+        if (normalized.includes("102") || normalized.includes("103")) {
+            toast.success(message);
+            return;
+        }
+
+        if (normalized.includes("101") || normalized.includes("proceso")) {
+            toast.warning(message);
+            return;
+        }
+
+        toast.error(message || "La guía no ha sido aceptada por SUNAT");
+    };
+
+    const normalizeSunatState = (estadoSunat?: string | null) => {
+        return String(estadoSunat || "")
+            .trim()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toUpperCase();
+    };
+
+    const isSunatValidated = (estadoSunat?: string | null) => {
+        const estado = normalizeSunatState(estadoSunat);
+        const isRejectedText = estado.includes("NO ACEPT") || estado.includes("RECHAZ");
+
+        return ["0", "101", "102", "103"].includes(estado) ||
+            (!isRejectedText && (estado.includes("ACEPT") || estado.includes("VALIDAD") || estado.includes("EN PROCESO")));
+    };
+
+    const handleValidateSunat = async (row: GuiaRemisionResponse) => {
+        if (isSunatValidated(row.estado_documento_sunat)) {
+            toast.warning("Esta guía ya fue validada en SUNAT y no puede volver a validarse.");
+            return;
+        }
+
+        const id = row.guiasremisionId;
+        setValidatingSunatId(id);
+        try {
+            const res = await guiaRemisionService.validarSunatId(id);
+            const message = res.data?.respuestaSunat || res.message || "Validación SUNAT finalizada.";
+
+            if (res.isSuccess) {
+                showSunatValidationMessage(message);
+                fetchData(meta.currentPage, debouncedSearch, filters);
+            } else {
+                toast.error(message);
+            }
+        } catch (error: any) {
+            toast.error(error?.response?.data?.message || "Error de conexión al validar la guía en SUNAT");
+        } finally {
+            setValidatingSunatId(null);
+        }
+    };
+
     // --- NUEVA LÓGICA DE IMPRESIÓN ---
     const handlePrint = async (id: string) => {
         setPrintingId(id);
@@ -137,7 +193,7 @@ export default function GuiasRemisionPage() {
             )
         },
         { 
-            header: 'Cliente / Motivo', 
+            header: 'Cliente / Proveedor / Motivo', 
             width: '250px',
             render: (row: GuiaRemisionResponse) => {
                 const entidad = row.cliente || row.proveedor;
@@ -228,9 +284,25 @@ export default function GuiasRemisionPage() {
         { 
             header: 'Acciones', 
             className: 'text-center', 
-            width: '160px', // <-- Aumentamos el ancho para que quepan 3 botones
-            render: (row: GuiaRemisionResponse) => (
-                <div className="flex justify-center gap-1">
+            width: '190px',
+            render: (row: GuiaRemisionResponse) => {
+                const sunatValidated = isSunatValidated(row.estado_documento_sunat);
+                const validateDisabled = validatingSunatId === row.guiasremisionId || row.estado === "ANULADO" || sunatValidated;
+
+                return (
+                    <div className="flex justify-center gap-1">
+                        <button 
+                            onClick={() => handleValidateSunat(row)} 
+                            disabled={validateDisabled}
+                            className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 disabled:opacity-40 rounded transition-colors"
+                            title={sunatValidated ? "Guía ya validada en SUNAT" : "Validar SUNAT"}
+                        >
+                            {validatingSunatId === row.guiasremisionId ? (
+                                <IconLoader2 size={18} className="animate-spin text-sky-600" />
+                            ) : (
+                                <IconShieldCheck size={18} />
+                            )}
+                        </button>
                     
                     {/* BOTÓN IMPRIMIR AÑADIDO */}
                     <button 
@@ -263,7 +335,7 @@ export default function GuiasRemisionPage() {
                         <IconBan size={18} />
                     </button>
                 </div>
-            )
+            )}
         }
     ];
 
@@ -282,6 +354,22 @@ export default function GuiasRemisionPage() {
 
     return (
         <div className="p-6 animate-fade-in-up">
+            {validatingSunatId && (
+                <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/35 backdrop-blur-[2px]">
+                    <div className="flex flex-col items-center gap-4 rounded-2xl border border-white/70 bg-white px-8 py-7 shadow-2xl">
+                        <div className="relative flex h-16 w-16 items-center justify-center">
+                            <span className="absolute inset-0 rounded-full border-4 border-sky-100" />
+                            <span className="absolute inset-0 rounded-full border-4 border-transparent border-t-sky-600 border-r-sky-400 animate-spin" />
+                            <IconShieldCheck size={26} className="text-sky-700" />
+                        </div>
+                        <div className="text-center">
+                            <p className="text-sm font-black uppercase tracking-wide text-slate-800">Validando SUNAT</p>
+                            <p className="mt-1 text-xs font-medium text-slate-500">Consultando el estado de la guía seleccionada...</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Header */}
             <div className="flex justify-between items-center mb-6">
                 <div>

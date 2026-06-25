@@ -226,26 +226,53 @@ export default function NotasIngresoPage() {
         { 
             header: 'Documento / Referencia', 
             width: '200px',
-            render: (row: NotaIngresoResponse) => (
-                <div className="flex flex-col">
-                    <span className="font-bold text-slate-800 text-xs truncate" title={row.tipoDocumentoComercial?.descripcion || row.tipodoccomercialId}>
-                        {row.tipoDocumentoComercial?.descripcion || row.tipodoccomercialId}
-                    </span>
-                    <div className="flex items-center gap-1 mt-1">
-                        <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-indigo-200" title="Número Referencia">
-                            {row.doc_referencia_numero || 'S/N'}
+            render: (row: NotaIngresoResponse) => {
+                const tipoDocumento = row.tipoDocumentoComercial?.descripcion || row.tipodoccomercialId || 'DOC';
+                const documentoReferencia = row.referenciaDocumento?.documentoReferencia || row.doc_referencia_numero || 'S/N';
+
+                return (
+                    <div className="flex flex-col">
+                        <span className="font-bold text-slate-800 text-xs truncate" title={tipoDocumento}>
+                            {tipoDocumento}
                         </span>
-                        {row.doc_referencia && (
-                            <span className="text-[9px] text-slate-500 font-medium truncate max-w-[100px]" title="Tipo Referencia">
-                                {row.doc_referencia}
+                        <div className="flex items-center gap-1 mt-1">
+                            <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-indigo-200 truncate max-w-[130px]" title={documentoReferencia}>
+                                {documentoReferencia}
                             </span>
-                        )}
+                            {row.doc_referencia && (
+                                <span className="text-[9px] text-slate-500 font-medium truncate max-w-[100px]" title="Tipo Referencia">
+                                    {row.doc_referencia}
+                                </span>
+                            )}
+                        </div>
                     </div>
-                </div>
-            )
+                );
+            }
+        },
+        {
+            header: 'Cliente / Proveedor',
+            width: '220px',
+            render: (row: NotaIngresoResponse) => {
+                const entidadDesc =
+                    row.referenciaDocumento?.entidad?.descripcion ||
+                    row.referenciaDocumento?.cliente?.descripcion ||
+                    row.referenciaDocumento?.proveedor?.descripcion ||
+                    row.cliente?.descripcion ||
+                    row.proveedor?.descripcion ||
+                    'Sin especificar';
+
+                return (
+                    <div className="flex items-start gap-1.5">
+                        <IconBuildingStore size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                        <span className="text-[11px] font-semibold text-slate-700 leading-tight line-clamp-2" title={entidadDesc}>
+                            {entidadDesc}
+                        </span>
+                    </div>
+                );
+            }
         },
         { 
-            header: 'Transacción / Contenedor', 
+            header: 'Transacción ', 
             width: '200px',
             render: (row: NotaIngresoResponse) => {
                 // El Swagger devuelve 'tablaTransacciones' (con 's')

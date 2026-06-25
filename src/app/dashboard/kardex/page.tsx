@@ -279,109 +279,135 @@ export default function KardexPage() {
 
             {/* PANEL PRINCIPAL */}
             <div className="bg-white p-4 rounded-b-xl rounded-tr-xl shadow-sm border border-slate-200 border-t-2 border-t-[#59696A]">
-                <div className={`grid grid-cols-1 gap-3 items-end ${activeTab === 1 ? 'xl:grid-cols-[220px_minmax(280px,1fr)_190px_160px_160px_minmax(220px,1fr)_auto]' : 'xl:grid-cols-[minmax(280px,420px)_160px_160px_180px_auto]'}`}>
-                    {activeTab === 1 && (
-                        <SearchableSelect
-                            label="Almacén"
-                            name="almacenId"
-                            options={almacenOptions}
-                            value={filtros.almacenId}
-                            disabled={loadingCatalogs}
-                            placeholder={loadingCatalogs ? 'Cargando almacenes...' : 'Seleccione almacén'}
-                            onChange={handleAlmacenChange}
-                        />
-                    )}
-
-                    <SearchableSelect
-                        label="Bien (Producto)"
-                        value={filtros.bienId}
-                        fallbackLabel={bienLabel}
-                        placeholder="Buscar producto..."
-                        fetchCustom={async (term) => {
-                            const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, { condicion_estado: ['STOCK'] }, true);
-                            return ((res.data || []) as ProductoApi[]).map((p) => ({
-                                key: String(p.bienId || '').trim(),
-                                value: String(p.bienId || '').trim(),
-                                label: String(p.descripcion || '').trim(),
-                                aux: String(p.codigo_existencia || '').trim()
-                            }));
-                        }}
-                        onChange={handleBienChange}
-                    />
-
-                    {activeTab === 1 && (
-                        <SearchableSelect
-                            label="Presentación"
-                            options={presentacionOptions}
-                            value={filtros.presentacionId}
-                            fallbackLabel={presLabel}
-                            disabled={!filtros.bienId}
-                            onChange={handlePresentacionChange}
-                        />
-                    )}
-
-                    <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                            Fecha Inicial
-                        </label>
-                        <input 
-                            type="date" 
-                            className="w-full border border-slate-300 rounded-lg px-3 py-[9px] text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#59696A]/30 focus:border-[#59696A] transition-all shadow-sm" 
-                            value={filtros.fechaInicial} 
-                            onChange={e => setFiltros({...filtros, fechaInicial: e.target.value})} 
-                        />
-                    </div>
-                    
-                    <div>
-                        <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                            Fecha Final
-                        </label>
-                        <input 
-                            type="date" 
-                            className="w-full border border-slate-300 rounded-lg px-3 py-[9px] text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#59696A]/30 focus:border-[#59696A] transition-all shadow-sm" 
-                            value={filtros.fechaFinal} 
-                            onChange={e => setFiltros({...filtros, fechaFinal: e.target.value})} 
-                        />
-                    </div>
-
-                    {activeTab === 1 ? (
-                        <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
+                <div className="grid grid-cols-1 gap-4">
+                    <div className={`grid grid-cols-1 gap-3 items-end ${activeTab === 1 ? 'md:grid-cols-2 xl:grid-cols-[220px_minmax(280px,1fr)_190px_160px_160px_minmax(260px,1fr)]' : 'md:grid-cols-2 xl:grid-cols-[minmax(280px,420px)_160px_160px_180px]'}`}>
+                        {activeTab === 1 && (
                             <SearchableSelect
-                                label="Lote"
-                                value={filtros.lote}
-                                fallbackLabel={loteLabel}
-                                placeholder="Todos los lotes"
-                                disabled={!filtros.presentacionId}
-                                fetchCustom={fetchLotes}
-                                fetchParams={{ almacenId: filtros.almacenId, presentacionId: filtros.presentacionId }}
-                                onChange={handleLoteChange}
+                                label="Almacén"
+                                name="almacenId"
+                                options={almacenOptions}
+                                value={filtros.almacenId}
+                                disabled={loadingCatalogs}
+                                placeholder={loadingCatalogs ? 'Cargando almacenes...' : 'Seleccione almacén'}
+                                onChange={handleAlmacenChange}
                             />
-                            <button
-                                type="button"
-                                title="Limpiar lote"
-                                disabled={!filtros.lote}
-                                onClick={() => { setFiltros(prev => ({ ...prev, lote: '' })); setLoteLabel(''); }}
-                                className="mb-0 h-[38px] w-[38px] rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 flex items-center justify-center transition"
-                            >
-                                <IconX size={16} />
-                            </button>
-                        </div>
-                    ) : (
-                        <div>
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Agrupamiento</label>
-                            <select
-                                className="w-full border border-slate-300 rounded-lg px-3 py-[9px] text-sm text-slate-700 bg-white outline-none focus:ring-2 focus:ring-[#59696A]/30 focus:border-[#59696A] transition-all shadow-sm"
-                                value={filtros.agrupamiento}
-                                onChange={(e) => setFiltros({ ...filtros, agrupamiento: e.target.value })}
-                            >
-                                <option value="MENSUAL">MENSUAL</option>
-                                <option value="TRIMESTRAL">TRIMESTRAL</option>
-                            </select>
-                        </div>
-                    )}
+                        )}
 
-                    <div className="flex flex-col gap-2 justify-start xl:items-end">
-                        <div className="flex gap-2 justify-start xl:justify-end">
+                        <SearchableSelect
+                            label="Bien (Producto)"
+                            value={filtros.bienId}
+                            fallbackLabel={bienLabel}
+                            placeholder="Buscar producto..."
+                            fetchCustom={async (term) => {
+                                const res = await productoService.getByEmpresa(EMPRESA_ID, 1, 20, term, { condicion_estado: ['STOCK'] }, true);
+                                return ((res.data || []) as ProductoApi[]).map((p) => ({
+                                    key: String(p.bienId || '').trim(),
+                                    value: String(p.bienId || '').trim(),
+                                    label: String(p.descripcion || '').trim(),
+                                    aux: String(p.codigo_existencia || '').trim()
+                                }));
+                            }}
+                            onChange={handleBienChange}
+                        />
+
+                        {activeTab === 1 && (
+                            <SearchableSelect
+                                label="Presentación"
+                                options={presentacionOptions}
+                                value={filtros.presentacionId}
+                                fallbackLabel={presLabel}
+                                disabled={!filtros.bienId}
+                                onChange={handlePresentacionChange}
+                            />
+                        )}
+
+                        <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                Fecha Inicial
+                            </label>
+                            <input 
+                                type="date" 
+                                className="w-full border border-slate-300 rounded-lg px-3 py-[9px] text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#59696A]/30 focus:border-[#59696A] transition-all shadow-sm" 
+                                value={filtros.fechaInicial} 
+                                onChange={e => setFiltros({...filtros, fechaInicial: e.target.value})} 
+                            />
+                        </div>
+                        
+                        <div>
+                            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                                Fecha Final
+                            </label>
+                            <input 
+                                type="date" 
+                                className="w-full border border-slate-300 rounded-lg px-3 py-[9px] text-sm text-slate-700 bg-white focus:outline-none focus:ring-2 focus:ring-[#59696A]/30 focus:border-[#59696A] transition-all shadow-sm" 
+                                value={filtros.fechaFinal} 
+                                onChange={e => setFiltros({...filtros, fechaFinal: e.target.value})} 
+                            />
+                        </div>
+
+                        {activeTab === 1 ? (
+                            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-2 items-end">
+                                <SearchableSelect
+                                    label="Lote"
+                                    value={filtros.lote}
+                                    fallbackLabel={loteLabel}
+                                    placeholder="Todos los lotes"
+                                    disabled={!filtros.presentacionId}
+                                    fetchCustom={fetchLotes}
+                                    fetchParams={{ almacenId: filtros.almacenId, presentacionId: filtros.presentacionId }}
+                                    onChange={handleLoteChange}
+                                />
+                                <button
+                                    type="button"
+                                    title="Limpiar lote"
+                                    disabled={!filtros.lote}
+                                    onClick={() => { setFiltros(prev => ({ ...prev, lote: '' })); setLoteLabel(''); }}
+                                    className="mb-0 h-[38px] w-[38px] rounded-lg border border-slate-200 bg-white text-slate-500 hover:border-slate-300 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 flex items-center justify-center transition"
+                                >
+                                    <IconX size={16} />
+                                </button>
+                            </div>
+                        ) : (
+                            <div>
+                                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">Agrupamiento</label>
+                                <select
+                                    className="w-full border border-slate-300 rounded-lg px-3 py-[9px] text-sm text-slate-700 bg-white outline-none focus:ring-2 focus:ring-[#59696A]/30 focus:border-[#59696A] transition-all shadow-sm"
+                                    value={filtros.agrupamiento}
+                                    onChange={(e) => setFiltros({ ...filtros, agrupamiento: e.target.value })}
+                                >
+                                    <option value="MENSUAL">MENSUAL</option>
+                                    <option value="TRIMESTRAL">TRIMESTRAL</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
+                </div>
+
+                {/* INDICADORES DE SALDO CONDICIONALES */}
+                <div className="mt-4 flex flex-col gap-3 border-t border-slate-100 pt-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="flex flex-wrap gap-2">
+                        <div className="min-w-[160px] rounded-lg border border-slate-800 bg-slate-800 px-3 py-2 text-white">
+                            <p className="text-[10px] text-slate-300 uppercase font-bold tracking-wider">Saldo Real</p>
+                            <p className="font-mono text-lg font-semibold leading-tight">{saldos.real.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
+                        </div>
+
+                        {/* Disponible y Futuro SOLO en Kardex General */}
+                        {activeTab === 3 && (
+                            <>
+                                <div className="min-w-[160px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Saldo Disponible</p>
+                                    <p className="font-mono text-lg font-semibold leading-tight text-slate-700">{saldos.disponible.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="min-w-[160px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Saldo Futuro</p>
+                                    <p className="font-mono text-lg font-semibold leading-tight text-slate-700">{saldos.futuro.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    <div className="flex flex-col gap-2 lg:items-end">
+                        <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
                             <button onClick={handleBuscar} disabled={loading || exportingExcel} className="flex items-center justify-center gap-2 bg-[#59696A] px-4 py-2.5 rounded-lg text-white hover:bg-slate-700 transition shadow-sm min-w-[112px] disabled:cursor-not-allowed disabled:opacity-60">
                                 <IconSearch size={18} /> Buscar
                             </button>
@@ -404,28 +430,6 @@ export default function KardexPage() {
                             </div>
                         )}
                     </div>
-                </div>
-
-                {/* INDICADORES DE SALDO CONDICIONALES */}
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                    <div className="min-w-[160px] rounded-lg border border-slate-800 bg-slate-800 px-3 py-2 text-white">
-                        <p className="text-[10px] text-slate-300 uppercase font-bold tracking-wider">Saldo Real</p>
-                        <p className="font-mono text-lg font-semibold leading-tight">{saldos.real.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
-                    </div>
-
-                    {/* Disponible y Futuro SOLO en Kardex General */}
-                    {activeTab === 3 && (
-                        <>
-                            <div className="min-w-[160px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Saldo Disponible</p>
-                                <p className="font-mono text-lg font-semibold leading-tight text-slate-700">{saldos.disponible.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
-                            </div>
-                            <div className="min-w-[160px] rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-                                <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Saldo Futuro</p>
-                                <p className="font-mono text-lg font-semibold leading-tight text-slate-700">{saldos.futuro.toLocaleString('es-PE', { minimumFractionDigits: 2 })}</p>
-                            </div>
-                        </>
-                    )}
                 </div>
 
             </div> {/* Fin Panel Principal */}

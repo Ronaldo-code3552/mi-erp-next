@@ -92,7 +92,8 @@ export default function VerNotaIngresoPage() {
     const entidadLabel = (() => {
         if (nota?.referenciaDocumento?.cliente || nota?.transaccionId === 'DV') return 'Cliente';
         if (nota?.referenciaDocumento?.proveedor) return 'Proveedor';
-        return 'Entidad';
+        if (nota?.referenciaDocumento?.entidad) return nota?.transaccionId === 'DV' ? 'Cliente' : 'Proveedor';
+        return 'Cliente / Proveedor';
     })();
 
     const entidadValue = (() => {
@@ -111,7 +112,11 @@ export default function VerNotaIngresoPage() {
 
     const transactionDescription = nota?.tablaTransacciones?.descripcion || nota?.transaccionId || '';
     const documentDescription = nota?.tipoDocumentoComercial?.descripcion || nota?.tipodoccomercialId || '';
-    const documentReferenceValue = nota?.doc_referencia_numero || nota?.doc_referencia || '';
+    const documentReferenceValue =
+        nota?.referenciaDocumento?.documentoReferencia ||
+        nota?.doc_referencia_numero ||
+        nota?.doc_referencia ||
+        '';
 
     if (loading) {
         return (

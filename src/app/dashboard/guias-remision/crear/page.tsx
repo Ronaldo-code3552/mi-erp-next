@@ -347,24 +347,34 @@ export default function CrearGuiaPage() {
         return transportistaOptions.find((option: any) => String(option?.value || '').trim() === selectedId);
     }, [formData.transportistaId, transportistaOptions]);
 
-    const selectedTransportistaNumeroDoc = String(
-        selectedTransportistaOption?.raw?.numero_doc ||
-        selectedTransportistaOption?.originalData?.numero_doc ||
-        selectedTransportistaOption?.numero_doc ||
-        selectedTransportistaOption?.aux ||
-        ''
-    ).trim();
-
-    const fechaEntregaObligatoria = Boolean(
-        shouldSendToSunat &&
-        formData.transportistaId &&
-        selectedTransportistaNumeroDoc !== EMPRESA_RUC_CLIENTE
-    );
+    const fechaEntregaMinima = useMemo(() => {
+        return [
+            todayStr,
+            formData.fecha_emision,
+            formData.fecha_doc,
+            formData.fecha_traslado
+        ]
+            .filter(Boolean)
+            .map((date) => String(date))
+            .sort()
+            .at(-1) || todayStr;
+    }, [formData.fecha_doc, formData.fecha_emision, formData.fecha_traslado, todayStr]);
 
     useEffect(() => {
-        if (shouldSendToSunat || !formData.fecha_entrega) return;
-        setFormData(prev => ({ ...prev, fecha_entrega: null }));
-    }, [formData.fecha_entrega, shouldSendToSunat]);
+        setFormData(prev => {
+            const currentFechaEntrega = String(prev.fecha_entrega || '');
+
+            if (!shouldSendToSunat) {
+                return currentFechaEntrega ? { ...prev, fecha_entrega: null } : prev;
+            }
+
+            if (!currentFechaEntrega || currentFechaEntrega < fechaEntregaMinima) {
+                return { ...prev, fecha_entrega: fechaEntregaMinima };
+            }
+
+            return prev;
+        });
+    }, [fechaEntregaMinima, shouldSendToSunat]);
 
     // Documento Referencia:
     // - "Soportado": se muestra el bloque y se permite importar.
@@ -1053,8 +1063,14 @@ export default function CrearGuiaPage() {
             return toast.error("Seleccione un Almacén Destino");
         }
         if (!String(formData.transportistaId || '').trim()) return toast.error("Seleccione una Empresa de Transporte");
-        if (fechaEntregaObligatoria && !String(formData.fecha_entrega || '').trim()) {
-            return toast.error("La fecha de entrega es obligatoria para transportistas externos.");
+        const fechaEntregaFinal = shouldSendToSunat
+            ? String(formData.fecha_entrega || fechaEntregaMinima)
+            : '';
+        if (shouldSendToSunat && !fechaEntregaFinal.trim()) {
+            return toast.error("La fecha de entrega es obligatoria para enviar a SUNAT.");
+        }
+        if (shouldSendToSunat && fechaEntregaFinal < fechaEntregaMinima) {
+            return toast.error("La fecha de entrega no puede ser menor a emisión, documento, traslado o el día actual.");
         }
         if (!String(formData.unidadTransporteId || '').trim()) return toast.error("Seleccione un Vehículo / Placa");
         if (!String(formData.conductorId || '').trim()) return toast.error("Seleccione un Conductor");
@@ -1076,7 +1092,7 @@ export default function CrearGuiaPage() {
         try {
             const payload: GuiaRemisionPayload = {
                 ...formData as GuiaRemisionPayload,
-                fecha_entrega: shouldSendToSunat && formData.fecha_entrega ? formData.fecha_entrega : null,
+                fecha_entrega: shouldSendToSunat ? fechaEntregaFinal : null,
                 solicitudReposicionId: importedReferenceDoc?.type === 'SOLICITUD_REPOSICION'
                     ? Number(importedReferenceDoc.id)
                     : null,
@@ -1346,12 +1362,12 @@ export default function CrearGuiaPage() {
                                 <FormInput label="Fecha Traslado" type="date" name="fecha_traslado" value={formData.fecha_traslado} onChange={handleChange} min={formData.fecha_emision} />
                                 {shouldSendToSunat && (
                                     <FormInput
-                                        label={fechaEntregaObligatoria ? "Fecha Entrega *" : "Fecha Entrega (Opcional)"}
+                                        label="Fecha Entrega *"
                                         type="date"
                                         name="fecha_entrega"
-                                        value={formData.fecha_entrega}
+                                        value={formData.fecha_entrega || fechaEntregaMinima}
                                         onChange={handleChange}
-                                        min={formData.fecha_traslado}
+                                        min={fechaEntregaMinima}
                                     />
                                 )}
                             </div>

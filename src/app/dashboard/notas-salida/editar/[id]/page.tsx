@@ -115,7 +115,11 @@ export default function VerNotaSalidaPage() {
         nota?.tipodoccomercialId ||
         '';
 
-    const documentReferenceValue = nota?.doc_referencia_numero || nota?.doc_referencia || '';
+    const documentReferenceValue =
+        nota?.referenciaDocumento?.documentoReferencia ||
+        nota?.doc_referencia_numero ||
+        nota?.doc_referencia ||
+        '';
     const entidadValue = (() => {
         const fromReferenciaDocumento = String(
             nota?.referenciaDocumento?.entidad?.descripcion ||

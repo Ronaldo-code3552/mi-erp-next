@@ -235,6 +235,7 @@ export default function NotasSalidaPage() {
             width: '250px',
             render: (row: NotaSalidaResponse) => {
                 const transaccionDesc = row.transaccionDesc || row.tablaTransacciones?.descripcion || row.transaccionId || 'SIN TRANSACCIÓN';
+                const documentoReferencia = row.referenciaDocumento?.documentoReferencia || row.observaciones || row.doc_referencia_numero || 'S/N';
                 return (
                     <div className="flex flex-col gap-1">
                         <span className="font-bold text-slate-800 text-xs truncate" title={transaccionDesc}>
@@ -242,10 +243,10 @@ export default function NotasSalidaPage() {
                         </span>
                         <div className="flex items-center gap-1 mt-0.5">
                             <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-indigo-200">
-                                {row.tipodoccomercialDesc || row.tipodoccomercialId || 'DOC'}
+                                {row.tipoDocumentoComercial.descripcion || row.tipodoccomercialId || 'DOC'}
                             </span>
-                            <span className="text-[10px] text-slate-500 font-mono font-medium">
-                                {row.observaciones || row.doc_referencia_numero || 'S/N'}
+                            <span className="text-[10px] text-slate-500 font-mono font-medium truncate" title={documentoReferencia}>
+                                {documentoReferencia}
                             </span>
                         </div>
                     </div>
@@ -253,13 +254,19 @@ export default function NotasSalidaPage() {
             }
         },
         { 
-            header: 'Cliente / Destino', 
+            header: 'Cliente / Proveedor', 
             width: '220px',
             render: (row: NotaSalidaResponse) => {
-                const clienteDesc = row.CuentasusuarioId || row.cliente?.descripcion || row.clienteDesc || 'Sin especificar';
+                const clienteDesc =
+                    row.referenciaDocumento?.entidad?.descripcion ||
+                    row.referenciaDocumento?.cliente?.descripcion ||
+                    row.referenciaDocumento?.proveedor?.descripcion ||
+                    row.cliente?.descripcion ||
+                    row.clienteDesc ||
+                    'Sin especificar';
                 return (
                     <div className="flex items-start gap-1.5">
-                        <IconFileExport size={16} className="text-slate-400 mt-0.5 shrink-0" />
+                        <IconBuildingStore size={16} className="text-slate-400 mt-0.5 shrink-0" />
                         <span className="text-[11px] font-semibold text-slate-700 leading-tight line-clamp-2" title={clienteDesc}>
                             {clienteDesc}
                         </span>

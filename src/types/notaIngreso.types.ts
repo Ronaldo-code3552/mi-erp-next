@@ -90,6 +90,7 @@ export interface NotaIngresoResponse extends Omit<NotaIngresoPayload, 'detalles'
     referenciaDocumento?: {
         idDocumento?: string;
         entidadId?: string;
+        documentoReferencia?: string;
         clienteId?: string;
         proveedorId?: string;
         entidad?: EntidadLite;

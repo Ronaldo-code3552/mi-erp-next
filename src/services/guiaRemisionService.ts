@@ -103,8 +103,10 @@ export const guiaRemisionService = {
     },
 
     // 6. Validar ID existente en SUNAT
-    validarSunatId: async (guiaId: string): Promise<ApiResponse<any>> => {
-        const response = await apiClient.post(`/GuiaRemision/validarId?guiaRemisionId=${guiaId}`);
+    validarSunatId: async (guiaId: string): Promise<ApiResponse<{ respuestaSunat: string }>> => {
+        const response = await apiClient.post('/GuiaRemision/validarId', null, {
+            params: { guiaRemisionId: guiaId }
+        });
         return response.data;
     },
 
