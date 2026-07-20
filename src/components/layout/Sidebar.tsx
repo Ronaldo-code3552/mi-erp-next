@@ -15,7 +15,17 @@ import {
   IconSteeringWheel,
   IconTableOptions,
   IconTruck,
-  IconTruckDelivery
+  IconTruckDelivery,
+  IconBrandWhatsapp,
+  IconDashboard,
+  IconSend,
+  IconListDetails,
+  IconMessages,
+  IconPhone,
+  IconAddressBook,
+  IconTemplate,
+  IconBuildingStore,
+  IconShoppingCart
 } from "@tabler/icons-react";
 
 const Sidebar = () => {
@@ -25,6 +35,8 @@ const Sidebar = () => {
   const menuItems = [
     { title: 'Inventario / Productos', icon: <IconPackages size={20} />, path: '/dashboard/productos' },
     { title: 'Maestro Conductores', icon: <IconSteeringWheel size={20} />, path: '/dashboard/conductores' },
+    { title: 'Proveedores', icon: <IconBuildingStore size={20} />, path: '/dashboard/proveedor' },
+    { title: 'Orden Compra/Servicio', icon: <IconShoppingCart size={20} />, path: '/dashboard/orden-compra-servicio' },
     { title: 'Transportistas', icon: <IconTruckDelivery size={20} />, path: '/dashboard/transportistas' },
     { title: 'Unidad Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/unidad-transporte' },
     { title: 'Guias Remision', icon: <IconFileInvoice size={20} />, path: '/dashboard/guias-remision' },
@@ -36,6 +48,20 @@ const Sidebar = () => {
     { title: 'Solicitud Reposicion', icon: <IconPackageImport size={20} />, path: '/dashboard/solicitudes-reposicion' },
     { title: 'Motivo Traslado', icon: <IconRoute size={20} />, path: '/dashboard/motivo-traslado' },
     { title: 'Tabla Transaccion', icon: <IconTableOptions size={20} />, path: '/dashboard/tabla-transaccion' },
+    {
+      title: 'WhatsApp',
+      icon: <IconBrandWhatsapp size={20} />,
+      path: '/dashboard/whatsapp',
+      children: [
+        { title: 'Overview', icon: <IconDashboard size={17} />, path: '/dashboard/whatsapp' },
+        { title: 'Enviar', icon: <IconSend size={17} />, path: '/dashboard/whatsapp/enviar' },
+        { title: 'Logs', icon: <IconListDetails size={17} />, path: '/dashboard/whatsapp/logs' },
+        { title: 'Conversaciones', icon: <IconMessages size={17} />, path: '/dashboard/whatsapp/conversaciones' },
+        { title: 'Números', icon: <IconPhone size={17} />, path: '/dashboard/whatsapp/numeros' },
+        { title: 'Contactos', icon: <IconAddressBook size={17} />, path: '/dashboard/whatsapp/contactos' },
+        { title: 'Plantillas', icon: <IconTemplate size={17} />, path: '/dashboard/whatsapp/plantillas' }
+      ]
+    },
   ];
 
   return (
@@ -44,25 +70,18 @@ const Sidebar = () => {
           Mi ERP PRO
       </div>
       
-      <nav className="flex-1 p-4 space-y-2">
+      <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
         {menuItems.map((item) => {
           // Lógica para saber si el item está activo
           const isActive = pathname.startsWith(item.path);
 
-          return (
-            <Link
-              key={item.path}
-              href={item.path}
-              className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${
-                isActive 
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' 
-                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-              }`}
-            >
-              {item.icon}
-              {item.title}
-            </Link>
-          );
+          return <div key={item.path}>
+              <Link href={item.path} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}>{item.icon}{item.title}</Link>
+              {'children' in item && item.children && isActive && <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-2">{item.children.map(child => {
+                const childActive = child.path === '/dashboard/whatsapp' ? pathname === child.path : pathname.startsWith(child.path);
+                return <Link key={child.path} href={child.path} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${childActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}>{child.icon}{child.title}</Link>;
+              })}</div>}
+          </div>;
         })}
       </nav>
     </aside>

@@ -11,7 +11,9 @@ import {
     IconTags, 
     IconSettings, 
     IconLoader, 
-    IconDeviceFloppy 
+    IconDeviceFloppy,
+    IconPhoto,
+    IconPhotoOff
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { Producto } from '@/types/producto.types';
@@ -59,17 +61,31 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
     const [activeTab, setActiveTab] = useState<Tabs>('general');
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState<Partial<Producto>>({});
+    const [imageError, setImageError] = useState(false);
+    const [selectedClaseBienId, setSelectedClaseBienId] = useState('');
 
     const isReadOnly = !!(productToEdit && productToEdit.estado === false);
     const isEditing = !!productToEdit; 
 
     // 🚀 MAGIA AQUÍ: Carga perezosa (Lazy Load) de catálogos solo si el modal está abierto
     const { catalogs, loadingCatalogs } = useCatalogs(isOpen ? [
-        'TipoBien', 
-        'SubClaseBien', 
-        'UnidadMedida', 
-        'DetraccionBien', 
-        'OperacionesItem'
+        'TipoBien',
+        {
+            endpoint: 'ClaseBien',
+            params: { filters: JSON.stringify({ estado: 1 }) }
+        },
+        'UnidadMedida',
+        'DetraccionBien',
+        'OperacionesItem',
+        ...(selectedClaseBienId ? [{
+            endpoint: 'SubClaseBien',
+            params: {
+                filters: JSON.stringify({
+                    estado: 1,
+                    clase_bien: [selectedClaseBienId]
+                })
+            }
+        }] : [])
     ] : []);
 
     const normalizeId = (value: any): string => {
@@ -82,6 +98,11 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
             // ELIMINADO: productoService.getFormDropdowns() 🧹
             
             if (productToEdit) {
+                const claseBienId = normalizeId(
+                    productToEdit.subclaseBien?.clasebienId ||
+                    productToEdit.subClaseBien?.clasebienId ||
+                    productToEdit.claseBien?.clasebienId
+                );
                 setFormData({
                     ...productToEdit,
                     descripcion: String(productToEdit.descripcion || '').toUpperCase(),
@@ -94,6 +115,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                     condicion_estado: productToEdit.condicion_estado || 'STOCK',
                     detraccion_porcentaje: productToEdit.detraccion_porcentaje || 0
                 });
+                setSelectedClaseBienId(claseBienId);
             } else {
                 setFormData({ 
                     descripcion: '', codigo_existencia: '', codigo_barra: '', marca: '', 
@@ -106,10 +128,16 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                     condicion_estado: 'STOCK', observacion: '',
                     estado: true
                 });
+                setSelectedClaseBienId('');
             }
             setActiveTab('general');
+            setImageError(false);
         }
     }, [isOpen, productToEdit]);
+
+    useEffect(() => {
+        setImageError(false);
+    }, [formData.imagen]);
 
     const handleInputChange = (e: any) => {
         if (isReadOnly) return;
@@ -153,6 +181,14 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         }));
     };
 
+    const handleClaseBienChange = (value: string | number) => {
+        if (isReadOnly) return;
+
+        const claseBienId = normalizeId(value);
+        setSelectedClaseBienId(claseBienId);
+        setFormData(prev => ({ ...prev, subclasebienId: '' }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const descripcion = String(formData.descripcion || '').trim();
@@ -191,6 +227,10 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         if (!String(formData.unidadmedidaId || '').trim()) {
             setActiveTab('clasificacion');
             return toast.error("Unidad de medida es obligatoria.");
+        }
+        if (!selectedClaseBienId) {
+            setActiveTab('clasificacion');
+            return toast.error("Clase de bien es obligatoria.");
         }
         if (!String(formData.subclasebienId || '').trim()) {
             setActiveTab('clasificacion');
@@ -259,23 +299,50 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 <TabButton id="otros" label="CONFIGURACIÓN" icon={IconSettings} activeTab={activeTab} onClick={setActiveTab} />
             </div>
 
-            <form onSubmit={handleSubmit} className="h-[60vh] min-h-[500px] max-h-[620px] flex flex-col">
+            <form onSubmit={handleSubmit} className="h-[58vh] min-h-[470px] max-h-[600px] flex flex-col">
                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-1 space-y-5 pb-5">
                 {/* --- PESTAÑA GENERAL (Mismo código, no toca catálogos) --- */}
                 {activeTab === 'general' && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-bottom-4 duration-300">
-                        {/* ... Código de pestaña general intacto ... */}
-                        <div className="md:col-span-2">
-                            <FormInput label="Descripción del Producto *" name="descripcion" required disabled={isReadOnly} value={formData.descripcion || ''} onChange={handleInputChange} className="border-2 border-slate-100 p-2.5 rounded-xl uppercase font-semibold text-slate-700" />
+                    <div className="grid grid-cols-1 gap-5 animate-in fade-in slide-in-from-bottom-4 duration-300 lg:grid-cols-[minmax(0,1.35fr)_minmax(250px,0.65fr)]">
+                        <div className="grid grid-cols-1 content-start gap-4 md:grid-cols-2">
+                            <div className="md:col-span-2">
+                                <FormInput label="Descripción del Producto *" name="descripcion" required disabled={isReadOnly} value={formData.descripcion || ''} onChange={handleInputChange} className="border-2 border-slate-100 p-2.5 rounded-xl uppercase font-semibold text-slate-700" />
+                            </div>
+                            <FormInput label="Código Interno" name="codigo_existencia" value={formData.codigo_existencia || ''} onChange={handleInputChange} disabled={isReadOnly} />
+                            <FormInput label="Código de Barras" name="codigo_barra" value={formData.codigo_barra || ''} onChange={handleInputChange} disabled={isReadOnly} />
+                            <FormInput label="Marca" name="marca" value={formData.marca || ''} onChange={handleInputChange} disabled={isReadOnly} />
+                            <FormInput label="Código OSCE" name="codigo_osce" value={formData.codigo_osce || ''} onChange={handleInputChange} disabled={isReadOnly} />
+                            <div className="md:col-span-2">
+                                <FormInput label="URL de la imagen" name="imagen" value={formData.imagen || ''} onChange={handleInputChange} disabled={isReadOnly} placeholder="https://servidor.com/producto.jpg" />
+                                <p className="mt-1.5 px-1 text-[10px] text-slate-400">La vista previa se actualiza automáticamente al cambiar la ruta.</p>
+                            </div>
                         </div>
-                        <FormInput label="Código Interno" name="codigo_existencia" value={formData.codigo_existencia || ''} onChange={handleInputChange} disabled={isReadOnly} />
-                        <FormInput label="Código de Barras" name="codigo_barra" value={formData.codigo_barra || ''} onChange={handleInputChange} disabled={isReadOnly} />
-                        <div className="md:col-span-1">
-                             <FormInput label="Marca" name="marca" value={formData.marca || ''} onChange={handleInputChange} disabled={isReadOnly} />
-                        </div>
-                        <FormInput label="Código OSCE" name="codigo_osce" value={formData.codigo_osce || ''} onChange={handleInputChange} disabled={isReadOnly} />
-                        <div className="md:col-span-2">
-                            <FormInput label="URL Imagen" name="imagen" value={formData.imagen || ''} onChange={handleInputChange} disabled={isReadOnly} placeholder="https://..." />
+
+                        <div className="min-h-[330px] overflow-hidden rounded-lg border border-slate-200 bg-slate-50">
+                            <div className="flex items-center gap-2 border-b border-slate-200 bg-white px-3 py-2.5">
+                                <IconPhoto size={16} className="text-blue-600" />
+                                <span className="text-[10px] font-black uppercase text-slate-600">Vista previa</span>
+                            </div>
+                            <div className="flex h-[285px] items-center justify-center p-4">
+                                {formData.imagen && !imageError ? (
+                                    // Las URLs son configurables y pueden pertenecer a cualquier dominio externo.
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={String(formData.imagen)}
+                                        alt={String(formData.descripcion || 'Vista previa del producto')}
+                                        className="h-full w-full object-contain"
+                                        onError={() => setImageError(true)}
+                                    />
+                                ) : (
+                                    <div className="flex max-w-[220px] flex-col items-center gap-3 text-center text-slate-400">
+                                        <IconPhotoOff size={46} stroke={1.4} />
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-500">{imageError ? 'No se pudo cargar la imagen' : 'Sin imagen'}</p>
+                                            <p className="mt-1 text-[10px] leading-relaxed">{imageError ? 'Revise que la URL sea pública y válida.' : 'Ingrese una URL para visualizar el producto.'}</p>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
                         </div>
                     </div>
                 )}
@@ -362,8 +429,25 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                             onChange={handleInputChange} 
                             disabled={isReadOnly || isEditing || loadingCatalogs} 
                         />
-                        
-                        <div className="col-span-2">
+
+                        <div className="md:col-span-2">
+                            <SearchableSelect
+                                label="Clase de Bien"
+                                name="clasebienId"
+                                value={selectedClaseBienId}
+                                options={catalogs['ClaseBien']?.map((opt: any) => ({
+                                    key: opt.key || opt.value,
+                                    value: opt.value,
+                                    label: opt.label || opt.descripcion || String(opt.value),
+                                    aux: opt.aux
+                                })) || []}
+                                onChange={(e: any) => handleClaseBienChange(e.target.value)}
+                                disabled={isReadOnly || loadingCatalogs}
+                                placeholder="-- Seleccione una clase --"
+                            />
+                        </div>
+
+                        <div className="md:col-span-2">
                             <SearchableSelect 
                                 label="Subclase / Categoría" 
                                 name="subclasebienId" 
@@ -375,7 +459,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                     aux: opt.aux
                                 })) || []}
                                 onChange={handleInputChange} 
-                                disabled={isReadOnly || loadingCatalogs} 
+                                disabled={isReadOnly || !selectedClaseBienId || loadingCatalogs}
+                                placeholder={selectedClaseBienId ? "-- Seleccione una subclase --" : "Seleccione primero una clase"}
                             />
                         </div>
                     </div>

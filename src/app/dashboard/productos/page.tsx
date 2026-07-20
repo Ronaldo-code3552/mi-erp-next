@@ -14,10 +14,11 @@ import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
 import MultiSelect from "@/components/forms/MultiSelect";
 import ProductFormModal from "./components/ProductFormModal";
 import PresentacionesModal from "./components/PresentacionesModal";
+import ProductDetailModal from "./components/ProductDetailModal";
 
 import { 
     IconPlus, IconRefresh, IconSearch, IconFilter, 
-    IconEdit, IconTrash, IconEye, IconStack2
+    IconEdit, IconTrash, IconEye, IconStack2, IconLoader2
 } from '@tabler/icons-react';
 
 // Constante para los estados (reemplaza el hardcodeo del SP anterior)
@@ -48,6 +49,8 @@ export default function ProductosPage() {
     const [showForm, setShowForm] = useState(false);
     const [showPresentaciones, setShowPresentaciones] = useState(false);
     const [productToEdit, setProductToEdit] = useState<Producto | null>(null);
+    const [detailProductId, setDetailProductId] = useState<string | null>(null);
+    const [loadingProductId, setLoadingProductId] = useState<string | null>(null);
 
     const debouncedSearch = useDebounce(searchTerm, 500);
 
@@ -107,6 +110,23 @@ export default function ProductosPage() {
         }
     };
 
+    const handleEditProduct = async (row: Producto) => {
+        setLoadingProductId(row.bienId);
+        try {
+            const response = await productoService.getById(row.bienId);
+            if (!response.isSuccess || !response.data) {
+                toast.error(response.message || "No se pudo cargar el producto");
+                return;
+            }
+            setProductToEdit(response.data);
+            setShowForm(true);
+        } catch {
+            toast.error("No se pudo cargar la información completa del producto");
+        } finally {
+            setLoadingProductId(null);
+        }
+    };
+
     // DEFINICIÓN DE COLUMNAS (Lógica recuperada de React)
     const columns = [
         { header: 'Código', width: '100px', render: (row: Producto) => <span className="font-mono font-bold text-xs">{row.codigo_existencia || 'S/C'}</span> },
@@ -153,26 +173,39 @@ export default function ProductosPage() {
             width: '260px',
             render: (row: Producto) => (
                 <div className="flex justify-center gap-1">
-                    <button onClick={() => { setProductToEdit(row); setShowForm(true); }} className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 rounded transition-colors" title="Editar">
-                        {row.estado ? <IconEdit size={18} /> : <IconEye size={18} />}
+                    <button
+                        type="button"
+                        onClick={() => setDetailProductId(row.bienId)}
+                        className="p-1.5 hover:bg-sky-50 text-slate-400 hover:text-sky-600 rounded transition-colors"
+                        title="Ver detalle"
+                    >
+                        <IconEye size={18} />
                     </button>
-                    
+
+                    <button
+                        type="button"
+                        onClick={() => handleEditProduct(row)}
+                        disabled={loadingProductId === row.bienId}
+                        className="p-1.5 hover:bg-blue-50 text-slate-400 hover:text-blue-600 disabled:opacity-40 rounded transition-colors"
+                        title="Editar"
+                    >
+                        {loadingProductId === row.bienId ? <IconLoader2 size={18} className="animate-spin" /> : <IconEdit size={18} />}
+                    </button>
+
                     <button onClick={() => handleAction(row.bienId, 'delete')} className="p-1.5 hover:bg-red-50 text-slate-400 hover:text-red-600 rounded transition-colors" title="Eliminar">
                         <IconTrash size={18} />
                     </button>
-                    
-                    {/* BOTÓN RECUPERADO DE PRESENTACIONES */}
-                    <button 
+
+                    <button
                         onClick={() => {
-                            setProductToEdit(row); 
-                            setShowPresentaciones(true); 
-                        }} 
+                            setProductToEdit(row);
+                            setShowPresentaciones(true);
+                        }}
                         className="p-1.5 hover:bg-purple-50 text-slate-400 hover:text-purple-600 rounded transition-colors"
-                        title="Gestionar Presentaciones"
+                        title="Gestionar presentaciones"
                     >
                         <IconStack2 size={18} />
                     </button>
-
                     <button
                         onClick={() => handleToggleProductoEstado(row)}
                         className="px-2 py-1 rounded-lg hover:bg-slate-50 transition-colors"
@@ -310,6 +343,13 @@ export default function ProductosPage() {
                 isOpen={showPresentaciones}
                 onClose={() => setShowPresentaciones(false)}
                 product={productToEdit}
+            />
+
+            <ProductDetailModal
+                key={detailProductId || "product-detail"}
+                isOpen={!!detailProductId}
+                productId={detailProductId}
+                onClose={() => setDetailProductId(null)}
             />
         </div>
     );

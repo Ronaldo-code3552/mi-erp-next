@@ -4,6 +4,12 @@ export interface SubClaseBien {
     subclasebienId: string;
     descripcion: string;
     clasebienId?: string; // Agregado según tu JSON
+    estado?: boolean;
+    observacion?: string;
+    claseBien?: {
+        descripcion?: string;
+        estado?: boolean;
+    };
 }
 
 export interface UnidadMedida {
@@ -52,14 +58,38 @@ export interface Producto {
 
     // Objetos anidados (Vienen en el JSON, útiles para mostrar nombres en tablas)
     tipoBien?: { descripcion: string; estado: boolean };
-    subClaseBien?: { descripcion: string };
-    claseBien?: { descripcion: string };
+    subClaseBien?: { descripcion: string; clasebienId?: string };
+    subclaseBien?: { descripcion: string; estado?: boolean; clasebienId?: string };
+    claseBien?: { descripcion: string; clasebienId?: string };
     unidadMedida?: { descripcion: string; abreviatura: string };
 
     // Tipo Afecto (operación/tributación). Viene en el GET ALL según el backend.
     operacionItem?: {
         descripcion?: string;
         valor?: number;
+    };
+    presentaciones?: Array<{
+        presentacionId: string;
+        descripcion: string;
+        cantidad: number;
+        estado: boolean;
+        unidadmedidaId: string;
+    }>;
+    empresa?: {
+        razon_social?: string;
+        ruc?: string;
+    };
+    usuario?: {
+        observacion?: string;
+        usuario?: string;
+        estado?: boolean;
+    };
+    perfiles?: {
+        descripcion?: string;
+        detalle?: string;
+    };
+    detraccionBienService?: {
+        descripcion?: string;
     };
 }
 

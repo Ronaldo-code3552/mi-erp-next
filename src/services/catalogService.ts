@@ -103,6 +103,7 @@ export const catalogService = {
                         : endpointName === 'AlmacenLote' ? item.loteId
                         : endpointName === 'DetraccionBien' ? item.detraccionbienserviceId
                         : endpointName === 'OperacionesItem' ? item.operacionesItemId
+                        : endpointName === 'ClaseBien' ? item.clasebienId
                         : endpointName === 'SubClaseBien' ? item.subclasebienId
                         : endpointName === 'UnidadMedida' ? item.unidadmedidaId
                         : endpointName === 'TipoBien' ? item.tipobienId
@@ -111,7 +112,7 @@ export const catalogService = {
 
                     // Y por si acaso, añádelo de primero en los fallbacks aquí abajo:
                     const extractedId = String(
-                        endpointSpecificId || item.bienId || item.Id || item.tipobienId || item.subclasebienId || 
+                        endpointSpecificId || item.bienId || item.Id || item.tipobienId || item.clasebienId || item.subclasebienId ||
                         item.unidadmedidaId || item.modeloId || item.marcaId || item.docidentId || 
                         item.id || item.codigo || item.serie || `fallback-${index}`
                     ).trim();

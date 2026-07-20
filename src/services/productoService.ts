@@ -79,6 +79,11 @@ export const productoService = {
         return response.data;
     },
 
+    getById: async (id: string | number): Promise<ApiResponse<Producto>> => {
+        const response = await apiClient.get(`/Producto/${id}`);
+        return response.data;
+    },
+
     update: async (id: string | number, data: Partial<Producto>): Promise<ApiResponse<Producto>> => {
         const response = await apiClient.put(`/Producto/${id}`, data);
         return response.data;

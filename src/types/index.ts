@@ -18,3 +18,19 @@ export interface ApiResponse<T> {
     message?: string;
 }
 export * from './solicitudReposicion.types';
+export * from './claseBien.types';
+export * from './senderWhatsApp.types';
+export * from './contactoWhatsApp.types';
+export * from './plantillaWhatsApp.types';
+export * from './conversacionWhatsApp.types';
+export * from './mensajeWhatsApp.types';
+export * from './proveedor.types';
+export * from './tipoProveedor.types';
+export * from './claseProveedor.types';
+export * from './ubigeo.types';
+export * from './ordenCompraServicio.types';
+export * from './tipoOrden.types';
+export * from './tipoPago.types';
+export * from './moneda.types';
+export * from './trabajador.types';
+export * from './tipoCambioUniversal.types';

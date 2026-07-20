@@ -6,6 +6,7 @@ interface Props {
     description?: string;
     icon?: React.ReactNode;
     gradientClass?: string;
+    compact?: boolean;
     children: React.ReactNode;
 }
 
@@ -14,10 +15,11 @@ export default function ReportCard({
     description,
     icon,
     gradientClass = 'bg-gradient-to-br from-cyan-400 to-blue-700', 
+    compact = false,
     children 
 }: Props) {
     return (
-        <article className="group flex min-h-[430px] flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg">
+        <article className={`group flex flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg ${compact ? 'min-h-0' : 'min-h-[430px]'}`}>
             <div className={`${gradientClass} relative overflow-hidden px-5 py-4 text-white`}>
                 <div className="absolute inset-x-0 bottom-0 h-px bg-white/25" />
                 <div className="flex items-start gap-3">
@@ -39,7 +41,7 @@ export default function ReportCard({
                 </div>
             </div>
 
-            <div className="flex flex-1 flex-col gap-4 p-4">
+            <div className={`flex flex-1 flex-col gap-4 ${compact ? 'p-5' : 'p-4'}`}>
                 {children}
             </div>
         </article>

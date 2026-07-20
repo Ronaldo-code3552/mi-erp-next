@@ -4,3 +4,18 @@ export * from './transportistaService';
 export * from './unidadTransporteService';
 
 export * from './solicitudReposicionService';
+export * from './senderWhatsAppService';
+export * from './contactoWhatsAppService';
+export * from './plantillaWhatsAppService';
+export * from './conversacionWhatsAppService';
+export * from './mensajeWhatsAppService';
+export * from './proveedorService';
+export * from './tipoProveedorService';
+export * from './claseProveedorService';
+export * from './ubigeoService';
+export * from './ordenCompraServicioService';
+export * from './tipoOrdenService';
+export * from './tipoPagoService';
+export * from './monedaService';
+export * from './trabajadorService';
+export * from './tipoCambioUniversalService';
