@@ -1,3 +1,5 @@
+import { CuentaProveedor } from './cuentasProveedor.types';
+
 export interface ProveedorTipoProveedor {
     descripcion?: string;
     estado?: boolean;
@@ -85,6 +87,8 @@ export interface Proveedor {
     tenant?: ProveedorTenant;
     ubigeo?: ProveedorUbigeo;
     Ubigeo?: ProveedorUbigeo;
+    cuentasProveedor?: CuentaProveedor[];
+    CuentasProveedor?: CuentaProveedor[];
 }
 
 export interface ProveedorPayload {

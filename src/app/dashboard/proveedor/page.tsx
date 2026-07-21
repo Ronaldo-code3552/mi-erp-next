@@ -30,6 +30,7 @@ import {
     Proveedor,
     ProveedorFilters
 } from "@/types/proveedor.types";
+import ProveedorCuentasModal from "./components/ProveedorCuentasModal";
 
 type Option = {
     value: string | number;
@@ -106,6 +107,7 @@ export default function ProveedorPage() {
     const [loadingDropdowns, setLoadingDropdowns] = useState(false);
     const [tipoOptions, setTipoOptions] = useState<Option[]>([]);
     const [claseOptions, setClaseOptions] = useState<Option[]>([]);
+    const [cuentasProveedor, setCuentasProveedor] = useState<Proveedor | null>(null);
     const { catalogs, loadingCatalogs } = useCatalogs(["DocumentoIdentidadXcore"]);
 
     useEffect(() => {
@@ -310,9 +312,9 @@ export default function ProveedorPage() {
                 <div className="flex items-center justify-center gap-1">
                     <button
                         type="button"
-                        disabled
-                        className="rounded p-1.5 text-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                        title="Cuentas proveedor pendiente"
+                        onClick={() => setCuentasProveedor(row)}
+                        className="rounded p-1.5 text-slate-400 transition-colors hover:bg-cyan-50 hover:text-cyan-600"
+                        title="Cuentas"
                     >
                         <IconWallet size={17} />
                     </button>
@@ -452,6 +454,12 @@ export default function ProveedorPage() {
                     </div>
                 )}
             </FiltrosAvanzados>
+
+            <ProveedorCuentasModal
+                proveedor={cuentasProveedor}
+                isOpen={Boolean(cuentasProveedor)}
+                onClose={() => setCuentasProveedor(null)}
+            />
         </div>
     );
 }

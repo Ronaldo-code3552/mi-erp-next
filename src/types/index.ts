@@ -34,3 +34,5 @@ export * from './tipoPago.types';
 export * from './moneda.types';
 export * from './trabajador.types';
 export * from './tipoCambioUniversal.types';
+export * from './banco.types';
+export * from './cuentasProveedor.types';

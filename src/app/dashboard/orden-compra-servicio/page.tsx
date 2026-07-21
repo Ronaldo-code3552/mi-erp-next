@@ -149,25 +149,6 @@ const getResponsable = (row: OrdenCompraServicio) => {
     return trabajador?.descripcion || nombre || "";
 };
 
-const getIncluyeIgv = (row: OrdenCompraServicio) => {
-    const raw = getValue(row, ["incluyeIgv", "incluye_igv", "IncluyeIgv"]);
-    return raw === "" ? true : Boolean(raw);
-};
-
-const getSubtotalAfecto = (row: OrdenCompraServicio) => {
-    const explicit = getValue(row, ["subtotalAfecto", "subtotal_afecto", "SubtotalAfecto"]);
-    if (explicit !== "") return explicit;
-
-    return getIncluyeIgv(row) ? getValue(row, ["subtotal", "Subtotal"]) : 0;
-};
-
-const getSubtotalInafecto = (row: OrdenCompraServicio) => {
-    const explicit = getValue(row, ["subtotalInafecto", "subtotal_inafecto", "SubtotalInafecto"]);
-    if (explicit !== "") return explicit;
-
-    return getIncluyeIgv(row) ? 0 : getValue(row, ["subtotal", "Subtotal"]);
-};
-
 const estadoBadgeClass = (estado: string) => {
     const normalized = estado.trim().toUpperCase();
 
@@ -362,12 +343,7 @@ export default function OrdenCompraServicioPage() {
             header: "N° Orden",
             width: "150px",
             render: (row: OrdenCompraServicio) => (
-                <div className="flex flex-col gap-1">
-                    <span className="font-mono text-xs font-bold text-blue-700">{getNumeroOrden(row)}</span>
-                    <span className={`inline-flex w-fit rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${estadoBadgeClass(getEstado(row))}`}>
-                        {getEstado(row)}
-                    </span>
-                </div>
+                <span className="font-mono text-xs font-bold text-blue-700">{getNumeroOrden(row)}</span>
             )
         },
         {
@@ -422,42 +398,21 @@ export default function OrdenCompraServicioPage() {
             )
         },
         {
-            header: "Subtotal Afecto",
-            width: "135px",
-            className: "text-right",
-            render: (row: OrdenCompraServicio) => (
-                <span className="font-mono text-xs font-bold text-slate-700">
-                    {formatMoney(getSubtotalAfecto(row))}
-                </span>
-            )
-        },
-        {
-            header: "Subtotal Inafecto",
-            width: "145px",
-            className: "text-right",
-            render: (row: OrdenCompraServicio) => (
-                <span className="font-mono text-xs font-bold text-slate-700">
-                    {formatMoney(getSubtotalInafecto(row))}
-                </span>
-            )
-        },
-        {
-            header: "Igv",
-            width: "110px",
-            className: "text-right",
-            render: (row: OrdenCompraServicio) => (
-                <span className="font-mono text-xs font-bold text-slate-700">
-                    {formatMoney(getValue(row, ["igv", "Igv"]))}
-                </span>
-            )
-        },
-        {
             header: "Total",
             width: "120px",
             className: "text-right",
             render: (row: OrdenCompraServicio) => (
                 <span className="font-mono text-xs font-bold text-emerald-700">
                     {getMonedaSymbol(row)} {formatMoney(getValue(row, ["total", "Total"]))}
+                </span>
+            )
+        },
+        {
+            header: "Estado",
+            width: "125px",
+            render: (row: OrdenCompraServicio) => (
+                <span className={`inline-flex w-fit rounded-full border px-2.5 py-1 text-[10px] font-black uppercase ${estadoBadgeClass(getEstado(row))}`}>
+                    {getEstado(row)}
                 </span>
             )
         },

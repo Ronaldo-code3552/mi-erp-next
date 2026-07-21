@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { InputHTMLAttributes } from "react";
 import { toast } from "sonner";
 import {
@@ -10,20 +10,24 @@ import {
     IconId,
     IconLoader,
     IconNotes,
-    IconPhone
+    IconPhone,
+    IconWallet
 } from "@tabler/icons-react";
 
 import ExternalSearchInput from "@/components/forms/ExternalSearchInput";
 import SearchableSelect from "@/components/forms/SearchableSelect";
 import { useCatalogs } from "@/hooks/useCatalogs";
 import { claseProveedorService } from "@/services/claseProveedorService";
+import { cuentasProveedorService } from "@/services/cuentasProveedorService";
 import { tipoProveedorService } from "@/services/tipoProveedorService";
 import { ubigeoService } from "@/services/ubigeoService";
+import { CuentaProveedor } from "@/types/cuentasProveedor.types";
 import {
     Proveedor,
     ProveedorPayload
 } from "@/types/proveedor.types";
 import { Ubigeo } from "@/types/ubigeo.types";
+import ProveedorCuentasModal from "./ProveedorCuentasModal";
 
 const EMPRESA_ID = "005";
 const TENANT_ID = "1";
@@ -113,6 +117,42 @@ const normalizeProveedor = (source?: Partial<Proveedor>): ProveedorFormValue => 
     };
 };
 
+const getProveedorCuentas = (source?: Partial<Proveedor>): CuentaProveedor[] => {
+    return source?.cuentasProveedor || source?.CuentasProveedor || [];
+};
+
+const getCuentaId = (cuenta: CuentaProveedor) => {
+    return cuenta.cuentasProveedorId || cuenta.cuentasproveedorId || cuenta.CuentasProveedorId || "";
+};
+
+const getCuentaNumero = (cuenta: CuentaProveedor) => {
+    return cuenta.numeroCuenta || cuenta.NumeroCuenta || cuenta.n_cuenta || "-";
+};
+
+const getCuentaCci = (cuenta: CuentaProveedor) => {
+    return cuenta.cci || cuenta.Cci || cuenta.c_cci || "-";
+};
+
+const getCuentaBanco = (cuenta: CuentaProveedor) => {
+    return cuenta.banco?.nombre ||
+        cuenta.bancos?.nombre ||
+        cuenta.Banco?.nombre ||
+        cuenta.banco?.descripcion ||
+        cuenta.bancos?.descripcion ||
+        cuenta.Banco?.descripcion ||
+        String(cuenta.bancosId || cuenta.BancosId || cuenta.idBancos || "-");
+};
+
+const getCuentaMoneda = (cuenta: CuentaProveedor) => {
+    return cuenta.moneda?.descripcion ||
+        cuenta.Moneda?.descripcion ||
+        cuenta.moneda?.simbolomoneda ||
+        cuenta.Moneda?.simbolomoneda ||
+        cuenta.monedaId ||
+        cuenta.MonedaId ||
+        "-";
+};
+
 const FormInput = ({ label, disabled, className, value, ...props }: FormInputProps) => (
     <div className="flex flex-col gap-1.5 w-full">
         <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">
@@ -148,6 +188,8 @@ export default function ProveedorForm({
     const [formData, setFormData] = useState<ProveedorFormValue>(() => normalizeProveedor(initialValue));
     const [saving, setSaving] = useState(false);
     const [loadingUbigeo, setLoadingUbigeo] = useState(false);
+    const [cuentas, setCuentas] = useState<CuentaProveedor[]>(() => getProveedorCuentas(initialValue));
+    const [cuentasModalOpen, setCuentasModalOpen] = useState(false);
     const [paisOptions, setPaisOptions] = useState<SelectOption[]>([]);
     const [departamentoOptions, setDepartamentoOptions] = useState<SelectOption[]>([]);
     const [provinciaOptions, setProvinciaOptions] = useState<SelectOption[]>([]);
@@ -159,7 +201,19 @@ export default function ProveedorForm({
 
     useEffect(() => {
         setFormData(normalizeProveedor(initialValue));
+        setCuentas(getProveedorCuentas(initialValue));
     }, [initialValue]);
+
+    const refreshCuentas = useCallback(async () => {
+        const proveedorId = formData.proveedorId;
+        if (!proveedorId) return;
+
+        const response = await cuentasProveedorService.getByProveedor(proveedorId, 1, 20);
+
+        if (response.isSuccess) {
+            setCuentas(response.data || []);
+        }
+    }, [formData.proveedorId]);
 
     const { catalogs, loadingCatalogs } = useCatalogs(["DocumentoIdentidadXcore"]);
 
@@ -468,18 +522,32 @@ export default function ProveedorForm({
 
             <form onSubmit={handleSubmit} className="rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="border-b border-slate-100 px-5 py-4">
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                            <IconBuildingStore size={22} />
+                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                                <IconBuildingStore size={22} />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-bold uppercase text-slate-800">
+                                    {formData.proveedorId ? `Proveedor ${formData.proveedorId}` : "Datos del proveedor"}
+                                </h2>
+                                <p className="text-xs text-slate-400">
+                                    {isLockedByEstado ? "Este proveedor se encuentra anulado." : "Complete la información principal y secundaria."}
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-sm font-bold uppercase text-slate-800">
-                                {formData.proveedorId ? `Proveedor ${formData.proveedorId}` : "Datos del proveedor"}
-                            </h2>
-                            <p className="text-xs text-slate-400">
-                                {isLockedByEstado ? "Este proveedor se encuentra anulado." : "Complete la información principal y secundaria."}
-                            </p>
-                        </div>
+                        {isEditing && (
+                            <div className="flex flex-col gap-1 md:items-end">
+                                <span className="text-[10px] font-black uppercase text-slate-400">Estado</span>
+                                <span className={`inline-flex w-fit items-center rounded-full border px-3 py-1 text-[10px] font-black uppercase ${
+                                    formData.estado
+                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                        : "border-red-100 bg-red-50 text-red-600"
+                                }`}>
+                                    {formData.estado ? "Activo" : "Anulado"}
+                                </span>
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -637,34 +705,63 @@ export default function ProveedorForm({
                                 disabled={isReadOnly}
                                 type="date"
                             />
-                            <FormInput
-                                label="Tenant"
-                                value={formData.tenantId}
-                                disabled
-                            />
-                            <div className="flex flex-col gap-1.5">
-                                <span className="text-[10px] font-bold uppercase text-slate-500 ml-1">Estado</span>
-                                <div className={`flex h-[38px] items-center rounded-lg border px-3 text-xs font-bold uppercase ${
-                                    formData.estado
-                                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                        : "border-red-100 bg-red-50 text-red-600"
-                                }`}>
-                                    {formData.estado ? "Activo" : "Anulado"}
-                                </div>
-                            </div>
                         </div>
                     </section>
 
                     {isEditing && (
-                        <section className="space-y-3">
-                            <SectionTitle title="Cuentas proveedor" icon={IconNotes} />
-                            <button
-                                type="button"
-                                disabled
-                                className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-2.5 text-xs font-bold text-slate-400"
-                            >
-                                Endpoint pendiente
-                            </button>
+                        <section className="space-y-4">
+                            <div className="flex flex-col gap-3 border-b border-slate-200 pb-2 md:flex-row md:items-center md:justify-between">
+                                <div className="flex items-center gap-2">
+                                    <IconWallet size={18} className="text-blue-600" />
+                                    <div>
+                                        <h3 className="text-xs font-bold uppercase tracking-wide text-slate-800">Cuentas proveedor</h3>
+                                        <p className="text-[11px] font-medium text-slate-400">
+                                            {cuentas.length} cuenta(s) bancaria(s) registrada(s)
+                                        </p>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setCuentasModalOpen(true)}
+                                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-600 transition-colors hover:bg-slate-50 hover:text-blue-600"
+                                >
+                                    <IconNotes size={15} />
+                                    {isReadOnly ? "Ver cuentas" : "Gestionar cuentas"}
+                                </button>
+                            </div>
+
+                            <div className="overflow-hidden rounded-xl border border-slate-200">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="bg-slate-50 font-black uppercase text-slate-500">
+                                        <tr>
+                                            <th className="w-28 p-3">Código</th>
+                                            <th className="p-3">Banco</th>
+                                            <th className="p-3">N° Cuenta</th>
+                                            <th className="p-3">CCI</th>
+                                            <th className="w-32 p-3">Moneda</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100">
+                                        {cuentas.length === 0 ? (
+                                            <tr>
+                                                <td colSpan={5} className="p-8 text-center text-sm font-semibold text-slate-400">
+                                                    No hay cuentas registradas.
+                                                </td>
+                                            </tr>
+                                        ) : (
+                                            cuentas.map((cuenta) => (
+                                                <tr key={getCuentaId(cuenta)} className="transition-colors hover:bg-slate-50">
+                                                    <td className="p-3 font-mono font-bold text-slate-500">{getCuentaId(cuenta)}</td>
+                                                    <td className="p-3 font-semibold uppercase text-slate-700">{getCuentaBanco(cuenta)}</td>
+                                                    <td className="p-3 font-mono text-slate-700">{getCuentaNumero(cuenta)}</td>
+                                                    <td className="p-3 font-mono text-slate-700">{getCuentaCci(cuenta)}</td>
+                                                    <td className="p-3 font-semibold uppercase text-slate-700">{getCuentaMoneda(cuenta)}</td>
+                                                </tr>
+                                            ))
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         </section>
                     )}
                 </div>
@@ -689,6 +786,16 @@ export default function ProveedorForm({
                     )}
                 </div>
             </form>
+
+            {isEditing && (
+                <ProveedorCuentasModal
+                    proveedor={initialValue as Proveedor}
+                    isOpen={cuentasModalOpen}
+                    readOnly={isReadOnly}
+                    onClose={() => setCuentasModalOpen(false)}
+                    onSaved={refreshCuentas}
+                />
+            )}
         </div>
     );
 }

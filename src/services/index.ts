@@ -19,3 +19,5 @@ export * from './tipoPagoService';
 export * from './monedaService';
 export * from './trabajadorService';
 export * from './tipoCambioUniversalService';
+export * from './bancoService';
+export * from './cuentasProveedorService';
