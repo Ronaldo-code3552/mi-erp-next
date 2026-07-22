@@ -52,12 +52,16 @@ type OrdenDetalleDraft = {
     bienId: string;
     bienLabel: string;
     bienCodigo: string;
+    operacionItemId: string;
+    operacionItemLabel: string;
+    afectoInafecto: boolean;
     presentacionId: string;
     presentacionLabel: string;
     presentacionCantidad: number;
     cantidad: string;
     costo: string;
-    descuentoProducto: string;
+    importe: string;
+    importeDesdeBackend: boolean;
     observacion: string;
 };
 
@@ -72,6 +76,8 @@ type OrdenFormValue = {
     fechaEntrega: string;
     monedaId: string;
     tipoCambio: string;
+    subtotalAfecto: string;
+    subtotalExonerado: string;
     descuentoGlobal: string;
     tipoPagoId: string;
     proveedorId: string;
@@ -148,15 +154,42 @@ const boolFromSource = (source: Record<string, unknown>) => {
     return value === undefined || value === null ? true : Boolean(value);
 };
 
+const boolValueFromSource = (value: unknown, fallback = false) => {
+    if (value === undefined || value === null || value === "") return fallback;
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value === 1;
+
+    const normalized = String(value).trim().toLowerCase();
+    return ["1", "true", "si", "sí", "afecto"].includes(normalized);
+};
+
 const getDetalleBien = (detalle: OrdenCompraServicioDetalle) => detalle.bien || detalle.Bien || {};
 const getDetallePresentacion = (detalle: OrdenCompraServicioDetalle) => detalle.presentacion || detalle.Presentacion || {};
 
+const getOperacionItem = (source: Record<string, unknown>) => {
+    const id = firstString(source, ["operacionesItemId", "operacionesitemId", "OperacionesItemId"]);
+    const nested = getNested(source, ["operacionesItem", "operacionItem", "operacionesitem", "operacionitem", "OperacionesItem", "OperacionItem"]);
+    const nestedId = firstString(nested, ["operacionesItemId", "operacionesitemId", "OperacionesItemId"]);
+    const label = firstString(nested, ["descripcion", "Descripcion"]);
+
+    return { id: id || nestedId, label };
+};
+
+const detalleEsAfecto = (detalle: OrdenDetalleDraft) => {
+    const operacionItemId = detalle.operacionItemId.trim();
+    if (operacionItemId) return operacionItemId === "1000";
+
+    return detalle.afectoInafecto;
+};
+
 const getDetalleImporte = (detalle: OrdenDetalleDraft) => {
+    if (detalle.importeDesdeBackend) return roundDecimal(toNumber(detalle.importe));
+
     return roundDecimal(toNumber(detalle.cantidad) * detalle.presentacionCantidad * toNumber(detalle.costo));
 };
 
 const getDetalleNeto = (detalle: OrdenDetalleDraft) => {
-    return roundDecimal(Math.max(getDetalleImporte(detalle) - toNumber(detalle.descuentoProducto), 0));
+    return getDetalleImporte(detalle);
 };
 
 const normalizeDetalles = (source?: Partial<OrdenCompraServicio>): OrdenDetalleDraft[] => {
@@ -166,19 +199,31 @@ const normalizeDetalles = (source?: Partial<OrdenCompraServicio>): OrdenDetalleD
         const raw = detalle as Record<string, unknown>;
         const bien = getDetalleBien(detalle);
         const presentacion = getDetallePresentacion(detalle);
-        const presentacionCantidad = toNumber(presentacion.cantidad) || 1;
+        const cantidad = firstString(raw, ["cantidad", "Cantidad"]) || "0";
         const costo = firstString(raw, ["costo", "Costo"]) || String(bien.costo || 0);
+        const hasImporte = ["importe", "Importe"].some(key => raw[key] !== undefined && raw[key] !== null);
+        const importe = firstString(raw, ["importe", "Importe"]);
+        const presentacionCantidad = toNumber(presentacion.cantidad) || 1;
+        const operacionItem = getOperacionItem(bien);
+        const afectoInafecto = boolValueFromSource(
+            raw.afectoInafecto ?? raw.afecto_inafecto ?? raw.AfectoInafecto ?? bien.afecto_inafecto ?? bien.afectoInafecto,
+            false
+        );
 
         return {
             bienId: firstString(raw, ["bienId", "BienId"]) || String(bien.bienId || ""),
             bienLabel: String(bien.descripcion || firstString(raw, ["bienDescripcion", "descripcion"]) || "").trim(),
             bienCodigo: String(bien.codigo_existencia || bien.cod_admin || "").trim(),
+            operacionItemId: operacionItem.id,
+            operacionItemLabel: operacionItem.label,
+            afectoInafecto,
             presentacionId: firstString(raw, ["presentacionId", "PresentacionId"]) || String(presentacion.presentacionId || ""),
             presentacionLabel: String(presentacion.descripcion || "").trim(),
             presentacionCantidad,
-            cantidad: firstString(raw, ["cantidad", "Cantidad"]) || "0",
+            cantidad,
             costo,
-            descuentoProducto: firstString(raw, ["descuentoProducto", "descuento_producto", "DescuentoProducto"]) || "0",
+            importe,
+            importeDesdeBackend: hasImporte,
             observacion: firstString(raw, ["observacion", "Observacion"])
         };
     });
@@ -199,6 +244,8 @@ const normalizeOrden = (source?: Partial<OrdenCompraServicio>): OrdenFormValue =
         fechaEntrega: toDateInput(firstString(raw, ["fechaEntrega", "fecha_entrega", "FechaEntrega"])) || todayInput(),
         monedaId: firstString(raw, ["monedaId", "MonedaId"]) || "001",
         tipoCambio: firstString(raw, ["tipoCambio", "tipo_cambio", "TipoCambio"]) || "1",
+        subtotalAfecto: firstString(raw, ["subtotalAfecto", "subtotal_afecto", "SubtotalAfecto", "valorventaAfecto", "valorventa_afecto", "ValorventaAfecto"]) || "0",
+        subtotalExonerado: firstString(raw, ["subtotalExonerado", "subtotal_exonerado", "SubtotalExonerado", "valorventaExonerado", "valorventa_exonerado", "ValorventaExonerado", "subtotalInafecto", "subtotal_inafecto", "SubtotalInafecto"]) || "0",
         descuentoGlobal: firstString(raw, ["descuentoGlobal", "descuento_global", "DescuentoGlobal"]) || "0",
         tipoPagoId: firstString(raw, ["tipoPagoId", "tipopagoId", "TipoPagoId"]),
         proveedorId: firstString(raw, ["proveedorId", "ProveedorId"]),
@@ -281,12 +328,16 @@ export default function OrdenCompraServicioForm({
         bienId: "",
         bienLabel: "",
         bienCodigo: "",
+        operacionItemId: "",
+        operacionItemLabel: "",
+        afectoInafecto: false,
         presentacionId: "",
         presentacionLabel: "",
         presentacionCantidad: 1,
         cantidad: "1",
         costo: "0",
-        descuentoProducto: "0",
+        importe: "",
+        importeDesdeBackend: false,
         observacion: ""
     });
 
@@ -331,21 +382,62 @@ export default function OrdenCompraServicioForm({
     }, [formData.fechaEmision, isReadOnly]);
 
     const totals = useMemo(() => {
-        const bruto = formData.detalles.reduce((sum, detalle) => sum + getDetalleNeto(detalle), 0);
+        let sumaAfectoBruto = 0;
+        let sumaExoneradoBruto = 0;
+
+        formData.detalles.forEach(detalle => {
+            const neto = getDetalleNeto(detalle);
+            if (detalleEsAfecto(detalle)) {
+                sumaAfectoBruto += neto;
+            } else {
+                sumaExoneradoBruto += neto;
+            }
+        });
+
+        if (formData.detalles.length === 0) {
+            const subtotalAfecto = roundDecimal(toNumber(formData.subtotalAfecto));
+            const subtotalExonerado = roundDecimal(toNumber(formData.subtotalExonerado));
+            const subtotal = roundDecimal(subtotalAfecto + subtotalExonerado);
+            const igv = roundDecimal(subtotalAfecto * IGV_RATE);
+
+            return {
+                subtotalAfecto,
+                subtotalExonerado,
+                subtotal,
+                igv,
+                total: roundDecimal(subtotal + igv)
+            };
+        }
+
+        const brutoTotal = sumaAfectoBruto + sumaExoneradoBruto;
         const descuentoGlobal = toNumber(formData.descuentoGlobal);
-        const base = roundDecimal(Math.max(bruto - descuentoGlobal, 0));
-        const subtotalAfecto = roundDecimal(formData.incluyeIgv ? base : 0);
-        const subtotalInafecto = roundDecimal(formData.incluyeIgv ? 0 : base);
-        const igv = roundDecimal(formData.incluyeIgv ? subtotalAfecto * IGV_RATE : 0);
+        const baseTotal = roundDecimal(Math.max(brutoTotal - descuentoGlobal, 0));
+        const afectoRatio = brutoTotal > 0 ? sumaAfectoBruto / brutoTotal : 0;
+
+        // Bases (con descuento global ya prorrateado) de cada grupo tributario.
+        const sumaSubTotalAfecto = roundDecimal(baseTotal * afectoRatio);
+        const subtotalExonerado = roundDecimal(baseTotal - sumaSubTotalAfecto);
+
+        let subtotalAfecto: number;
+
+        if (formData.incluyeIgv) {
+            // El precio del producto ya incluye el IGV: se extrae del monto afecto.
+            subtotalAfecto = roundDecimal(sumaSubTotalAfecto / (1 + IGV_RATE));
+        } else {
+            // El precio del producto no incluye IGV: se suma sobre el monto afecto.
+            subtotalAfecto = sumaSubTotalAfecto;
+        }
+
+        const igv = roundDecimal(subtotalAfecto * IGV_RATE);
 
         return {
             subtotalAfecto,
-            subtotalInafecto,
-            subtotal: base,
+            subtotalExonerado,
+            subtotal: roundDecimal(subtotalAfecto + subtotalExonerado),
             igv,
-            total: roundDecimal(base + igv)
+            total: roundDecimal(subtotalAfecto + subtotalExonerado + igv)
         };
-    }, [formData.detalles, formData.descuentoGlobal, formData.incluyeIgv]);
+    }, [formData.detalles, formData.descuentoGlobal, formData.incluyeIgv, formData.subtotalAfecto, formData.subtotalExonerado]);
 
     const fallbackLabels = useMemo(() => {
         const raw = (initialValue || {}) as Record<string, unknown>;
@@ -495,12 +587,16 @@ export default function OrdenCompraServicioForm({
             bienId: "",
             bienLabel: "",
             bienCodigo: "",
+            operacionItemId: "",
+            operacionItemLabel: "",
+            afectoInafecto: false,
             presentacionId: "",
             presentacionLabel: "",
             presentacionCantidad: 1,
             cantidad: "1",
             costo: "0",
-            descuentoProducto: "0",
+            importe: "",
+            importeDesdeBackend: false,
             observacion: ""
         });
         setPresentacionOptions([]);
@@ -510,12 +606,17 @@ export default function OrdenCompraServicioForm({
         const producto = option?.raw as Producto | undefined;
         const bienId = String(value || "").trim();
         const costo = Number(producto?.costo ?? 0);
+        const operacionItem = getOperacionItem((producto || {}) as Record<string, unknown>);
+        const afectoInafecto = boolValueFromSource(producto?.afecto_inafecto, false);
 
         setAddForm(prev => ({
             ...prev,
             bienId,
             bienLabel: String(option?.label || producto?.descripcion || "").trim(),
             bienCodigo: String(option?.aux || producto?.codigo_existencia || "").trim(),
+            operacionItemId: operacionItem.id,
+            operacionItemLabel: operacionItem.label,
+            afectoInafecto,
             presentacionId: "",
             presentacionLabel: "",
             presentacionCantidad: 1,
@@ -580,7 +681,12 @@ export default function OrdenCompraServicioForm({
         setFormData(prev => ({
             ...prev,
             detalles: prev.detalles.map((detalle, idx) => (
-                idx === index ? { ...detalle, [field]: value } : detalle
+                idx === index ? {
+                    ...detalle,
+                    [field]: value,
+                    importe: field === "cantidad" || field === "costo" ? "" : detalle.importe,
+                    importeDesdeBackend: field === "cantidad" || field === "costo" ? false : detalle.importeDesdeBackend
+                } : detalle
             ))
         }));
     };
@@ -603,6 +709,8 @@ export default function OrdenCompraServicioForm({
         monedaId: formData.monedaId.trim() || null,
         tipoCambio: roundDecimal(toNumber(formData.tipoCambio)),
         subtotal: roundDecimal(totals.subtotal),
+        subtotalAfecto: roundDecimal(totals.subtotalAfecto),
+        subtotalExonerado: roundDecimal(totals.subtotalExonerado),
         igv: roundDecimal(totals.igv),
         total: roundDecimal(totals.total),
         descuentoGlobal: roundDecimal(toNumber(formData.descuentoGlobal)),
@@ -620,7 +728,8 @@ export default function OrdenCompraServicioForm({
             cantidad: roundDecimal(toNumber(detalle.cantidad)),
             costo: roundDecimal(toNumber(detalle.costo)),
             importe: roundDecimal(getDetalleImporte(detalle)),
-            descuentoProducto: roundDecimal(toNumber(detalle.descuentoProducto)),
+            descuentoProducto: 0,
+            afectoInafecto: detalle.afectoInafecto,
             observacion: detalle.observacion.trim() || null
         }))
     });
@@ -838,12 +947,12 @@ export default function OrdenCompraServicioForm({
                             <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
                                 <div className="space-y-4 text-sm">
                                     <div>
-                                        <p className="text-xs font-black uppercase text-slate-800">Subtotal(Afecto):</p>
+                                        <p className="text-xs font-black uppercase text-slate-800">Subtotal (Afecto):</p>
                                         <p className="mt-1 text-lg font-black text-slate-900">S/ {toMoney(totals.subtotalAfecto)}</p>
                                     </div>
                                     <div>
-                                        <p className="text-xs font-black uppercase text-slate-800">Subtotal(Exonerado):</p>
-                                        <p className="mt-1 text-lg font-black text-slate-900">S/ {toMoney(totals.subtotalInafecto)}</p>
+                                        <p className="text-xs font-black uppercase text-slate-800">Subtotal (Exonerado):</p>
+                                        <p className="mt-1 text-lg font-black text-slate-900">S/ {toMoney(totals.subtotalExonerado)}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs font-black uppercase text-slate-800">IGV:</p>
@@ -869,14 +978,13 @@ export default function OrdenCompraServicioForm({
                     </div>
 
                     <div className="overflow-visible min-h-[250px]">
-                        <table className="w-full min-w-[1040px] text-left text-xs">
+                        <table className="w-full min-w-[920px] text-left text-xs">
                             <thead className="bg-slate-50 font-semibold uppercase text-slate-500">
                                 <tr>
                                     <th className="w-8 p-3">#</th>
                                     <th className="w-[30%] p-3">Producto</th>
                                     <th className="w-44 p-3">Presentación</th>
                                     <th className="w-24 p-3 text-right">Cant.</th>
-                                    <th className="w-28 p-3 text-right">Conv. Total</th>
                                     <th className="w-28 p-3 text-right">Precio Compra</th>
                                     <th className="w-28 p-3 text-right">Total</th>
                                     {!isReadOnly && <th className="w-14 p-3 text-center">Acc.</th>}
@@ -904,6 +1012,13 @@ export default function OrdenCompraServicioForm({
                                                 onChange={(event) => handleProductoChange(event.target.value, (event as unknown as { option?: SelectOption }).option)}
                                                 placeholder="Buscar producto"
                                             />
+                                            {addForm.operacionItemLabel && (
+                                                <p className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-tight ${
+                                                    detalleEsAfecto(addForm) ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                                                }`}>
+                                                    {addForm.operacionItemLabel}
+                                                </p>
+                                            )}
                                         </td>
                                         <td className="p-3">
                                             <SearchableSelect
@@ -923,13 +1038,6 @@ export default function OrdenCompraServicioForm({
                                                 value={addForm.cantidad}
                                                 onChange={(event) => setAddForm(prev => ({ ...prev, cantidad: event.target.value }))}
                                                 className="h-[38px] w-full rounded-lg border border-slate-200 bg-white p-2 text-right font-mono text-xs font-bold outline-none focus:border-blue-500"
-                                            />
-                                        </td>
-                                        <td className="p-3">
-                                            <input
-                                                value={addTotalPresentacion.toFixed(2)}
-                                                disabled
-                                                className="h-[38px] w-full rounded-lg border border-slate-200 bg-slate-50 p-2 text-right font-mono text-xs font-bold text-slate-500"
                                             />
                                         </td>
                                         <td className="p-3">
@@ -964,21 +1072,27 @@ export default function OrdenCompraServicioForm({
 
                                 {formData.detalles.length === 0 ? (
                                     <tr>
-                                        <td colSpan={isReadOnly ? 7 : 8} className="p-8 text-center italic text-slate-400">
+                                        <td colSpan={isReadOnly ? 6 : 7} className="p-8 text-center italic text-slate-400">
                                             No hay items. Agregue productos al detalle.
                                         </td>
                                     </tr>
                                 ) : (
                                     formData.detalles.map((detalle, index) => {
-                                        const totalPresentacion = toNumber(detalle.cantidad) * detalle.presentacionCantidad;
                                         const importe = getDetalleImporte(detalle);
 
                                         return (
                                             <tr key={`${detalle.bienId}-${detalle.presentacionId}-${index}`} className="transition-colors hover:bg-slate-50">
                                                 <td className="p-3 text-center font-mono text-slate-400">{index + 1}</td>
-                                                <td className="p-3">
+                                                <td className="p-3 py-4">
                                                     <p className="font-bold text-slate-700">{detalle.bienLabel || detalle.bienId}</p>
                                                     {detalle.bienCodigo && <p className="mt-0.5 font-mono text-[10px] text-slate-400">{detalle.bienCodigo}</p>}
+                                                    {detalle.operacionItemLabel && (
+                                                        <p className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase leading-tight ${
+                                                            detalleEsAfecto(detalle) ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"
+                                                        }`}>
+                                                            {detalle.operacionItemLabel}
+                                                        </p>
+                                                    )}
                                                 </td>
                                                 <td className="p-3 font-semibold text-slate-700">{detalle.presentacionLabel || detalle.presentacionId}</td>
                                                 <td className="p-3 text-right">
@@ -995,7 +1109,6 @@ export default function OrdenCompraServicioForm({
                                                         />
                                                     )}
                                                 </td>
-                                                <td className="p-3 text-right font-mono font-bold text-blue-700">{toMoney(totalPresentacion)}</td>
                                                 <td className="p-3 text-right">
                                                     {isReadOnly ? (
                                                         <span className="font-mono font-bold text-slate-700">{toMoney(toNumber(detalle.costo))}</span>

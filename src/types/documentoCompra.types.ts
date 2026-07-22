@@ -1,24 +1,26 @@
-// src/types/documentoCompra.types.ts
-
 export interface DocumentoCompraTipoDocumentoComercial {
+    tipodoccomercialId?: string;
     descripcion?: string;
     abreviatura?: string;
     codtablaSunat?: string;
 }
 
 export interface DocumentoCompraProveedor {
+    proveedorId?: string;
     descripcion?: string;
     numero_doc?: string;
     direccion?: string;
 }
 
 export interface DocumentoCompraMoneda {
+    monedaId?: string;
     descripcion?: string;
     abreviatura?: string;
     simbolomoneda?: string;
 }
 
 export interface DocumentoCompraTipoPago {
+    tipopagoId?: string;
     descripcion?: string;
     estado?: boolean;
 }
@@ -34,12 +36,28 @@ export interface DocumentoCompraEmpresa {
 }
 
 export interface DocumentoCompraDetalleBien {
+    bienId?: string;
     descripcion?: string;
     codigo_existencia?: string;
+    cod_admin?: string | number;
+    afecto_inafecto?: boolean;
+    operacionesItemId?: string;
+    operacionesItem?: {
+        operacionesItemId?: string;
+        descripcion?: string;
+        valor?: number;
+    };
+    operacionItem?: {
+        operacionesItemId?: string;
+        descripcion?: string;
+        valor?: number;
+    };
 }
 
 export interface DocumentoCompraDetallePresentacion {
+    presentacionId?: string;
     descripcion?: string;
+    cantidad?: number;
     estado?: boolean;
 }
 
@@ -48,52 +66,62 @@ export interface DocumentoCompraDetalle {
     bienId?: string;
     presentacionId?: string;
     cantidad?: number;
-    conversionTotal?: number;
     costo?: number;
     importe?: number;
     saldoCantidad?: number;
     descuentoProducto?: number;
+    descuento_producto?: number;
     afectoInafecto?: boolean;
+    afecto_inafecto?: boolean;
     observacion?: string;
     saldoTemporal?: number;
     igvCosto?: number;
     condicionEstado?: string;
     maximoExceso?: number;
+    maximo_exceso?: number;
     bien?: DocumentoCompraDetalleBien;
     presentacion?: DocumentoCompraDetallePresentacion;
 }
 
 export interface DocumentoCompra {
-    documentocompraId: string;
+    documentocompraId?: string;
+    documentoCompraId?: string;
     ordencompraservicioId?: string | null;
+    ordenCompraServicioId?: string | null;
     tipodoccomercialId?: string | null;
+    tipoDocComercialId?: string | null;
     serie?: string | null;
     numero?: string | null;
-
-    // Compatibilidad con respuestas legacy y nuevas
     fechaEmision?: string | null;
     fechaDoc?: string | null;
     fecha_emision?: string | null;
     fecha_doc?: string | null;
-
     guiasremisionId?: string | null;
+    guiasRemisionId?: string | null;
     proveedorId?: string | null;
     monedaId?: string | null;
     valorventaAfecto?: number | null;
-    valorventaInafecto?: number | null;
+    valorVentaAfecto?: number | null;
     valorventa_afecto?: number | null;
+    valorventaExonerado?: number | null;
+    valorVentaExonerado?: number | null;
+    valorventa_exonerado?: number | null;
+    valorventaInafecto?: number | null;
     valorventa_inafecto?: number | null;
     igv?: number | null;
     total?: number | null;
     saldo?: number | null;
     observacion?: string | null;
     tipopagoId?: string | null;
+    tipoPagoId?: string | null;
     detraccion?: boolean | null;
     fotoDocumentocompra?: string | null;
+    fotoDocumentoCompra?: string | null;
     foto_documentocompra?: string | null;
     estado?: string | null;
     empresaId?: string | null;
     cuentausuarioId?: string | null;
+    cuentaUsuarioId?: string | null;
     tipoCompra?: string | null;
     tipo_compra?: string | null;
     documentoReferencia?: string | null;
@@ -103,7 +131,6 @@ export interface DocumentoCompra {
     incluye_igv?: boolean | null;
     tipoCambio?: number | null;
     tipo_cambio?: number | null;
-
     tipoDocumento?: DocumentoCompraTipoDocumentoComercial;
     tipoDocumentoComercial?: DocumentoCompraTipoDocumentoComercial;
     proveedor?: DocumentoCompraProveedor;
@@ -113,15 +140,64 @@ export interface DocumentoCompra {
     empresa?: DocumentoCompraEmpresa;
     detalles?: DocumentoCompraDetalle[];
 }
-// El reflejo de tu ParseFilters en C#
+
 export interface DocumentoCompraFiltros {
-    tipo_documento?: string[];
-    proveedor?: string[];
-    moneda?: string[];
-    tipo_pago?: string[];
-    estado?: number;
-    fecha_inicio?: string; // Formato YYYY-MM-DD
-    fecha_fin?: string;    // Formato YYYY-MM-DD
-    tipo_compra?: string;  // "IMPORTACION" | "COMPRA NACIONAL"
-    estados_excluidos?: string[]; // ["COMPROMETIDO", "ANULADO"]
+    tipo_documento?: Array<string | number>;
+    proveedor?: Array<string | number>;
+    moneda?: Array<string | number>;
+    tipo_pago?: Array<string | number>;
+    estado?: string | number;
+    fecha_inicio?: string;
+    fecha_fin?: string;
+    tipo_compra?: string;
+    estados_excluidos?: Array<string | number>;
+}
+
+export interface DocumentoCompraDetallePayload {
+    bienId: string;
+    presentacionId: string;
+    item: number;
+    cantidad: number;
+    costo: number;
+    importe: number;
+    descuentoProducto: number;
+    observacion: string | null;
+    maximoExceso: number;
+}
+
+export interface DocumentoCompraPayload {
+    ordenCompraServicioId: string | null;
+    tipoDocComercialId: string;
+    serie: string;
+    numero: string;
+    fechaEmision: string;
+    fechaDoc: string;
+    guiasRemisionId: string | null;
+    proveedorId: string;
+    monedaId: string;
+    valorVentaAfecto: number;
+    valorVentaExonerado: number;
+    igv: number;
+    total: number;
+    saldo: number;
+    observacion: string | null;
+    tipoPagoId: string;
+    detraccion: boolean;
+    fotoDocumentoCompra: string | null;
+    cuentaUsuarioId: string;
+    tipoCompra: string;
+    documentoReferencia: string | null;
+    motivoElectronicoId: string | null;
+    incluyeIgv: boolean;
+    tipoCambio: number;
+    igvPorcentaje: number;
+    detalles: DocumentoCompraDetallePayload[];
+}
+
+export interface TipoDocumentoComercialCompra {
+    tipodoccomercialId: string;
+    descripcion: string;
+    abreviatura?: string;
+    estado?: boolean;
+    tabla_referencia?: string;
 }

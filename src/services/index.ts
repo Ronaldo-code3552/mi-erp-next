@@ -21,3 +21,4 @@ export * from './trabajadorService';
 export * from './tipoCambioUniversalService';
 export * from './bancoService';
 export * from './cuentasProveedorService';
+export * from './documentoCompraService';

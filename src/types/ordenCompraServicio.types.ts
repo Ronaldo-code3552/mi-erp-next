@@ -34,6 +34,9 @@ export interface OrdenCompraServicioDetalle {
     descuentoProducto?: number | string | null;
     descuento_producto?: number | string | null;
     DescuentoProducto?: number | string | null;
+    afectoInafecto?: boolean | number | string | null;
+    afecto_inafecto?: boolean | number | string | null;
+    AfectoInafecto?: boolean | number | string | null;
     observacion?: string | null;
     Observacion?: string | null;
     bien?: {
@@ -42,6 +45,12 @@ export interface OrdenCompraServicioDetalle {
         codigo_existencia?: string;
         costo?: number;
         cod_admin?: number;
+        operacionesItemId?: string;
+        operacionesitemId?: string;
+        operacionesItem?: { operacionesItemId?: string; descripcion?: string; valor?: number };
+        operacionItem?: { descripcion?: string; valor?: number };
+        afecto_inafecto?: boolean | number | string | null;
+        afectoInafecto?: boolean | number | string | null;
     };
     Bien?: {
         bienId?: string;
@@ -49,6 +58,12 @@ export interface OrdenCompraServicioDetalle {
         codigo_existencia?: string;
         costo?: number;
         cod_admin?: number;
+        operacionesItemId?: string;
+        operacionesitemId?: string;
+        operacionesItem?: { operacionesItemId?: string; descripcion?: string; valor?: number };
+        operacionItem?: { descripcion?: string; valor?: number };
+        afecto_inafecto?: boolean | number | string | null;
+        afectoInafecto?: boolean | number | string | null;
     };
     presentacion?: {
         presentacionId?: string;
@@ -100,9 +115,18 @@ export interface OrdenCompraServicio {
     subtotalAfecto?: number | string | null;
     subtotal_afecto?: number | string | null;
     SubtotalAfecto?: number | string | null;
+    valorventaAfecto?: number | string | null;
+    valorventa_afecto?: number | string | null;
+    ValorventaAfecto?: number | string | null;
     subtotalInafecto?: number | string | null;
     subtotal_inafecto?: number | string | null;
     SubtotalInafecto?: number | string | null;
+    subtotalExonerado?: number | string | null;
+    subtotal_exonerado?: number | string | null;
+    SubtotalExonerado?: number | string | null;
+    valorventaExonerado?: number | string | null;
+    valorventa_exonerado?: number | string | null;
+    ValorventaExonerado?: number | string | null;
     igv?: number | string | null;
     Igv?: number | string | null;
     total?: number | string | null;
@@ -166,6 +190,8 @@ export interface OrdenCompraServicioPayload {
     monedaId?: string | null;
     tipoCambio?: number | null;
     subtotal?: number | null;
+    subtotalAfecto?: number | null;
+    subtotalExonerado?: number | null;
     igv?: number | null;
     total?: number | null;
     descuentoGlobal?: number | null;
@@ -187,6 +213,7 @@ export interface OrdenCompraServicioDetallePayload {
     costo?: number | null;
     importe?: number | null;
     descuentoProducto?: number | null;
+    afectoInafecto?: boolean | null;
     observacion?: string | null;
 }
 
@@ -197,6 +224,7 @@ export interface OrdenCompraServicioDetalleCreatePayload {
     Costo?: number | null;
     Importe?: number | null;
     DescuentoProducto?: number | null;
+    AfectoInafecto?: boolean | null;
     Observacion?: string | null;
 }
 
@@ -210,6 +238,8 @@ export interface OrdenCompraServicioCreatePayload {
     MonedaId?: string | null;
     TipoCambio?: number | null;
     Subtotal?: number | null;
+    SubtotalAfecto?: number | null;
+    SubtotalExonerado?: number | null;
     Igv?: number | null;
     Total?: number | null;
     DescuentoGlobal?: number | null;

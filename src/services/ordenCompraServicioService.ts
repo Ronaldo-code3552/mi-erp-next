@@ -63,6 +63,8 @@ const toCreatePayload = (payload: OrdenCompraServicioPayload): OrdenCompraServic
     MonedaId: payload.monedaId?.trim() || null,
     TipoCambio: asNumber(payload.tipoCambio),
     Subtotal: asNumber(payload.subtotal),
+    SubtotalAfecto: asNumber(payload.subtotalAfecto),
+    SubtotalExonerado: asNumber(payload.subtotalExonerado),
     Igv: asNumber(payload.igv),
     Total: asNumber(payload.total),
     DescuentoGlobal: asNumber(payload.descuentoGlobal),
@@ -83,6 +85,7 @@ const toDetallePayload = (detalle: NonNullable<OrdenCompraServicioPayload['detal
     Costo: asNumber(detalle.costo),
     Importe: asNumber(detalle.importe),
     DescuentoProducto: asNumber(detalle.descuentoProducto) ?? 0,
+    AfectoInafecto: detalle.afectoInafecto ?? null,
     Observacion: detalle.observacion?.trim() || null
 });
 

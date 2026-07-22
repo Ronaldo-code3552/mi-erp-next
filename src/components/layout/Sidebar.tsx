@@ -25,7 +25,8 @@ import {
   IconAddressBook,
   IconTemplate,
   IconBuildingStore,
-  IconShoppingCart
+  IconShoppingCart,
+  IconReceipt
 } from "@tabler/icons-react";
 
 const Sidebar = () => {
@@ -37,6 +38,7 @@ const Sidebar = () => {
     { title: 'Maestro Conductores', icon: <IconSteeringWheel size={20} />, path: '/dashboard/conductores' },
     { title: 'Proveedores', icon: <IconBuildingStore size={20} />, path: '/dashboard/proveedor' },
     { title: 'Orden Compra/Servicio', icon: <IconShoppingCart size={20} />, path: '/dashboard/orden-compra-servicio' },
+    { title: 'Documento Comercial', icon: <IconReceipt size={20} />, path: '/dashboard/documento-comercial' },
     { title: 'Transportistas', icon: <IconTruckDelivery size={20} />, path: '/dashboard/transportistas' },
     { title: 'Unidad Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/unidad-transporte' },
     { title: 'Guias Remision', icon: <IconFileInvoice size={20} />, path: '/dashboard/guias-remision' },

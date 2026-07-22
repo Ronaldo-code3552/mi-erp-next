@@ -13,7 +13,6 @@ import {
     IconFilter,
     IconRefresh,
     IconSearch,
-    IconTrash,
     IconWallet
 } from "@tabler/icons-react";
 
@@ -85,6 +84,11 @@ const getProveedorDireccion = (row: Proveedor) => {
 
 const getProveedorEstado = (row: Proveedor) => {
     return row.estado ?? row.Estado ?? true;
+};
+
+const isProveedorAnulado = (row: Proveedor) => {
+    const estado: unknown = getProveedorEstado(row);
+    return estado === false || estado === 0 || String(estado).trim() === "0";
 };
 
 export default function ProveedorPage() {
@@ -171,6 +175,8 @@ export default function ProveedorPage() {
         setFilters(initialFilters);
     };
 
+    // Proceso conservado para reactivar la eliminación cuando vuelva a usarse en la UI.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const handleDelete = async (row: Proveedor) => {
         const proveedorId = getProveedorId(row);
         if (!proveedorId) return;
@@ -267,11 +273,11 @@ export default function ProveedorPage() {
                             {getProveedorDescripcion(row)}
                         </p>
                         <span className={`inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase ${
-                            getProveedorEstado(row) === false
+                            isProveedorAnulado(row)
                                 ? "border-red-100 bg-red-50 text-red-600"
                                 : "border-emerald-200 bg-emerald-50 text-emerald-700"
                         }`}>
-                            {getProveedorEstado(row) === false ? "Anulado" : "Activo"}
+                            {isProveedorAnulado(row) ? "Anulado" : "Activo"}
                         </span>
                     </div>
                 </div>
@@ -308,51 +314,50 @@ export default function ProveedorPage() {
             header: "Acciones",
             width: "160px",
             className: "text-center",
-            render: (row: Proveedor) => (
-                <div className="flex items-center justify-center gap-1">
-                    <button
-                        type="button"
-                        onClick={() => setCuentasProveedor(row)}
-                        className="rounded p-1.5 text-slate-400 transition-colors hover:bg-cyan-50 hover:text-cyan-600"
-                        title="Cuentas"
-                    >
-                        <IconWallet size={17} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => getProveedorId(row) && router.push(`/dashboard/proveedor/editar/${getProveedorId(row)}?mode=view`)}
-                        className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-blue-600"
-                        title="Ver detalle"
-                    >
-                        <IconEye size={17} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => getProveedorId(row) && router.push(`/dashboard/proveedor/editar/${getProveedorId(row)}`)}
-                        className="rounded p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600"
-                        title="Editar"
-                    >
-                        <IconEdit size={17} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => handleAnular(row)}
-                        disabled={getProveedorEstado(row) === false}
-                        className="rounded p-1.5 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 disabled:cursor-not-allowed disabled:opacity-30"
-                        title="Anular"
-                    >
-                        <IconBan size={17} />
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => handleDelete(row)}
-                        className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600"
-                        title="Borrar"
-                    >
-                        <IconTrash size={17} />
-                    </button>
-                </div>
-            )
+            render: (row: Proveedor) => {
+                const proveedorId = getProveedorId(row);
+                const anulado = isProveedorAnulado(row);
+
+                return (
+                    <div className="flex items-center justify-center gap-1">
+                        <button
+                            type="button"
+                            onClick={() => setCuentasProveedor(row)}
+                            disabled={anulado}
+                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-cyan-50 hover:text-cyan-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                            title={anulado ? "Proveedor anulado" : "Cuentas"}
+                        >
+                            <IconWallet size={17} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => proveedorId && router.push(`/dashboard/proveedor/editar/${proveedorId}?mode=view`)}
+                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-slate-50 hover:text-blue-600"
+                            title="Ver detalle"
+                        >
+                            <IconEye size={17} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => proveedorId && router.push(`/dashboard/proveedor/editar/${proveedorId}`)}
+                            disabled={anulado}
+                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                            title={anulado ? "Proveedor anulado" : "Editar"}
+                        >
+                            <IconEdit size={17} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleAnular(row)}
+                            disabled={anulado}
+                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400"
+                            title={anulado ? "Proveedor anulado" : "Anular"}
+                        >
+                            <IconBan size={17} />
+                        </button>
+                    </div>
+                );
+            }
         }
     ];
 

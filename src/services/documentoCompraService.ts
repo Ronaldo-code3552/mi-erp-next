@@ -1,100 +1,171 @@
-// src/services/documentoCompraService.ts
-import apiClient from '../api/apiCliente';
-import { DocumentoCompra, DocumentoCompraFiltros } from '../types/documentoCompra.types'; // 🚀 Importamos la nueva interfaz
-import { ApiResponse } from '../types';
+import apiClient from "@/api/apiCliente";
+import { ApiResponse } from "@/types";
+import {
+    DocumentoCompra,
+    DocumentoCompraFiltros,
+    DocumentoCompraPayload,
+    TipoDocumentoComercialCompra
+} from "@/types/documentoCompra.types";
 
-// 🚀 Función auxiliar para no repetir código (D.R.Y.)
-const buildFiltersString = (filtros: DocumentoCompraFiltros | null | undefined): string | null => {
-    if (!filtros) return null;
+const EMPRESA_ID = "005";
+const BASE_URL = "/DocumentoCompra";
 
-    const cleaned: any = {};
-    let hasData = false;
-
-    Object.keys(filtros).forEach(key => {
-        const value = (filtros as any)[key];
-        if (value !== undefined && value !== null && value !== '') {
-            if (Array.isArray(value)) {
-                if (value.length > 0) {
-                    cleaned[key] = value;
-                    hasData = true;
-                }
-            } else {
-                cleaned[key] = value;
-                hasData = true;
-            }
-        }
-    });
-
-    return hasData ? JSON.stringify(cleaned) : null;
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (typeof error === "object" && error !== null) {
+        const response = (error as { response?: { data?: { message?: unknown } } }).response;
+        if (typeof response?.data?.message === "string") return response.data.message;
+    }
+    return error instanceof Error && error.message ? error.message : fallback;
 };
 
+const buildFiltersString = (filters?: DocumentoCompraFiltros) => {
+    if (!filters) return undefined;
+    const entries = Object.entries(filters).filter(([, value]) => (
+        Array.isArray(value) ? value.length > 0 : value !== undefined && value !== null && value !== ""
+    ));
+    return entries.length ? JSON.stringify(Object.fromEntries(entries)) : undefined;
+};
+
+const normalizeMeta = (meta: ApiResponse<unknown>["meta"], page: number, pageSize: number) => ({
+    totalRecords: Number(meta?.totalRecords ?? meta?.TotalRecords ?? 0),
+    totalPages: Number(meta?.totalPages ?? meta?.TotalPages ?? 1),
+    currentPage: Number(meta?.currentPage ?? meta?.CurrentPage ?? page),
+    pageSize: Number(meta?.pageSize ?? meta?.PageSize ?? pageSize)
+});
+
 export const documentoCompraService = {
-    
-    // Método clásico
     getByEmpresa: async (
         empresaId: string,
         page = 1,
         pageSize = 20,
-        term = '',
-        filtros?: DocumentoCompraFiltros // 🚀 Tipado fuerte
+        term = "",
+        filters: DocumentoCompraFiltros = {}
     ): Promise<ApiResponse<DocumentoCompra[]>> => {
-        
-        const filtersToSend = buildFiltersString(filtros); // 🚀 Usamos la función auxiliar
-
-        const response = await apiClient.get(`/DocumentoCompra/empresa/${empresaId}`, {
-            params: { page, pageSize, search: term, filters: filtersToSend }
-        });
-        return response.data;
+        try {
+            const response = await apiClient.get(`${BASE_URL}/empresa/${empresaId.trim()}`, {
+                params: { page, pageSize, search: term.trim() || undefined, filters: buildFiltersString(filters) }
+            });
+            const payload = response.data as ApiResponse<DocumentoCompra[]>;
+            return {
+                isSuccess: payload?.isSuccess ?? true,
+                data: payload?.data || [],
+                meta: normalizeMeta(payload?.meta, page, pageSize),
+                message: payload?.message
+            };
+        } catch (error) {
+            return { isSuccess: false, data: [], message: getErrorMessage(error, "Error al obtener documentos de compra") };
+        }
     },
 
-    // 🚀 MÉTODO: Obtiene solo los disponibles
-    getDisponiblesByEmpresa: async (
-        empresaId: string,
-        page: number = 1,
-        pageSize: number = 20,
-        searchTerm: string = '',
-        filtros: DocumentoCompraFiltros | null = null, // 🚀 Tipado fuerte
-        soloStock: boolean = false
-    ): Promise<ApiResponse<any>> => {
-        
-        const filtersToSend = buildFiltersString(filtros); // 🚀 Usamos la función auxiliar
-
-        const response = await apiClient.get(`/DocumentoCompra/empresa/${empresaId}/disponibles`, {
-            params: { 
-                page, 
-                pageSize, 
-                search: searchTerm, 
-                filters: filtersToSend, // Viaja como String JSON puro ✅
-                soloStock // Viaja como booleano puro ✅
-            }
-        });
-
-        return response.data;
+    getAll: async (
+        page = 1,
+        pageSize = 20,
+        term = "",
+        filters: DocumentoCompraFiltros = {}
+    ): Promise<ApiResponse<DocumentoCompra[]>> => {
+        try {
+            const response = await apiClient.get(`${BASE_URL}/empresa/${EMPRESA_ID}`, {
+                params: { page, pageSize, search: term.trim() || undefined, filters: buildFiltersString(filters) }
+            });
+            const payload = response.data as ApiResponse<DocumentoCompra[]>;
+            return {
+                isSuccess: payload?.isSuccess ?? true,
+                data: payload?.data || [],
+                meta: normalizeMeta(payload?.meta, page, pageSize),
+                message: payload?.message
+            };
+        } catch (error) {
+            return { isSuccess: false, data: [], message: getErrorMessage(error, "Error al obtener documentos de compra") };
+        }
     },
 
     getById: async (id: string): Promise<ApiResponse<DocumentoCompra>> => {
-        const safeId = id?.trim();
-        if (!safeId) throw new Error('El ID del documento es requerido');
-        const response = await apiClient.get(`/DocumentoCompra/${safeId}`);
-        const payload = response.data;
-        if (payload && typeof payload === 'object' && 'isSuccess' in payload) {
-            return payload as ApiResponse<DocumentoCompra>;
+        try {
+            const response = await apiClient.get(`${BASE_URL}/${id.trim()}`);
+            return response.data;
+        } catch (error) {
+            return { isSuccess: false, data: {}, message: getErrorMessage(error, "Error al obtener el documento de compra") };
         }
-        return { isSuccess: true, data: payload?.data ?? payload, message: 'Éxito' };
     },
 
-    create: async (data: Partial<DocumentoCompra>): Promise<ApiResponse<DocumentoCompra>> => {
-        const response = await apiClient.post(`/DocumentoCompra`, data);
-        return response.data;
+    getDisponiblesByEmpresa: async (
+        empresaId: string,
+        page = 1,
+        pageSize = 20,
+        term = "",
+        filters: DocumentoCompraFiltros = {},
+        soloStock = false
+    ): Promise<ApiResponse<DocumentoCompra[]>> => {
+        try {
+            const response = await apiClient.get(`${BASE_URL}/empresa/${empresaId.trim()}/disponibles`, {
+                params: {
+                    page,
+                    pageSize,
+                    search: term.trim() || undefined,
+                    filters: buildFiltersString(filters),
+                    soloStock
+                }
+            });
+            const payload = response.data as ApiResponse<DocumentoCompra[]>;
+            return {
+                isSuccess: payload?.isSuccess ?? true,
+                data: payload?.data || [],
+                meta: normalizeMeta(payload?.meta, page, pageSize),
+                message: payload?.message
+            };
+        } catch (error) {
+            return { isSuccess: false, data: [], message: getErrorMessage(error, "Error al obtener documentos disponibles") };
+        }
     },
 
-    update: async (id: string, data: Partial<DocumentoCompra>): Promise<ApiResponse<DocumentoCompra>> => {
-        const response = await apiClient.put(`/DocumentoCompra/${id}`, data);
-        return response.data;
+    create: async (data: DocumentoCompraPayload): Promise<ApiResponse<{ documentoCompraId?: string; documentocompraId?: string }>> => {
+        try {
+            const response = await apiClient.post(`${BASE_URL}/empresa/${EMPRESA_ID}`, data);
+            return response.data;
+        } catch (error) {
+            return { isSuccess: false, data: {}, message: getErrorMessage(error, "Error al crear el documento de compra") };
+        }
     },
 
-    delete: async (id: string): Promise<ApiResponse<any>> => {
-        const response = await apiClient.delete(`/DocumentoCompra/${id}`);
-        return response.data;
+    update: async (id: string, data: DocumentoCompraPayload): Promise<ApiResponse<unknown>> => {
+        try {
+            const response = await apiClient.put(`${BASE_URL}/empresa/${EMPRESA_ID}/${id.trim()}`, data);
+            return response.data;
+        } catch (error) {
+            return { isSuccess: false, data: null, message: getErrorMessage(error, "Error al actualizar el documento de compra") };
+        }
+    },
+
+    anular: async (id: string): Promise<ApiResponse<unknown>> => {
+        try {
+            const response = await apiClient.post(`${BASE_URL}/empresa/${EMPRESA_ID}/${id.trim()}/anular`);
+            return response.data;
+        } catch (error) {
+            return { isSuccess: false, data: null, message: getErrorMessage(error, "Error al anular el documento de compra") };
+        }
+    },
+
+    delete: async (id: string): Promise<ApiResponse<unknown>> => {
+        try {
+            const response = await apiClient.delete(`${BASE_URL}/empresa/${EMPRESA_ID}/${id.trim()}`);
+            return response.data;
+        } catch (error) {
+            return { isSuccess: false, data: null, message: getErrorMessage(error, "Error al eliminar el documento de compra") };
+        }
+    },
+
+    getTiposDocumento: async (term = ""): Promise<ApiResponse<TipoDocumentoComercialCompra[]>> => {
+        try {
+            const response = await apiClient.get("/TipoDocumentoComercial", {
+                params: { page: 1, pageSize: 20, search: term || "DOCUMENTO_COMPRA" }
+            });
+            const payload = response.data as ApiResponse<TipoDocumentoComercialCompra[]>;
+            const data = (payload.data || []).filter(item => (
+                item.estado !== false && String(item.tabla_referencia || "").toUpperCase() === "DOCUMENTO_COMPRA"
+            ));
+            return { ...payload, data };
+        } catch (error) {
+            return { isSuccess: false, data: [], message: getErrorMessage(error, "Error al obtener tipos de documento") };
+        }
     }
 };

@@ -36,3 +36,4 @@ export * from './trabajador.types';
 export * from './tipoCambioUniversal.types';
 export * from './banco.types';
 export * from './cuentasProveedor.types';
+export * from './documentoCompra.types';
