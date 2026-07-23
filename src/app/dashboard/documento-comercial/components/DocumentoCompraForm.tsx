@@ -60,10 +60,14 @@ type DetalleDraft = {
     presentacionCantidad: number;
     cantidad: string;
     costo: string;
+    conversionTotal: string;
+    conversionTotalDesdeBackend: boolean;
     importe: string;
     importeDesdeBackend: boolean;
     observacion: string;
     maximoExceso: string;
+    bloqueado: boolean;
+    origenImportado: boolean;
 };
 
 type FormValue = {
@@ -83,6 +87,8 @@ type FormValue = {
     observacion: string;
     fotoDocumentoCompra: string;
     incluyeIgv: boolean;
+    subtotalAfectoBase: string;
+    subtotalExoneradoBase: string;
     maximoExceso: string;
     saldo: string;
     estado: string;
@@ -146,13 +152,38 @@ const isAfecto = (detail: DetalleDraft) => detail.operacionItemId
     ? detail.operacionItemId === "1000"
     : detail.afectoInafecto;
 
-const importeOf = (detail: DetalleDraft) => {
-    const saved = numberOf(detail.importe);
-    if (detail.importeDesdeBackend) return round(saved);
-    return round(numberOf(detail.cantidad) * detail.presentacionCantidad * numberOf(detail.costo));
+const conversionTotalOf = (detail: DetalleDraft) => {
+    if (detail.conversionTotalDesdeBackend) return round(numberOf(detail.conversionTotal));
+
+    return round(numberOf(detail.cantidad) * detail.presentacionCantidad);
 };
 
-const normalizeDetails = (details: Array<DocumentoCompraDetalle | OrdenCompraServicioDetalle> = []): DetalleDraft[] => details.map(detail => {
+const importeOf = (detail: DetalleDraft) => round(numberOf(detail.cantidad) * numberOf(detail.costo));
+
+const getValorVentaAfecto = (source: Record<string, unknown>) => first(source, [
+    "valorVentaAfecto",
+    "valorventaAfecto",
+    "valorventa_afecto",
+    "ValorVentaAfecto",
+    "ValorventaAfecto",
+    "subtotalAfecto",
+    "SubtotalAfecto"
+]);
+
+const getValorVentaExonerado = (source: Record<string, unknown>) => first(source, [
+    "valorVentaExonerado",
+    "valorventaExonerado",
+    "valorventa_exonerado",
+    "ValorVentaExonerado",
+    "ValorventaExonerado",
+    "subtotalExonerado",
+    "SubtotalExonerado"
+]);
+
+const normalizeDetails = (
+    details: Array<DocumentoCompraDetalle | OrdenCompraServicioDetalle> = [],
+    options: { bloqueado?: boolean; origenImportado?: boolean } = {}
+): DetalleDraft[] => details.map(detail => {
     const raw = detail as Record<string, unknown>;
     const bien = nested(raw, ["bien", "Bien"]);
     const presentation = nested(raw, ["presentacion", "Presentacion"]);
@@ -161,7 +192,11 @@ const normalizeDetails = (details: Array<DocumentoCompraDetalle | OrdenCompraSer
     const costo = first(raw, ["costo", "Costo"]) || "0";
     const hasImporte = ["importe", "Importe"].some(key => raw[key] !== undefined && raw[key] !== null);
     const importe = first(raw, ["importe", "Importe"]);
-    const presentationQuantity = numberOf(presentation.cantidad) || 1;
+    const hasConversionTotal = ["conversionTotal", "conversion_total", "ConversionTotal"].some(key => raw[key] !== undefined && raw[key] !== null);
+    const conversionTotal = first(raw, ["conversionTotal", "conversion_total", "ConversionTotal"]);
+    const cantidadNumber = numberOf(cantidad);
+    const conversionNumber = numberOf(conversionTotal);
+    const presentationQuantity = numberOf(presentation.cantidad) || (cantidadNumber > 0 && hasConversionTotal ? conversionNumber / cantidadNumber : 0) || 1;
 
     return {
         bienId: first(raw, ["bienId", "BienId"]) || first(bien, ["bienId", "BienId"]),
@@ -175,10 +210,14 @@ const normalizeDetails = (details: Array<DocumentoCompraDetalle | OrdenCompraSer
         presentacionCantidad: presentationQuantity || 1,
         cantidad,
         costo,
+        conversionTotal: hasConversionTotal ? conversionTotal : "",
+        conversionTotalDesdeBackend: hasConversionTotal,
         importe,
         importeDesdeBackend: hasImporte,
         observacion: first(raw, ["observacion", "Observacion"]),
-        maximoExceso: first(raw, ["maximoExceso", "maximo_exceso", "MaximoExceso"]) || "0"
+        maximoExceso: first(raw, ["maximoExceso", "maximo_exceso", "MaximoExceso"]) || "0",
+        bloqueado: options.bloqueado ?? false,
+        origenImportado: options.origenImportado ?? false
     };
 });
 
@@ -186,9 +225,11 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
     const raw = (source || {}) as Record<string, unknown>;
     const order = nested(raw, ["ordenCompraServicio", "ordencompraServicio", "ordenCompra"]);
     const purchaseType = first(raw, ["tipoCompra", "tipo_compra", "TipoCompra"]);
+    const documentId = first(raw, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"]);
+    const orderId = first(raw, ["ordencompraservicioId", "ordenCompraServicioId", "OrdenCompraServicioId"]);
     return {
-        documentoCompraId: first(raw, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"]),
-        ordenCompraServicioId: first(raw, ["ordencompraservicioId", "ordenCompraServicioId", "OrdenCompraServicioId"]),
+        documentoCompraId: documentId,
+        ordenCompraServicioId: orderId,
         ordenNumero: first(order, ["numero_ordencompra", "numeroOrdenCompra"]) || first(raw, ["numeroOrdenCompra"]),
         tipoDocComercialId: first(raw, ["tipodoccomercialId", "tipoDocComercialId", "TipoDocComercialId"]),
         serie: first(raw, ["serie", "Serie"]),
@@ -203,17 +244,24 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
         observacion: first(raw, ["observacion", "Observacion"]),
         fotoDocumentoCompra: first(raw, ["fotoDocumentocompra", "fotoDocumentoCompra", "foto_documentocompra"]),
         incluyeIgv: boolOf(raw.incluyeIgv ?? raw.incluye_igv ?? raw.IncluyeIgv, false),
+        subtotalAfectoBase: documentId ? getValorVentaAfecto(raw) || "0" : "0",
+        subtotalExoneradoBase: documentId ? getValorVentaExonerado(raw) || "0" : "0",
         maximoExceso: first(((source?.detalles || [])[0] || {}) as Record<string, unknown>, ["maximoExceso", "maximo_exceso", "MaximoExceso"]) || "0",
         saldo: first(raw, ["saldo", "Saldo"]),
         estado: first(raw, ["estado", "Estado"]) || "REGISTRADO",
-        detalles: normalizeDetails((source?.detalles || []) as DocumentoCompraDetalle[])
+        detalles: normalizeDetails((source?.detalles || []) as DocumentoCompraDetalle[], {
+            bloqueado: Boolean(documentId),
+            origenImportado: Boolean(orderId)
+        })
     };
 };
 
 const emptyDetail = (): DetalleDraft => ({
     bienId: "", bienLabel: "", bienCodigo: "", operacionItemId: "", operacionItemLabel: "",
     afectoInafecto: false, presentacionId: "", presentacionLabel: "", presentacionCantidad: 1,
-    cantidad: "1", costo: "0", importe: "", importeDesdeBackend: false, observacion: "", maximoExceso: "0"
+    cantidad: "1", costo: "0", conversionTotal: "", conversionTotalDesdeBackend: false,
+    importe: "", importeDesdeBackend: false, observacion: "", maximoExceso: "0",
+    bloqueado: false, origenImportado: false
 });
 
 const Input = ({ label, disabled, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) => (
@@ -232,6 +280,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
     const [importedLabels, setImportedLabels] = useState({ provider: "", currency: "", payment: "" });
     const isEditing = Boolean(form.documentoCompraId);
     const isReadOnly = readOnly || form.estado.toUpperCase().includes("ANUL");
+    const igvLocked = isReadOnly || Boolean(form.ordenCompraServicioId);
 
     useEffect(() => setForm(normalizeForm(initialValue)), [initialValue]);
 
@@ -247,22 +296,26 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
     }, [isEditing, isReadOnly]);
 
     const totals = useMemo(() => {
-        let affectAmount = 0;
-        let exemptAmount = 0;
+        let newAffectAmount = 0;
+        let newExemptAmount = 0;
         form.detalles.forEach(detail => {
+            if (detail.bloqueado || detail.origenImportado) return;
+
             const amount = importeOf(detail);
-            if (isAfecto(detail)) affectAmount += amount;
-            else exemptAmount += amount;
+            if (isAfecto(detail)) newAffectAmount += amount;
+            else newExemptAmount += amount;
         });
-        // Una orden importada ya trae importe como valor de venta de línea.
-        // Se acumula íntegro según su operación tributaria, sin extraer IGV nuevamente.
-        const subtotalAfecto = round(form.ordenCompraServicioId
-            ? affectAmount
-            : (form.incluyeIgv ? affectAmount / (1 + IGV_RATE) : affectAmount));
-        const subtotalExonerado = round(exemptAmount);
+
+        const baseSubtotalAfecto = round(numberOf(form.subtotalAfectoBase));
+        const baseSubtotalExonerado = round(numberOf(form.subtotalExoneradoBase));
+        const newSubtotalAfecto = round(form.incluyeIgv ? newAffectAmount / (1 + IGV_RATE) : newAffectAmount);
+        const newSubtotalExonerado = round(newExemptAmount);
+        const subtotalAfecto = round(baseSubtotalAfecto + newSubtotalAfecto);
+        const subtotalExonerado = round(baseSubtotalExonerado + newSubtotalExonerado);
         const igv = round(subtotalAfecto * IGV_RATE);
+
         return { subtotalAfecto, subtotalExonerado, igv, total: round(subtotalAfecto + subtotalExonerado + igv) };
-    }, [form.detalles, form.incluyeIgv, form.ordenCompraServicioId]);
+    }, [form.detalles, form.incluyeIgv, form.subtotalAfectoBase, form.subtotalExoneradoBase]);
 
     const labels = useMemo(() => {
         const raw = (initialValue || {}) as Record<string, unknown>;
@@ -295,7 +348,10 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
         const provider = nested(raw, ["proveedor", "Proveedor"]);
         const currency = nested(raw, ["moneda", "Moneda"]);
         const payment = nested(raw, ["tipoPago", "TipoPago"]);
-        const details = normalizeDetails((order.detalles || order.Detalles || []) as OrdenCompraServicioDetalle[]);
+        const details = normalizeDetails((order.detalles || order.Detalles || []) as OrdenCompraServicioDetalle[], {
+            bloqueado: true,
+            origenImportado: true
+        });
         if (!details.length) return toast.warning("La orden seleccionada no contiene productos.");
 
         setImportedLabels({
@@ -312,6 +368,8 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
             tipoPagoId: first(raw, ["tipopagoId", "tipoPagoId", "TipoPagoId"]) || first(payment, ["tipopagoId"]),
             tipoCambio: first(raw, ["tipo_cambio", "tipoCambio", "TipoCambio"]) || previous.tipoCambio,
             incluyeIgv: boolOf(raw.incluye_igv ?? raw.incluyeIgv, previous.incluyeIgv),
+            subtotalAfectoBase: getValorVentaAfecto(raw) || "0",
+            subtotalExoneradoBase: getValorVentaExonerado(raw) || "0",
             detalles: details
         }));
         setOrderModalOpen(false);
@@ -327,7 +385,9 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
             proveedorId: "",
             monedaId: "001",
             tipoPagoId: "",
-            detalles: []
+            subtotalAfectoBase: "0",
+            subtotalExoneradoBase: "0",
+            detalles: previous.detalles.filter(detail => !detail.origenImportado)
         }));
         setOrderModalOpen(false);
         toast.success("Importación de orden limpiada.");
@@ -371,6 +431,8 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
             presentacionLabel: "",
             presentacionCantidad: 1,
             costo: String(product.costo || 0),
+            conversionTotal: "",
+            conversionTotalDesdeBackend: false,
             importe: "",
             importeDesdeBackend: false
         }));
@@ -394,9 +456,11 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
 
     const updateDetail = (index: number, field: "cantidad" | "costo", value: string) => setForm(previous => ({
         ...previous,
-        detalles: previous.detalles.map((item, detailIndex) => detailIndex === index ? {
+        detalles: previous.detalles.map((item, detailIndex) => detailIndex === index && !item.bloqueado ? {
             ...item,
             [field]: value,
+            conversionTotal: field === "cantidad" ? "" : item.conversionTotal,
+            conversionTotalDesdeBackend: field === "cantidad" ? false : item.conversionTotalDesdeBackend,
             importe: "",
             importeDesdeBackend: false
         } : item)
@@ -446,6 +510,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
                 item: index + 1,
                 cantidad: round(numberOf(detail.cantidad)),
                 costo: round(numberOf(detail.costo)),
+                conversionTotal: round(conversionTotalOf(detail)),
                 importe: importeOf(detail),
                 descuentoProducto: 0,
                 observacion: detail.observacion.trim() || null,
@@ -480,7 +545,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
                                 <label className="text-[10px] font-bold uppercase text-slate-500">N° Orden aprobada</label>
                                 <div className="flex h-[38px] min-w-0 gap-2">
                                     <input value={labels.order} readOnly placeholder="Sin orden importada" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-100 px-3 font-mono text-xs font-bold text-slate-600 outline-none" />
-                                    {!isReadOnly && form.ordenCompraServicioId && <button type="button" onClick={clearImportedOrder} className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Limpiar orden importada"><IconX size={17} /></button>}
+                                    {!isReadOnly && !isEditing && form.ordenCompraServicioId && <button type="button" onClick={clearImportedOrder} className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Limpiar orden importada"><IconX size={17} /></button>}
                                     {!isReadOnly && <button type="button" onClick={() => setOrderModalOpen(true)} disabled={Boolean(form.ordenCompraServicioId)} className="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-45"><IconSearch size={16} /> Cargar orden</button>}
                                 </div>
                             </div>
@@ -490,7 +555,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
                             <SearchableSelect label="Tipo Pago" value={form.tipoPagoId} fetchCustom={fetchPaymentOptions} fallbackLabel={labels.payment} disabled={isReadOnly || Boolean(form.ordenCompraServicioId)} onChange={event => setField("tipoPagoId", String(event.target.value))} />
                             <Input label="Observaciones" value={form.observacion} maxLength={250} disabled={isReadOnly} onChange={event => setField("observacion", event.target.value)} />
                             <div className="flex min-w-0 flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-slate-500">Documento de compra</label><input type="file" disabled={isReadOnly} onChange={event => setField("fotoDocumentoCompra", event.target.files?.[0]?.name || "")} className="h-[38px] min-w-0 rounded-lg border border-slate-200 p-1.5 text-xs file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1" /></div>
-                            <div className="flex flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-red-500">¿Incluye IGV?</label><div className="flex h-[38px] items-center gap-5 rounded-lg border border-slate-200 px-3 text-xs font-bold"><label className="flex gap-2"><input type="radio" checked={form.incluyeIgv} disabled={isReadOnly} onChange={() => setField("incluyeIgv", true)} />Sí</label><label className="flex gap-2"><input type="radio" checked={!form.incluyeIgv} disabled={isReadOnly} onChange={() => setField("incluyeIgv", false)} />No</label></div></div>
+                            <div className="flex flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-red-500">¿Incluye IGV?</label><div className={`flex h-[38px] items-center gap-5 rounded-lg border border-slate-200 px-3 text-xs font-bold ${igvLocked ? "bg-slate-100 text-slate-500" : ""}`}><label className="flex gap-2"><input type="radio" checked={form.incluyeIgv} disabled={igvLocked} onChange={() => setField("incluyeIgv", true)} />Sí</label><label className="flex gap-2"><input type="radio" checked={!form.incluyeIgv} disabled={igvLocked} onChange={() => setField("incluyeIgv", false)} />No</label></div></div>
                             <Input label="Máximo Exceso" type="number" min="0" step="1" value={form.maximoExceso} disabled={isReadOnly} onChange={event => setField("maximoExceso", event.target.value)} />
                         </div>
                         <aside className="space-y-4">
@@ -509,8 +574,149 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
                     <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2"><div className="flex items-center gap-2"><IconPackage size={19} className="text-blue-600" /><h2 className="text-sm font-bold uppercase">Detalle de productos</h2></div><span className="text-xs font-bold text-slate-400">{form.detalles.length} producto(s)</span></div>
                     <div className="overflow-auto"><table className="w-full min-w-[980px] text-left text-xs"><thead className="bg-slate-50 uppercase text-slate-500"><tr><th className="p-3">#</th><th className="w-[36%] p-3">Producto</th><th className="p-3">Presentación</th><th className="p-3 text-right">Cantidad</th><th className="p-3 text-right">Costo</th><th className="p-3 text-right">Total</th>{!isReadOnly && <th className="p-3 text-center">Acc.</th>}</tr></thead>
                         <tbody className="divide-y divide-slate-100">
-                            {!isReadOnly && <tr className="align-top"><td className="p-3 text-center">+</td><td className="p-3"><SearchableSelect value={addDetail.bienId} fetchCustom={fetchProductOptions} fallbackLabel={addDetail.bienLabel} placeholder="Buscar producto" onChange={event => handleProduct(event.option as SelectOption)} />{addDetail.operacionItemLabel && <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${isAfecto(addDetail) ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>{addDetail.operacionItemLabel}</span>}</td><td className="p-3"><SearchableSelect value={addDetail.presentacionId} options={presentationOptions} disabled={!addDetail.bienId} onChange={event => { const option = presentationOptions.find(item => String(item.value) === String(event.target.value)); setAddDetail(previous => ({ ...previous, presentacionId: String(event.target.value), presentacionLabel: String(option?.label || ""), presentacionCantidad: numberOf(option?.aux) || 1 })); }} /></td><td className="p-3"><input type="number" min="0.01" step="0.01" value={addDetail.cantidad} onChange={event => setAddDetail(previous => ({ ...previous, cantidad: event.target.value }))} className="h-[38px] w-full rounded-lg border border-slate-200 p-2 text-right" /></td><td className="p-3"><input type="number" min="0" step="0.01" value={addDetail.costo} onChange={event => setAddDetail(previous => ({ ...previous, costo: event.target.value }))} className="h-[38px] w-full rounded-lg border border-slate-200 p-2 text-right" /></td><td className="p-3 text-right font-mono font-bold text-emerald-700">{money(importeOf(addDetail))}</td><td className="p-3 text-center"><button type="button" onClick={addProduct} className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg bg-blue-50 text-blue-700" title="Agregar producto"><IconPlus size={17} /></button></td></tr>}
-                            {form.detalles.length === 0 ? <tr><td colSpan={isReadOnly ? 6 : 7} className="p-10 text-center italic text-slate-400">No hay productos en el documento.</td></tr> : form.detalles.map((detail, index) => <tr key={`${detail.bienId}-${detail.presentacionId}-${index}`}><td className="p-3 text-center text-slate-400">{index + 1}</td><td className="p-3"><p className="font-bold text-slate-700">{detail.bienLabel || detail.bienId}</p>{detail.operacionItemLabel && <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${isAfecto(detail) ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>{detail.operacionItemLabel}</span>}</td><td className="p-3 font-semibold">{detail.presentacionLabel || detail.presentacionId}</td><td className="p-3 text-right">{isReadOnly ? money(numberOf(detail.cantidad)) : <input type="number" min="0.01" step="0.01" value={detail.cantidad} onChange={event => updateDetail(index, "cantidad", event.target.value)} className="h-[34px] w-24 rounded-lg border border-slate-200 p-2 text-right" />}</td><td className="p-3 text-right">{isReadOnly ? money(numberOf(detail.costo)) : <input type="number" min="0" step="0.01" value={detail.costo} onChange={event => updateDetail(index, "costo", event.target.value)} className="h-[34px] w-24 rounded-lg border border-slate-200 p-2 text-right" />}</td><td className="p-3 text-right font-mono font-black text-emerald-700">{money(importeOf(detail))}</td>{!isReadOnly && <td className="p-3 text-center"><button type="button" onClick={() => setForm(previous => ({ ...previous, detalles: previous.detalles.filter((_, detailIndex) => detailIndex !== index) }))} className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Quitar producto"><IconTrash size={17} /></button></td>}</tr>)}
+                            {!isReadOnly && (
+                                <tr className="align-top">
+                                    <td className="p-3 text-center">+</td>
+                                    <td className="p-3">
+                                        <SearchableSelect
+                                            value={addDetail.bienId}
+                                            fetchCustom={fetchProductOptions}
+                                            fallbackLabel={addDetail.bienLabel}
+                                            placeholder="Buscar producto"
+                                            onChange={event => handleProduct(event.option as SelectOption)}
+                                        />
+                                        {addDetail.operacionItemLabel && (
+                                            <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${isAfecto(addDetail) ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
+                                                {addDetail.operacionItemLabel}
+                                            </span>
+                                        )}
+                                    </td>
+                                    <td className="p-3">
+                                        <SearchableSelect
+                                            value={addDetail.presentacionId}
+                                            options={presentationOptions}
+                                            disabled={!addDetail.bienId}
+                                            onChange={event => {
+                                                const option = presentationOptions.find(item => String(item.value) === String(event.target.value));
+                                                setAddDetail(previous => ({
+                                                    ...previous,
+                                                    presentacionId: String(event.target.value),
+                                                    presentacionLabel: String(option?.label || ""),
+                                                    presentacionCantidad: numberOf(option?.aux) || 1,
+                                                    conversionTotal: "",
+                                                    conversionTotalDesdeBackend: false,
+                                                    importe: "",
+                                                    importeDesdeBackend: false
+                                                }));
+                                            }}
+                                        />
+                                        <p className="mt-1 text-right font-mono text-[10px] font-bold text-slate-400">
+                                            Conv. Total: {money(conversionTotalOf(addDetail))}
+                                        </p>
+                                    </td>
+                                    <td className="p-3">
+                                        <input
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            value={addDetail.cantidad}
+                                            onChange={event => setAddDetail(previous => ({ ...previous, cantidad: event.target.value }))}
+                                            className="h-[38px] w-full rounded-lg border border-slate-200 p-2 text-right"
+                                        />
+                                    </td>
+                                    <td className="p-3">
+                                        <input
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={addDetail.costo}
+                                            onChange={event => setAddDetail(previous => ({ ...previous, costo: event.target.value }))}
+                                            className="h-[38px] w-full rounded-lg border border-slate-200 p-2 text-right"
+                                        />
+                                    </td>
+                                    <td className="p-3 text-right font-mono font-bold text-emerald-700">{money(importeOf(addDetail))}</td>
+                                    <td className="p-3 text-center">
+                                        <button type="button" onClick={addProduct} className="inline-flex h-[38px] w-[38px] items-center justify-center rounded-lg bg-blue-50 text-blue-700" title="Agregar producto">
+                                            <IconPlus size={17} />
+                                        </button>
+                                    </td>
+                                </tr>
+                            )}
+                            {form.detalles.length === 0 ? (
+                                <tr><td colSpan={isReadOnly ? 6 : 7} className="p-10 text-center italic text-slate-400">No hay productos en el documento.</td></tr>
+                            ) : form.detalles.map((detail, index) => {
+                                const rowLocked = isReadOnly || detail.bloqueado;
+
+                                return (
+                                    <tr key={`${detail.bienId}-${detail.presentacionId}-${index}`}>
+                                        <td className="p-3 text-center text-slate-400">{index + 1}</td>
+                                        <td className="p-3">
+                                            <p className="font-bold text-slate-700">{detail.bienLabel || detail.bienId}</p>
+                                            {detail.operacionItemLabel && (
+                                                <span className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[9px] font-bold uppercase ${isAfecto(detail) ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-700"}`}>
+                                                    {detail.operacionItemLabel}
+                                                </span>
+                                            )}
+                                            {detail.bloqueado && (
+                                                <span className="ml-1 mt-1 inline-block rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-500">
+                                                    {detail.origenImportado ? "Importado" : "Guardado"}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="p-3 font-semibold">
+                                            <span>{detail.presentacionLabel || detail.presentacionId}</span>
+                                            <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">
+                                                Conv. Total: {money(conversionTotalOf(detail))}
+                                            </p>
+                                        </td>
+                                        <td className="p-3 text-right">
+                                            {rowLocked ? (
+                                                <span className="font-mono font-bold text-slate-700">{money(numberOf(detail.cantidad))}</span>
+                                            ) : (
+                                                <input
+                                                    type="number"
+                                                    min="0.01"
+                                                    step="0.01"
+                                                    value={detail.cantidad}
+                                                    onChange={event => updateDetail(index, "cantidad", event.target.value)}
+                                                    className="h-[34px] w-24 rounded-lg border border-slate-200 p-2 text-right"
+                                                />
+                                            )}
+                                        </td>
+                                        <td className="p-3 text-right">
+                                            {rowLocked ? (
+                                                <span className="font-mono font-bold text-slate-700">{money(numberOf(detail.costo))}</span>
+                                            ) : (
+                                                <input
+                                                    type="number"
+                                                    min="0"
+                                                    step="0.01"
+                                                    value={detail.costo}
+                                                    onChange={event => updateDetail(index, "costo", event.target.value)}
+                                                    className="h-[34px] w-24 rounded-lg border border-slate-200 p-2 text-right"
+                                                />
+                                            )}
+                                        </td>
+                                        <td className="p-3 text-right font-mono font-black text-emerald-700">{money(importeOf(detail))}</td>
+                                        {!isReadOnly && (
+                                            <td className="p-3 text-center">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setForm(previous => ({
+                                                        ...previous,
+                                                        detalles: previous.detalles.filter((item, detailIndex) => item.bloqueado || detailIndex !== index)
+                                                    }))}
+                                                    disabled={detail.bloqueado}
+                                                    className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
+                                                    title={detail.bloqueado ? "Este producto no se puede modificar" : "Quitar producto"}
+                                                >
+                                                    <IconTrash size={17} />
+                                                </button>
+                                            </td>
+                                        )}
+                                    </tr>
+                                );
+                            })}
                         </tbody></table></div>
                 </section>
             </form>

@@ -67,6 +67,9 @@ export interface DocumentoCompraDetalle {
     presentacionId?: string;
     cantidad?: number;
     costo?: number;
+    conversionTotal?: number;
+    conversion_total?: number;
+    ConversionTotal?: number;
     importe?: number;
     saldoCantidad?: number;
     descuentoProducto?: number;
@@ -159,6 +162,7 @@ export interface DocumentoCompraDetallePayload {
     item: number;
     cantidad: number;
     costo: number;
+    conversionTotal: number;
     importe: number;
     descuentoProducto: number;
     observacion: string | null;

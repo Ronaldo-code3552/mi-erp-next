@@ -60,6 +60,8 @@ type OrdenDetalleDraft = {
     presentacionCantidad: number;
     cantidad: string;
     costo: string;
+    conversionTotal: string;
+    conversionTotalDesdeBackend: boolean;
     importe: string;
     importeDesdeBackend: boolean;
     observacion: string;
@@ -182,11 +184,13 @@ const detalleEsAfecto = (detalle: OrdenDetalleDraft) => {
     return detalle.afectoInafecto;
 };
 
-const getDetalleImporte = (detalle: OrdenDetalleDraft) => {
-    if (detalle.importeDesdeBackend) return roundDecimal(toNumber(detalle.importe));
+const getDetalleConversionTotal = (detalle: OrdenDetalleDraft) => {
+    if (detalle.conversionTotalDesdeBackend) return roundDecimal(toNumber(detalle.conversionTotal));
 
-    return roundDecimal(toNumber(detalle.cantidad) * detalle.presentacionCantidad * toNumber(detalle.costo));
+    return roundDecimal(toNumber(detalle.cantidad) * detalle.presentacionCantidad);
 };
+
+const getDetalleImporte = (detalle: OrdenDetalleDraft) => roundDecimal(toNumber(detalle.cantidad) * toNumber(detalle.costo));
 
 const getDetalleNeto = (detalle: OrdenDetalleDraft) => {
     return getDetalleImporte(detalle);
@@ -203,7 +207,11 @@ const normalizeDetalles = (source?: Partial<OrdenCompraServicio>): OrdenDetalleD
         const costo = firstString(raw, ["costo", "Costo"]) || String(bien.costo || 0);
         const hasImporte = ["importe", "Importe"].some(key => raw[key] !== undefined && raw[key] !== null);
         const importe = firstString(raw, ["importe", "Importe"]);
-        const presentacionCantidad = toNumber(presentacion.cantidad) || 1;
+        const hasConversionTotal = ["conversionTotal", "conversion_total", "ConversionTotal"].some(key => raw[key] !== undefined && raw[key] !== null);
+        const conversionTotal = firstString(raw, ["conversionTotal", "conversion_total", "ConversionTotal"]);
+        const cantidadNumero = toNumber(cantidad);
+        const conversionNumero = toNumber(conversionTotal);
+        const presentacionCantidad = toNumber(presentacion.cantidad) || (cantidadNumero > 0 && hasConversionTotal ? conversionNumero / cantidadNumero : 0) || 1;
         const operacionItem = getOperacionItem(bien);
         const afectoInafecto = boolValueFromSource(
             raw.afectoInafecto ?? raw.afecto_inafecto ?? raw.AfectoInafecto ?? bien.afecto_inafecto ?? bien.afectoInafecto,
@@ -222,6 +230,8 @@ const normalizeDetalles = (source?: Partial<OrdenCompraServicio>): OrdenDetalleD
             presentacionCantidad,
             cantidad,
             costo,
+            conversionTotal: hasConversionTotal ? conversionTotal : "",
+            conversionTotalDesdeBackend: hasConversionTotal,
             importe,
             importeDesdeBackend: hasImporte,
             observacion: firstString(raw, ["observacion", "Observacion"])
@@ -336,6 +346,8 @@ export default function OrdenCompraServicioForm({
         presentacionCantidad: 1,
         cantidad: "1",
         costo: "0",
+        conversionTotal: "",
+        conversionTotalDesdeBackend: false,
         importe: "",
         importeDesdeBackend: false,
         observacion: ""
@@ -595,6 +607,8 @@ export default function OrdenCompraServicioForm({
             presentacionCantidad: 1,
             cantidad: "1",
             costo: "0",
+            conversionTotal: "",
+            conversionTotalDesdeBackend: false,
             importe: "",
             importeDesdeBackend: false,
             observacion: ""
@@ -620,6 +634,10 @@ export default function OrdenCompraServicioForm({
             presentacionId: "",
             presentacionLabel: "",
             presentacionCantidad: 1,
+            conversionTotal: "",
+            conversionTotalDesdeBackend: false,
+            importe: "",
+            importeDesdeBackend: false,
             costo: Number.isFinite(costo) ? String(costo) : "0"
         }));
 
@@ -638,7 +656,11 @@ export default function OrdenCompraServicioForm({
             ...prev,
             presentacionId,
             presentacionLabel: String(option?.label || "").trim(),
-            presentacionCantidad
+            presentacionCantidad,
+            conversionTotal: "",
+            conversionTotalDesdeBackend: false,
+            importe: "",
+            importeDesdeBackend: false
         }));
     };
 
@@ -684,6 +706,8 @@ export default function OrdenCompraServicioForm({
                 idx === index ? {
                     ...detalle,
                     [field]: value,
+                    conversionTotal: field === "cantidad" ? "" : detalle.conversionTotal,
+                    conversionTotalDesdeBackend: field === "cantidad" ? false : detalle.conversionTotalDesdeBackend,
                     importe: field === "cantidad" || field === "costo" ? "" : detalle.importe,
                     importeDesdeBackend: field === "cantidad" || field === "costo" ? false : detalle.importeDesdeBackend
                 } : detalle
@@ -727,6 +751,7 @@ export default function OrdenCompraServicioForm({
             presentacionId: detalle.presentacionId,
             cantidad: roundDecimal(toNumber(detalle.cantidad)),
             costo: roundDecimal(toNumber(detalle.costo)),
+            conversionTotal: roundDecimal(getDetalleConversionTotal(detalle)),
             importe: roundDecimal(getDetalleImporte(detalle)),
             descuentoProducto: 0,
             afectoInafecto: detalle.afectoInafecto,
@@ -779,7 +804,7 @@ export default function OrdenCompraServicioForm({
     };
 
     const addTotalPresentacion = toNumber(addForm.cantidad) * addForm.presentacionCantidad;
-    const addTotal = addTotalPresentacion * toNumber(addForm.costo);
+    const addTotal = toNumber(addForm.cantidad) * toNumber(addForm.costo);
 
     return (
         <div className="p-6 animate-fade-in-up">
@@ -1029,6 +1054,9 @@ export default function OrdenCompraServicioForm({
                                                 onChange={(event) => handlePresentacionChange(event.target.value)}
                                                 disabled={!addForm.bienId || presentacionOptions.length === 0}
                                             />
+                                            <p className="mt-1 text-right font-mono text-[10px] font-bold text-slate-400">
+                                                Conv. Total: {toMoney(addTotalPresentacion)}
+                                            </p>
                                         </td>
                                         <td className="p-3">
                                             <input
@@ -1078,6 +1106,7 @@ export default function OrdenCompraServicioForm({
                                     </tr>
                                 ) : (
                                     formData.detalles.map((detalle, index) => {
+                                        const conversionTotal = getDetalleConversionTotal(detalle);
                                         const importe = getDetalleImporte(detalle);
 
                                         return (
@@ -1094,7 +1123,12 @@ export default function OrdenCompraServicioForm({
                                                         </p>
                                                     )}
                                                 </td>
-                                                <td className="p-3 font-semibold text-slate-700">{detalle.presentacionLabel || detalle.presentacionId}</td>
+                                                <td className="p-3 font-semibold text-slate-700">
+                                                    <span>{detalle.presentacionLabel || detalle.presentacionId}</span>
+                                                    <p className="mt-1 font-mono text-[10px] font-bold text-slate-400">
+                                                        Conv. Total: {toMoney(conversionTotal)}
+                                                    </p>
+                                                </td>
                                                 <td className="p-3 text-right">
                                                     {isReadOnly ? (
                                                         <span className="font-mono font-bold text-slate-700">{toMoney(toNumber(detalle.cantidad))}</span>

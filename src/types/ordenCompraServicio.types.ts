@@ -29,6 +29,9 @@ export interface OrdenCompraServicioDetalle {
     Cantidad?: number | string | null;
     costo?: number | string | null;
     Costo?: number | string | null;
+    conversionTotal?: number | string | null;
+    conversion_total?: number | string | null;
+    ConversionTotal?: number | string | null;
     importe?: number | string | null;
     Importe?: number | string | null;
     descuentoProducto?: number | string | null;
@@ -211,6 +214,7 @@ export interface OrdenCompraServicioDetallePayload {
     presentacionId?: string | null;
     cantidad?: number | null;
     costo?: number | null;
+    conversionTotal?: number | null;
     importe?: number | null;
     descuentoProducto?: number | null;
     afectoInafecto?: boolean | null;
@@ -222,6 +226,7 @@ export interface OrdenCompraServicioDetalleCreatePayload {
     PresentacionId?: string | null;
     Cantidad?: number | null;
     Costo?: number | null;
+    ConversionTotal?: number | null;
     Importe?: number | null;
     DescuentoProducto?: number | null;
     AfectoInafecto?: boolean | null;

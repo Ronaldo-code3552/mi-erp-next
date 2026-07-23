@@ -83,6 +83,7 @@ const toDetallePayload = (detalle: NonNullable<OrdenCompraServicioPayload['detal
     PresentacionId: detalle.presentacionId?.trim() || null,
     Cantidad: asNumber(detalle.cantidad),
     Costo: asNumber(detalle.costo),
+    ConversionTotal: asNumber(detalle.conversionTotal),
     Importe: asNumber(detalle.importe),
     DescuentoProducto: asNumber(detalle.descuentoProducto) ?? 0,
     AfectoInafecto: detalle.afectoInafecto ?? null,
@@ -208,6 +209,23 @@ export const ordenCompraServicioService = {
                 isSuccess: false,
                 data: null,
                 message: getErrorMessage(error, 'Error al anular la orden de compra/servicio')
+            };
+        }
+    },
+
+    imprimir: async (id: string): Promise<ApiResponse<{
+        fileName?: string;
+        base64?: string;
+        esFormatoSunat?: boolean;
+    }>> => {
+        try {
+            const response = await apiClient.get(`${BASE_URL}/empresa/${EMPRESA_ID}/${id}/imprimir`);
+            return response.data;
+        } catch (error) {
+            return {
+                isSuccess: false,
+                data: {},
+                message: getErrorMessage(error, 'Error al imprimir la orden de compra/servicio')
             };
         }
     },

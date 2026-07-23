@@ -11,9 +11,10 @@ import {
     IconEdit,
     IconEye,
     IconFilter,
+    IconBan,
+    IconPrinter,
     IconRefresh,
-    IconSearch,
-    IconTrash
+    IconSearch
 } from "@tabler/icons-react";
 
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
@@ -45,6 +46,7 @@ const estadoOptions = [
     { value: "REGISTRADO", label: "REGISTRADO" },
     { value: "PENDIENTE", label: "PENDIENTE" },
     { value: "APROBADO", label: "APROBADO" },
+    { value: "COMPROMETIDO", label: "COMPROMETIDO" },
     { value: "ANULADO", label: "ANULADO" }
 ];
 
@@ -153,10 +155,36 @@ const estadoBadgeClass = (estado: string) => {
     const normalized = estado.trim().toUpperCase();
 
     if (normalized.includes("ANUL")) return "border-red-100 bg-red-50 text-red-600";
-    if (normalized.includes("APROB")) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    if (normalized.includes("APROB") || normalized.includes("COMPROMET")) return "border-emerald-200 bg-emerald-50 text-emerald-700";
     if (normalized.includes("PEND")) return "border-amber-200 bg-amber-50 text-amber-700";
 
     return "border-blue-200 bg-blue-50 text-blue-700";
+};
+
+const estadoBloqueaAcciones = (estado: string) => {
+    const normalized = estado.trim().toUpperCase();
+    return normalized.includes("APROB") || normalized.includes("COMPROMET") || normalized.includes("ANUL");
+};
+
+const openPdfFromBase64 = (base64Raw: string) => {
+    const base64 = base64Raw.includes("base64,")
+        ? base64Raw.split("base64,").pop() || ""
+        : base64Raw;
+
+    if (!base64.trim()) {
+        throw new Error("El documento no contiene base64 válido.");
+    }
+
+    const byteCharacters = atob(base64);
+    const byteNumbers = new Array(byteCharacters.length);
+
+    for (let i = 0; i < byteCharacters.length; i += 1) {
+        byteNumbers[i] = byteCharacters.charCodeAt(i);
+    }
+
+    const byteArray = new Uint8Array(byteNumbers);
+    const blob = new Blob([byteArray], { type: "application/pdf" });
+    window.open(URL.createObjectURL(blob), "_blank");
 };
 
 export default function OrdenCompraServicioPage() {
@@ -180,6 +208,7 @@ export default function OrdenCompraServicioPage() {
     const [proveedorOptions, setProveedorOptions] = useState<Option[]>([]);
     const [monedaOptions, setMonedaOptions] = useState<Option[]>([]);
     const [approvingId, setApprovingId] = useState("");
+    const [printingId, setPrintingId] = useState("");
 
     useEffect(() => {
         fetchData(1, debouncedSearch, filters);
@@ -264,30 +293,31 @@ export default function OrdenCompraServicioPage() {
         setFilters(initialFilters);
     };
 
-    const handleDelete = async (row: OrdenCompraServicio) => {
+    const handleAnular = async (row: OrdenCompraServicio) => {
         const ordenId = getOrdenId(row);
+        const numeroOrden = getNumeroOrden(row);
         if (!ordenId) return;
 
         const result = await Swal.fire({
-            title: "¿Eliminar orden?",
-            text: "Esta acción no se puede deshacer.",
+            title: "¿Anular orden?",
+            text: `Se anulará la orden ${numeroOrden}.`,
             icon: "warning",
             showCancelButton: true,
-            confirmButtonText: "Eliminar",
+            confirmButtonText: "Anular",
             cancelButtonText: "Cancelar",
             confirmButtonColor: "#dc2626"
         });
 
         if (!result.isConfirmed) return;
 
-        const response = await ordenCompraServicioService.delete(ordenId);
+        const response = await ordenCompraServicioService.anular(ordenId);
 
         if (!response.isSuccess) {
-            toast.error(response.message || "No se pudo eliminar la orden.");
+            toast.error(response.message || "No se pudo anular la orden.");
             return;
         }
 
-        toast.success("Orden eliminada correctamente.");
+        toast.success(response.message || "Orden anulada correctamente.");
         fetchData(meta.currentPage, searchTerm, filters);
     };
 
@@ -326,6 +356,32 @@ export default function OrdenCompraServicioPage() {
             fetchData(meta.currentPage, searchTerm, filters);
         } finally {
             setApprovingId("");
+        }
+    };
+
+    const handlePrint = async (row: OrdenCompraServicio) => {
+        const ordenId = getOrdenId(row);
+        if (!ordenId || printingId === ordenId) return;
+
+        setPrintingId(ordenId);
+
+        try {
+            const response = await ordenCompraServicioService.imprimir(ordenId);
+            const base64 = String(response.data?.base64 || "").trim();
+
+            if (!response.isSuccess || !base64) {
+                toast.error(response.message || "Error al generar la impresión.");
+                return;
+            }
+
+            openPdfFromBase64(base64);
+            toast.success(response.message || "Impresión generada correctamente.");
+        } catch (error) {
+            console.error("Error al imprimir:", error);
+            const message = error instanceof Error ? error.message : "Error de conexión al intentar imprimir.";
+            toast.error(message);
+        } finally {
+            setPrintingId("");
         }
     };
 
@@ -418,13 +474,15 @@ export default function OrdenCompraServicioPage() {
         },
         {
             header: "Acciones",
-            width: "150px",
+            width: "175px",
             className: "text-center",
             render: (row: OrdenCompraServicio) => {
                 const ordenId = getOrdenId(row);
                 const estado = getEstado(row).trim().toUpperCase();
-                const canApprove = !estado.includes("APROB") && !estado.includes("ANUL");
+                const lockedActions = estadoBloqueaAcciones(estado);
+                const canApprove = !lockedActions;
                 const isApproving = approvingId === ordenId;
+                const isPrinting = printingId === ordenId;
 
                 return (
                     <div className="flex items-center justify-center gap-1">
@@ -439,7 +497,7 @@ export default function OrdenCompraServicioPage() {
                         <button
                             type="button"
                             onClick={() => ordenId && router.push(`/dashboard/orden-compra-servicio/editar/${ordenId}`)}
-                            disabled={estado.includes("APROB") || estado.includes("ANUL")}
+                            disabled={lockedActions}
                             className="rounded p-1.5 text-slate-400 transition-colors hover:bg-blue-50 hover:text-blue-600 disabled:cursor-not-allowed disabled:opacity-35"
                             title="Editar"
                         >
@@ -450,18 +508,31 @@ export default function OrdenCompraServicioPage() {
                             onClick={() => handleAprobar(row)}
                             disabled={!canApprove || isApproving}
                             className="rounded p-1.5 text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-35"
-                            title={canApprove ? "Aprobar" : "Orden ya aprobada o anulada"}
+                            title={canApprove ? "Aprobar" : "Orden ya aprobada, comprometida o anulada"}
                         >
                             <IconCircleCheck size={17} className={isApproving ? "animate-pulse" : ""} />
                         </button>
                         <button
                             type="button"
-                            onClick={() => handleDelete(row)}
-                            disabled={estado.includes("APROB") || estado.includes("ANUL")}
-                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-35"
-                            title="Eliminar"
+                            onClick={() => handlePrint(row)}
+                            disabled={!ordenId || isPrinting}
+                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-35"
+                            title="Imprimir"
                         >
-                            <IconTrash size={17} />
+                            {isPrinting ? (
+                                <IconRefresh size={17} className="animate-spin text-emerald-600" />
+                            ) : (
+                                <IconPrinter size={17} />
+                            )}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleAnular(row)}
+                            disabled={lockedActions}
+                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-35"
+                            title="Anular"
+                        >
+                            <IconBan size={17} />
                         </button>
                     </div>
                 );
