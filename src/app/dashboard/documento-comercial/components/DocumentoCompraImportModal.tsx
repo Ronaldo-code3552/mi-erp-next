@@ -18,7 +18,7 @@ import { DocumentoCompra, DocumentoCompraDetalle } from "@/types/documentoCompra
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    onImport: (document: DocumentoCompra) => void;
+    onImport: (document: DocumentoCompra) => void | Promise<void>;
 }
 
 const PAGE_SIZE = 20;
@@ -190,7 +190,7 @@ export default function DocumentoCompraImportModal({ isOpen, onClose, onImport }
 
     const importDocument = async (document: DocumentoCompra) => {
         const fullDocument = await getFullDocument(document);
-        if (fullDocument) onImport(fullDocument);
+        if (fullDocument) await onImport(fullDocument);
     };
 
     const details = (detailDocument?.detalles || []) as DocumentoCompraDetalle[];
@@ -324,7 +324,17 @@ export default function DocumentoCompraImportModal({ isOpen, onClose, onImport }
 
                         <div className="flex justify-end gap-2 border-t border-slate-100 pt-3">
                             <button type="button" onClick={() => setDetailDocument(null)} className="rounded-lg bg-slate-100 px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200">Cerrar</button>
-                            <button type="button" onClick={() => { onImport(detailDocument); setDetailDocument(null); }} className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"><IconDownload size={16} /> Importar documento</button>
+                            <button
+                                type="button"
+                                onClick={async () => {
+                                    const document = detailDocument;
+                                    setDetailDocument(null);
+                                    await onImport(document);
+                                }}
+                                className="flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-xs font-bold text-white hover:bg-blue-700"
+                            >
+                                <IconDownload size={16} /> Importar documento
+                            </button>
                         </div>
                     </div>
                 )}

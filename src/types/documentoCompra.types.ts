@@ -47,6 +47,17 @@ export interface DocumentoCompraReferencia {
     estado?: string;
 }
 
+export interface DocumentoCompraMotivoElectronico {
+    motivoElectronicoId?: string;
+    motivoelectronicoId?: string;
+    MotivoElectronicoId?: string;
+    tipoDocumento?: "NC" | "ND";
+    tipodocumento?: "NC" | "ND";
+    TipoDocumento?: "NC" | "ND";
+    concepto?: string;
+    Concepto?: string;
+}
+
 export interface DocumentoCompraDetalleBien {
     bienId?: string;
     descripcion?: string;
@@ -141,7 +152,12 @@ export interface DocumentoCompra {
     tipo_compra?: string | null;
     documentoReferencia?: string | DocumentoCompraReferencia | null;
     documento_referencia?: string | null;
+    motivoElectronicoId?: string | null;
     motivoelectronicoId?: string | null;
+    MotivoElectronicoId?: string | null;
+    motivoElectronico?: DocumentoCompraMotivoElectronico | null;
+    MotivoElectronico?: DocumentoCompraMotivoElectronico | null;
+    motivo?: DocumentoCompraMotivoElectronico | null;
     incluyeIgv?: boolean | null;
     incluye_igv?: boolean | null;
     tipoCambio?: number | null;
@@ -208,7 +224,7 @@ export interface DocumentoCompraPayload {
     detraccion: boolean;
     fotoDocumentoCompra: string | null;
     cuentaUsuarioId: string;
-    tipoCompra: string;
+    tipoCompra: string | null;
     documentoReferencia: string | null;
     motivoElectronicoId: string | null;
     incluyeIgv: boolean;

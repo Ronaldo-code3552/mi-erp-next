@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+import Swal from "sweetalert2";
 import {
     IconArrowLeft,
     IconDeviceFloppy,
@@ -19,6 +20,7 @@ import DocumentoAdjuntosPanel from "@/components/documentos/DocumentoAdjuntosPan
 import DocumentoCompraImportModal from "./DocumentoCompraImportModal";
 import OrdenCompraImportModal from "./OrdenCompraImportModal";
 import { documentoCompraService } from "@/services/documentoCompraService";
+import { motivoNcNdElectronicoService } from "@/services/motivoNcNdElectronicoService";
 import { monedaService } from "@/services/monedaService";
 import { presentacionService } from "@/services/presentacionService";
 import { productoService } from "@/services/productoService";
@@ -35,6 +37,10 @@ import { Producto } from "@/types/producto.types";
 import { Proveedor } from "@/types/proveedor.types";
 import { TipoPago } from "@/types/tipoPago.types";
 import {
+    TipoDocumentoNota,
+    TIPO_DOCUMENTO_NOTA
+} from "@/types/motivoNcNdElectronico.types";
+import {
     DOCUMENTO_PDF_REFERENCIAS,
     DocumentoPdfFormSubmitResult
 } from "@/types/documentoPdf.types";
@@ -42,7 +48,14 @@ import {
 const EMPRESA_ID = "005";
 const USER_ID = "CU0001";
 const IGV_RATE = 0.18;
-const CREDIT_DEBIT_NOTE_TYPE_IDS = new Set(["X067", "X068"]);
+const DOCUMENTO_COMPRA_TIPO_IDS = {
+    NOTA_CREDITO: "X067",
+    NOTA_DEBITO: "X068"
+} as const;
+const TIPO_MOTIVO_BY_TIPO_DOCUMENTO: Record<string, TipoDocumentoNota> = {
+    [DOCUMENTO_COMPRA_TIPO_IDS.NOTA_CREDITO]: TIPO_DOCUMENTO_NOTA.NC,
+    [DOCUMENTO_COMPRA_TIPO_IDS.NOTA_DEBITO]: TIPO_DOCUMENTO_NOTA.ND
+};
 const LOCAL_PURCHASE = "COMPRA NACIONAL";
 const IMPORTED_PURCHASE = "IMPORTACION";
 const PURCHASE_TYPE_OPTIONS = [
@@ -87,6 +100,8 @@ type FormValue = {
     documentoReferenciaId: string;
     documentoReferenciaNumero: string;
     tipoDocComercialId: string;
+    motivoElectronicoId: string;
+    motivoConcepto: string;
     serie: string;
     numero: string;
     fechaDoc: string;
@@ -161,8 +176,14 @@ const normalizePurchaseType = (value: unknown) => {
     return LOCAL_PURCHASE;
 };
 
+const getTipoMotivo = (tipoDocComercialId: string): TipoDocumentoNota | null => (
+    TIPO_MOTIVO_BY_TIPO_DOCUMENTO[
+        tipoDocComercialId.trim().toUpperCase()
+    ] ?? null
+);
+
 const usesDocumentReference = (documentTypeId: unknown) => (
-    CREDIT_DEBIT_NOTE_TYPE_IDS.has(String(documentTypeId || "").trim().toUpperCase())
+    getTipoMotivo(String(documentTypeId || "")) !== null
 );
 
 const currencyIdOf = (currency: Moneda) => currency.monedaId || currency.MonedaId || "";
@@ -271,8 +292,15 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
         ? referenceValue as Record<string, unknown>
         : {};
     const purchaseType = first(raw, ["tipoCompra", "tipo_compra", "TipoCompra"]);
+    const motivo = nested(raw, ["motivoElectronico", "MotivoElectronico", "motivo"]);
     const documentId = first(raw, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"]);
     const orderId = first(raw, ["ordencompraservicioId", "ordenCompraServicioId", "OrdenCompraServicioId"]);
+    const documentTypeId = first(raw, [
+        "tipodoccomercialId",
+        "tipoDocComercialId",
+        "TipoDocComercialId"
+    ]);
+    const requiresElectronicReason = getTipoMotivo(documentTypeId) !== null;
     const referenceId = Object.keys(reference).length
         ? first(reference, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"])
         : String(referenceValue || "").trim();
@@ -284,7 +312,21 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
         ordenNumero: first(order, ["numero_ordencompra", "numeroOrdenCompra"]) || first(raw, ["numeroOrdenCompra"]),
         documentoReferenciaId: referenceId,
         documentoReferenciaNumero: [referenceSerie, referenceNumero].filter(Boolean).join("-") || referenceId,
-        tipoDocComercialId: first(raw, ["tipodoccomercialId", "tipoDocComercialId", "TipoDocComercialId"]),
+        tipoDocComercialId: documentTypeId,
+        motivoElectronicoId: requiresElectronicReason
+            ? first(raw, [
+                "motivoElectronicoId",
+                "motivoelectronicoId",
+                "MotivoElectronicoId"
+            ]) || first(motivo, [
+                "motivoElectronicoId",
+                "motivoelectronicoId",
+                "MotivoElectronicoId"
+            ])
+            : "",
+        motivoConcepto: requiresElectronicReason
+            ? first(motivo, ["concepto", "Concepto"])
+            : "",
         serie: first(raw, ["serie", "Serie"]),
         numero: first(raw, ["numero", "Numero"]),
         fechaDoc: dateInput(first(raw, ["fechaDoc", "fecha_doc", "FechaDoc", "fechaEmision", "fecha_emision"])) || today(),
@@ -292,7 +334,9 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
         proveedorId: first(raw, ["proveedorId", "ProveedorId"]),
         monedaId: first(raw, ["monedaId", "MonedaId"]) || "001",
         tipoPagoId: first(raw, ["tipopagoId", "tipoPagoId", "TipoPagoId"]),
-        tipoCompra: normalizePurchaseType(purchaseType),
+        tipoCompra: requiresElectronicReason
+            ? ""
+            : normalizePurchaseType(purchaseType),
         tipoCambio: first(raw, ["tipoCambio", "tipo_cambio", "TipoCambio"]) || "1",
         observacion: first(raw, ["observacion", "Observacion"]),
         fotoDocumentoCompra: first(raw, ["fotoDocumentocompra", "fotoDocumentoCompra", "foto_documentocompra"]),
@@ -342,13 +386,19 @@ export default function DocumentoCompraForm({
     const [orderModalOpen, setOrderModalOpen] = useState(false);
     const [documentModalOpen, setDocumentModalOpen] = useState(false);
     const [importedLabels, setImportedLabels] = useState({ provider: "", currency: "", payment: "" });
+    const [recalculateAllDetails, setRecalculateAllDetails] = useState(false);
     const importsDocument = usesDocumentReference(form.tipoDocComercialId);
+    const tipoMotivo = getTipoMotivo(form.tipoDocComercialId);
+    const requiereMotivoElectronico = tipoMotivo !== null;
     const isEditing = Boolean(form.documentoCompraId);
     const isReadOnly = readOnly || form.estado.trim().toUpperCase() !== "REGISTRADO";
     const linkedSourceId = importsDocument ? form.documentoReferenciaId : form.ordenCompraServicioId;
     const igvLocked = isReadOnly || Boolean(linkedSourceId);
 
-    useEffect(() => setForm(normalizeForm(initialValue)), [initialValue]);
+    useEffect(() => {
+        setForm(normalizeForm(initialValue));
+        setRecalculateAllDetails(false);
+    }, [initialValue]);
 
     useEffect(() => {
         let mounted = true;
@@ -382,19 +432,61 @@ export default function DocumentoCompraForm({
         return () => { mounted = false; };
     }, []);
 
+    useEffect(() => {
+        if (
+            !tipoMotivo
+            || !form.motivoElectronicoId
+            || form.motivoConcepto
+        ) {
+            return;
+        }
+
+        let mounted = true;
+        const loadSelectedReason = async () => {
+            const response = await motivoNcNdElectronicoService.getById(
+                form.motivoElectronicoId
+            );
+            if (!mounted) return;
+
+            if (!response.isSuccess || !response.data) {
+                toast.error(
+                    response.message
+                    || "No se pudo cargar el motivo electrónico del documento."
+                );
+                return;
+            }
+
+            if (response.data.tipoDocumento !== tipoMotivo) return;
+
+            setForm(previous => (
+                previous.motivoElectronicoId === response.data?.motivoElectronicoId
+                    ? {
+                        ...previous,
+                        motivoConcepto: response.data.concepto
+                    }
+                    : previous
+            ));
+        };
+
+        loadSelectedReason();
+        return () => {
+            mounted = false;
+        };
+    }, [form.motivoConcepto, form.motivoElectronicoId, tipoMotivo]);
+
     const totals = useMemo(() => {
         let newAffectAmount = 0;
         let newExemptAmount = 0;
         form.detalles.forEach(detail => {
-            if (detail.bloqueado || detail.origenImportado) return;
+            if (!recalculateAllDetails && (detail.bloqueado || detail.origenImportado)) return;
 
             const amount = importeOf(detail);
             if (isAfecto(detail)) newAffectAmount += amount;
             else newExemptAmount += amount;
         });
 
-        const baseSubtotalAfecto = round(numberOf(form.subtotalAfectoBase));
-        const baseSubtotalExonerado = round(numberOf(form.subtotalExoneradoBase));
+        const baseSubtotalAfecto = recalculateAllDetails ? 0 : round(numberOf(form.subtotalAfectoBase));
+        const baseSubtotalExonerado = recalculateAllDetails ? 0 : round(numberOf(form.subtotalExoneradoBase));
         const newSubtotalAfecto = round(form.incluyeIgv ? newAffectAmount / (1 + IGV_RATE) : newAffectAmount);
         const newSubtotalExonerado = round(newExemptAmount);
         const subtotalAfecto = round(baseSubtotalAfecto + newSubtotalAfecto);
@@ -402,7 +494,7 @@ export default function DocumentoCompraForm({
         const igv = round(subtotalAfecto * IGV_RATE);
 
         return { subtotalAfecto, subtotalExonerado, igv, total: round(subtotalAfecto + subtotalExonerado + igv) };
-    }, [form.detalles, form.incluyeIgv, form.subtotalAfectoBase, form.subtotalExoneradoBase]);
+    }, [form.detalles, form.incluyeIgv, form.subtotalAfectoBase, form.subtotalExoneradoBase, recalculateAllDetails]);
 
     const labels = useMemo(() => {
         const raw = (initialValue || {}) as Record<string, unknown>;
@@ -444,22 +536,70 @@ export default function DocumentoCompraForm({
         }));
     };
 
+    const fetchMotivoOptions = async (term: string): Promise<SelectOption[]> => {
+        if (!tipoMotivo) return [];
+
+        const response = await motivoNcNdElectronicoService.getAll(
+            tipoMotivo,
+            term
+        );
+        if (!response.isSuccess) {
+            toast.error(
+                response.message
+                || "No se pudieron cargar los motivos electrónicos."
+            );
+            return [];
+        }
+
+        return (response.data || []).map(item => ({
+            key: item.motivoElectronicoId,
+            value: item.motivoElectronicoId,
+            label: item.concepto,
+            aux: item.tipoDocumento === TIPO_DOCUMENTO_NOTA.NC
+                ? "Nota de Crédito"
+                : "Nota de Débito",
+            raw: item
+        }));
+    };
+
     const handleDocumentTypeChange = (documentTypeId: string) => {
-        const changesImportSource = importsDocument !== usesDocumentReference(documentTypeId);
+        const normalizedDocumentTypeId = documentTypeId.trim().toUpperCase();
+        const changesImportSource = importsDocument !== usesDocumentReference(normalizedDocumentTypeId);
         const hasImportedSource = Boolean(form.ordenCompraServicioId || form.documentoReferenciaId);
 
         setOrderModalOpen(false);
         setDocumentModalOpen(false);
 
         if (!changesImportSource || !hasImportedSource) {
-            setField("tipoDocComercialId", documentTypeId);
+            setForm(previous => {
+                const shouldClearReason = getTipoMotivo(previous.tipoDocComercialId)
+                    !== getTipoMotivo(normalizedDocumentTypeId);
+                return {
+                    ...previous,
+                    tipoDocComercialId: normalizedDocumentTypeId,
+                    tipoCompra: getTipoMotivo(normalizedDocumentTypeId)
+                        ? ""
+                        : previous.tipoCompra || LOCAL_PURCHASE,
+                    motivoElectronicoId: shouldClearReason
+                        ? ""
+                        : previous.motivoElectronicoId,
+                    motivoConcepto: shouldClearReason
+                        ? ""
+                        : previous.motivoConcepto
+                };
+            });
             return;
         }
 
         setImportedLabels({ provider: "", currency: "", payment: "" });
         setForm(previous => ({
             ...previous,
-            tipoDocComercialId: documentTypeId,
+            tipoDocComercialId: normalizedDocumentTypeId,
+            tipoCompra: getTipoMotivo(normalizedDocumentTypeId)
+                ? ""
+                : previous.tipoCompra || LOCAL_PURCHASE,
+            motivoElectronicoId: "",
+            motivoConcepto: "",
             ordenCompraServicioId: "",
             ordenNumero: "",
             documentoReferenciaId: "",
@@ -510,6 +650,7 @@ export default function DocumentoCompraForm({
             subtotalExoneradoBase: getValorVentaExonerado(raw) || "0",
             detalles: details
         }));
+        setRecalculateAllDetails(false);
         setOrderModalOpen(false);
         toast.success(`Orden ${first(raw, ["numero_ordencompra", "numeroOrdenCompra"]) || id} importada.`);
     };
@@ -528,18 +669,28 @@ export default function DocumentoCompraForm({
             subtotalExoneradoBase: "0",
             detalles: previous.detalles.filter(detail => !detail.origenImportado)
         }));
+        setRecalculateAllDetails(false);
         setOrderModalOpen(false);
         toast.success("Importación de orden limpiada.");
     };
 
-    const handleDocumentImported = (document: DocumentoCompra) => {
+    const handleDocumentImported = async (document: DocumentoCompra): Promise<void> => {
         const raw = document as Record<string, unknown>;
         const id = first(raw, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"]);
         const documentTypeId = first(raw, ["tipodoccomercialId", "tipoDocComercialId", "TipoDocComercialId"]);
         const status = first(raw, ["estado", "Estado"]).toUpperCase();
-        if (!id) return toast.error("El documento seleccionado no tiene un ID válido.");
-        if (documentTypeId !== "X062") return toast.error("Solo se pueden importar facturas de compra.");
-        if (status.includes("ANUL")) return toast.error("No se puede importar un documento anulado.");
+        if (!id) {
+            toast.error("El documento seleccionado no tiene un ID válido.");
+            return;
+        }
+        if (documentTypeId !== "X062") {
+            toast.error("Solo se pueden importar facturas de compra.");
+            return;
+        }
+        if (status.includes("ANUL")) {
+            toast.error("No se puede importar un documento anulado.");
+            return;
+        }
 
         const provider = nested(raw, ["proveedor", "Proveedor"]);
         const currency = nested(raw, ["moneda", "Moneda"]);
@@ -549,11 +700,39 @@ export default function DocumentoCompraForm({
             bloqueado: true,
             origenImportado: true
         });
-        if (!details.length) return toast.warning("El documento seleccionado no contiene productos.");
 
         const serie = first(raw, ["serie", "Serie"]);
         const numero = first(raw, ["numero", "Numero"]);
         const displayNumber = [serie, numero].filter(Boolean).join("-") || id;
+        setDocumentModalOpen(false);
+
+        let useImportedDetails = false;
+        if (details.length > 0) {
+            const confirmation = await Swal.fire({
+                title: "¿Desea usar el detalle?",
+                text: "Si usa el detalle, los productos de la factura se agregarán automáticamente a la nota.",
+                icon: "question",
+                showCancelButton: true,
+                confirmButtonText: "Sí, agregar detalle",
+                cancelButtonText: "No, solo referencia",
+                confirmButtonColor: "#0284c7",
+                cancelButtonColor: "#64748b",
+                reverseButtons: true,
+                allowEscapeKey: false,
+                allowOutsideClick: false,
+                showClass: {
+                    popup: "swal2-show animate-in zoom-in-95 duration-200"
+                },
+                hideClass: {
+                    popup: "swal2-hide animate-out zoom-out-95 duration-150"
+                }
+            });
+            useImportedDetails = confirmation.isConfirmed;
+        } else {
+            toast.info(
+                "La factura no contiene productos. Se importará solamente como referencia."
+            );
+        }
 
         setImportedLabels({
             provider: first(provider, ["descripcion", "Descripcion"]),
@@ -569,15 +748,25 @@ export default function DocumentoCompraForm({
             proveedorId: first(raw, ["proveedorId", "ProveedorId"]) || first(provider, ["proveedorId"]),
             monedaId: currencyId,
             tipoPagoId: first(raw, ["tipopagoId", "tipoPagoId", "TipoPagoId"]) || first(payment, ["tipopagoId"]),
-            tipoCompra: normalizePurchaseType(first(raw, ["tipoCompra", "tipo_compra", "TipoCompra"]) || previous.tipoCompra),
+            tipoCompra: "",
             tipoCambio: first(raw, ["tipo_cambio", "tipoCambio", "TipoCambio"]) || exchangeRateByCurrencyId(currencyId),
             incluyeIgv: boolOf(raw.incluye_igv ?? raw.incluyeIgv, previous.incluyeIgv),
-            subtotalAfectoBase: getValorVentaAfecto(raw) || "0",
-            subtotalExoneradoBase: getValorVentaExonerado(raw) || "0",
-            detalles: details
+            subtotalAfectoBase: useImportedDetails
+                ? getValorVentaAfecto(raw) || "0"
+                : "0",
+            subtotalExoneradoBase: useImportedDetails
+                ? getValorVentaExonerado(raw) || "0"
+                : "0",
+            detalles: useImportedDetails
+                ? details
+                : previous.detalles.filter(detail => !detail.origenImportado)
         }));
-        setDocumentModalOpen(false);
-        toast.success(`Documento ${displayNumber} importado.`);
+        setRecalculateAllDetails(false);
+        toast.success(
+            useImportedDetails
+                ? `Documento ${displayNumber} importado con su detalle.`
+                : `Documento ${displayNumber} importado solo como referencia.`
+        );
     };
 
     const clearImportedDocument = () => {
@@ -594,6 +783,7 @@ export default function DocumentoCompraForm({
             subtotalExoneradoBase: "0",
             detalles: previous.detalles.filter(detail => !detail.origenImportado)
         }));
+        setRecalculateAllDetails(false);
         setDocumentModalOpen(false);
         toast.success("Importación de documento limpiada.");
     };
@@ -654,21 +844,49 @@ export default function DocumentoCompraForm({
         setPresentationOptions([]);
     };
 
-    const updateDetail = (index: number, field: "cantidad" | "costo", value: string) => setForm(previous => ({
-        ...previous,
-        detalles: previous.detalles.map((item, detailIndex) => detailIndex === index && !item.bloqueado ? {
-            ...item,
-            [field]: value,
-            conversionTotal: field === "cantidad" ? "" : item.conversionTotal,
-            conversionTotalDesdeBackend: field === "cantidad" ? false : item.conversionTotalDesdeBackend,
-            importe: "",
-            importeDesdeBackend: false
-        } : item)
-    }));
+    const updateDetail = (index: number, field: "cantidad" | "costo", value: string) => {
+        if (isReadOnly) return;
+
+        const detail = form.detalles[index];
+        if (detail?.bloqueado || detail?.origenImportado) {
+            setRecalculateAllDetails(true);
+        }
+
+        setForm(previous => ({
+            ...previous,
+            detalles: previous.detalles.map((item, detailIndex) => detailIndex === index ? {
+                ...item,
+                [field]: value,
+                conversionTotal: field === "cantidad" ? "" : item.conversionTotal,
+                conversionTotalDesdeBackend: field === "cantidad" ? false : item.conversionTotalDesdeBackend,
+                importe: "",
+                importeDesdeBackend: false
+            } : item)
+        }));
+    };
+
+    const removeDetail = (index: number) => {
+        if (isReadOnly) return;
+
+        const detail = form.detalles[index];
+        if (detail?.bloqueado || detail?.origenImportado) {
+            setRecalculateAllDetails(true);
+        }
+
+        setForm(previous => ({
+            ...previous,
+            detalles: previous.detalles.filter((_, detailIndex) => detailIndex !== index)
+        }));
+    };
 
     const validate = () => {
         if (!form.tipoDocComercialId || !form.serie.trim() || !form.numero.trim()) return "Complete tipo de documento, serie y número.";
         if (importsDocument && !form.documentoReferenciaId) return "Importe la factura de compra que será referenciada.";
+        if (requiereMotivoElectronico && !form.motivoElectronicoId.trim()) {
+            return tipoMotivo === TIPO_DOCUMENTO_NOTA.NC
+                ? "Seleccione el motivo de la Nota de Crédito."
+                : "Seleccione el motivo de la Nota de Débito.";
+        }
         if (!form.fechaDoc || !form.proveedorId || !form.monedaId || !form.tipoPagoId) return "Complete fecha, proveedor, moneda y tipo de pago.";
         if (numberOf(form.tipoCambio) <= 0) return "El tipo de cambio debe ser mayor a cero.";
         if (!form.detalles.length) return "Agregue al menos un producto.";
@@ -700,9 +918,13 @@ export default function DocumentoCompraForm({
             detraccion: false,
             fotoDocumentoCompra: isEditing ? form.fotoDocumentoCompra || null : null,
             cuentaUsuarioId: USER_ID,
-            tipoCompra: normalizePurchaseType(form.tipoCompra),
+            tipoCompra: requiereMotivoElectronico
+                ? null
+                : normalizePurchaseType(form.tipoCompra),
             documentoReferencia: importsDocument ? form.documentoReferenciaId : null,
-            motivoElectronicoId: null,
+            motivoElectronicoId: requiereMotivoElectronico
+                ? form.motivoElectronicoId.trim() || null
+                : null,
             incluyeIgv: form.incluyeIgv,
             tipoCambio: numberOf(form.tipoCambio),
             igvPorcentaje: IGV_RATE,
@@ -749,7 +971,39 @@ export default function DocumentoCompraForm({
                     <div className="grid grid-cols-1 gap-5 p-5 xl:grid-cols-[1fr_260px]">
                         <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                             <SearchableSelect label="Tipo Doc" value={form.tipoDocComercialId} fetchCustom={fetchDocumentTypes} fallbackLabel={labels.documentType} disabled={isReadOnly || (isEditing && Boolean(linkedSourceId))} onChange={event => handleDocumentTypeChange(String(event.target.value))} />
-                            <div className="flex flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-slate-500">Tipo Compra</label><select value={normalizePurchaseType(form.tipoCompra)} disabled={isReadOnly || (importsDocument && Boolean(linkedSourceId))} onChange={event => setField("tipoCompra", event.target.value)} className="h-[38px] rounded-lg border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100">{PURCHASE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
+                            {requiereMotivoElectronico && (
+                                <SearchableSelect
+                                    label={tipoMotivo === TIPO_DOCUMENTO_NOTA.NC
+                                        ? "Motivo de Nota de Crédito"
+                                        : "Motivo de Nota de Débito"}
+                                    value={form.motivoElectronicoId}
+                                    fetchCustom={fetchMotivoOptions}
+                                    fallbackLabel={form.motivoConcepto}
+                                    disabled={isReadOnly}
+                                    onChange={event => setForm(previous => ({
+                                        ...previous,
+                                        motivoElectronicoId: String(event.target.value || ""),
+                                        motivoConcepto: String(event.option?.label || "")
+                                    }))}
+                                />
+                            )}
+                            {!requiereMotivoElectronico && (
+                                <div className="flex flex-col gap-1.5">
+                                    <label className="text-[10px] font-bold uppercase text-slate-500">Tipo Compra</label>
+                                    <select
+                                        value={normalizePurchaseType(form.tipoCompra)}
+                                        disabled={isReadOnly || Boolean(linkedSourceId)}
+                                        onChange={event => setField("tipoCompra", event.target.value)}
+                                        className="h-[38px] rounded-lg border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100"
+                                    >
+                                        {PURCHASE_TYPE_OPTIONS.map(option => (
+                                            <option key={option.value} value={option.value}>
+                                                {option.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <Input label="Serie" value={form.serie} maxLength={10} disabled={isReadOnly} onChange={event => setField("serie", event.target.value)} />
                             <Input label="Número" value={form.numero} maxLength={20} disabled={isReadOnly} onChange={event => setField("numero", event.target.value)} />
                             <Input label="Fecha Documento" type="date" value={form.fechaDoc} disabled={isReadOnly} onChange={event => setField("fechaDoc", event.target.value)} />
@@ -877,7 +1131,7 @@ export default function DocumentoCompraForm({
                             {form.detalles.length === 0 ? (
                                 <tr><td colSpan={isReadOnly ? 6 : 7} className="p-10 text-center italic text-slate-400">No hay productos en el documento.</td></tr>
                             ) : form.detalles.map((detail, index) => {
-                                const rowLocked = isReadOnly || detail.bloqueado;
+                                const rowLocked = isReadOnly;
 
                                 return (
                                     <tr key={`${detail.bienId}-${detail.presentacionId}-${index}`}>
@@ -934,13 +1188,9 @@ export default function DocumentoCompraForm({
                                             <td className="p-3 text-center">
                                                 <button
                                                     type="button"
-                                                    onClick={() => setForm(previous => ({
-                                                        ...previous,
-                                                        detalles: previous.detalles.filter((item, detailIndex) => item.bloqueado || detailIndex !== index)
-                                                    }))}
-                                                    disabled={detail.bloqueado}
-                                                    className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-30"
-                                                    title={detail.bloqueado ? "Este producto no se puede modificar" : "Quitar producto"}
+                                                    onClick={() => removeDetail(index)}
+                                                    className="rounded p-1.5 text-slate-400 hover:bg-red-50 hover:text-red-600"
+                                                    title="Quitar producto"
                                                 >
                                                     <IconTrash size={17} />
                                                 </button>

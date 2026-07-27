@@ -719,7 +719,9 @@ export default function OrdenCompraServicioForm({
         resetAddForm();
     };
 
-    const updateDetalle = (index: number, field: keyof OrdenDetalleDraft, value: string) => {
+    const updateDetalle = (index: number, field: "cantidad" | "costo", value: string) => {
+        if (isReadOnly) return;
+
         setFormData(prev => ({
             ...prev,
             detalles: prev.detalles.map((detalle, idx) => (
@@ -736,6 +738,8 @@ export default function OrdenCompraServicioForm({
     };
 
     const removeDetalle = (index: number) => {
+        if (isReadOnly) return;
+
         setFormData(prev => ({
             ...prev,
             detalles: prev.detalles.filter((_, idx) => idx !== index)
