@@ -19,7 +19,7 @@ import SearchableSelect from "@/components/forms/SearchableSelect";
 import { getAlmacenesActivosOrdenados, withTodosAlmacenesOption } from "@/utils/almacenOptions";
 
 import { 
-    IconFileExport, IconRefresh, IconSearch, IconFilter, 
+    IconRefresh, IconSearch, IconFilter, 
     IconEye, IconBan, IconPlus, IconPrinter, IconCalendar,
     IconUser, IconFileExcel, IconBuildingStore
 } from '@tabler/icons-react';
@@ -236,6 +236,12 @@ export default function NotasSalidaPage() {
             render: (row: NotaSalidaResponse) => {
                 const transaccionDesc = row.transaccionDesc || row.tablaTransacciones?.descripcion || row.transaccionId || 'SIN TRANSACCIÓN';
                 const documentoReferencia = row.referenciaDocumento?.documentoReferencia || row.observaciones || row.doc_referencia_numero || 'S/N';
+                const tipoDocumentoDesc =
+                    row.tipoDocumentoComercial?.descripcion ||
+                    row.tipodoccomercialDesc ||
+                    row.tipodoccomercialId ||
+                    'DOC';
+
                 return (
                     <div className="flex flex-col gap-1">
                         <span className="font-bold text-slate-800 text-xs truncate" title={transaccionDesc}>
@@ -243,7 +249,7 @@ export default function NotasSalidaPage() {
                         </span>
                         <div className="flex items-center gap-1 mt-0.5">
                             <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-indigo-200">
-                                {row.tipoDocumentoComercial.descripcion || row.tipodoccomercialId || 'DOC'}
+                                {tipoDocumentoDesc}
                             </span>
                             <span className="text-[10px] text-slate-500 font-mono font-medium truncate" title={documentoReferencia}>
                                 {documentoReferencia}
