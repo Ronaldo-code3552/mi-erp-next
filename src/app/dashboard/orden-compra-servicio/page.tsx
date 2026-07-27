@@ -12,6 +12,7 @@ import {
     IconEye,
     IconFilter,
     IconBan,
+    IconPaperclip,
     IconPrinter,
     IconRefresh,
     IconSearch
@@ -19,6 +20,7 @@ import {
 
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
 import MultiSelect from "@/components/forms/MultiSelect";
+import DocumentoAdjuntosViewerModal from "@/components/documentos/DocumentoAdjuntosViewerModal";
 import DataTable from "@/components/shared/DataTable";
 import { useCrud } from "@/hooks/useCrud";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -27,6 +29,7 @@ import { ordenCompraServicioService } from "@/services/ordenCompraServicioServic
 import { proveedorService } from "@/services/proveedorService";
 import { tipoOrdenService } from "@/services/tipoOrdenService";
 import { OrdenCompraServicio, OrdenCompraServicioFilters } from "@/types/ordenCompraServicio.types";
+import { DOCUMENTO_PDF_REFERENCIAS } from "@/types/documentoPdf.types";
 
 type Option = {
     value: string | number;
@@ -209,6 +212,7 @@ export default function OrdenCompraServicioPage() {
     const [monedaOptions, setMonedaOptions] = useState<Option[]>([]);
     const [approvingId, setApprovingId] = useState("");
     const [printingId, setPrintingId] = useState("");
+    const [adjuntosOrdenId, setAdjuntosOrdenId] = useState("");
 
     useEffect(() => {
         fetchData(1, debouncedSearch, filters);
@@ -474,7 +478,7 @@ export default function OrdenCompraServicioPage() {
         },
         {
             header: "Acciones",
-            width: "175px",
+            width: "205px",
             className: "text-center",
             render: (row: OrdenCompraServicio) => {
                 const ordenId = getOrdenId(row);
@@ -493,6 +497,15 @@ export default function OrdenCompraServicioPage() {
                             title="Ver detalle"
                         >
                             <IconEye size={17} />
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => ordenId && setAdjuntosOrdenId(ordenId)}
+                            disabled={!ordenId}
+                            className="rounded p-1.5 text-slate-400 transition-colors hover:bg-amber-50 hover:text-amber-600 disabled:cursor-not-allowed disabled:opacity-35"
+                            title="Ver archivos adjuntos"
+                        >
+                            <IconPaperclip size={17} />
                         </button>
                         <button
                             type="button"
@@ -598,6 +611,14 @@ export default function OrdenCompraServicioPage() {
                 meta={meta}
                 onPageChange={(page) => fetchData(page, searchTerm, filters)}
                 emptyMessage="No se encontraron órdenes de compra/servicio"
+            />
+
+            <DocumentoAdjuntosViewerModal
+                isOpen={Boolean(adjuntosOrdenId)}
+                onClose={() => setAdjuntosOrdenId("")}
+                referenciaId={adjuntosOrdenId}
+                referenciaTabla={DOCUMENTO_PDF_REFERENCIAS.ORDEN_COMPRA_SERVICIO}
+                title={`Adjuntos de la orden ${adjuntosOrdenId}`}
             />
 
             <FiltrosAvanzados

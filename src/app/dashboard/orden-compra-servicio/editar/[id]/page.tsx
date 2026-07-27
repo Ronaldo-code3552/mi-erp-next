@@ -5,8 +5,13 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
 import OrdenCompraServicioForm from "../../components/OrdenCompraServicioForm";
+import {
+    documentoPdfService,
+    formatDocumentoPdfUploadFailures
+} from "@/services/documentoPdfService";
 import { ordenCompraServicioService } from "@/services/ordenCompraServicioService";
 import { OrdenCompraServicio, OrdenCompraServicioPayload } from "@/types/ordenCompraServicio.types";
+import { DOCUMENTO_PDF_REFERENCIAS } from "@/types/documentoPdf.types";
 
 export default function EditarOrdenCompraServicioPage() {
     const router = useRouter();
@@ -42,7 +47,10 @@ export default function EditarOrdenCompraServicioPage() {
         fetchOrden();
     }, [id, router]);
 
-    const handleSubmit = async (payload: OrdenCompraServicioPayload) => {
+    const handleSubmit = async (
+        payload: OrdenCompraServicioPayload,
+        archivosPendientes: File[]
+    ) => {
         const response = await ordenCompraServicioService.update({
             ...payload,
             ordenCompraServicioId: id
@@ -51,6 +59,24 @@ export default function EditarOrdenCompraServicioPage() {
         if (!response.isSuccess) {
             toast.error(response.message || "No se pudo actualizar la orden.");
             return;
+        }
+
+        if (archivosPendientes.length > 0) {
+            const uploadResult = await documentoPdfService.uploadSequentially(
+                DOCUMENTO_PDF_REFERENCIAS.ORDEN_COMPRA_SERVICIO,
+                id,
+                archivosPendientes
+            );
+
+            if (uploadResult.fallidos.length > 0) {
+                toast.warning(
+                    `La orden se actualizó, pero ${uploadResult.fallidos.length} archivo(s) no pudieron cargarse:\n${formatDocumentoPdfUploadFailures(uploadResult)}`
+                );
+                return {
+                    archivosPendientes: uploadResult.fallidos.map(item => item.archivo),
+                    refreshAdjuntos: uploadResult.exitosos.length > 0
+                };
+            }
         }
 
         toast.success("Orden actualizada correctamente.");

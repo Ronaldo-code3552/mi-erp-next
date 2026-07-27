@@ -27,10 +27,18 @@ const CONDICION_ESTADO_OPTIONS = [
     { label: 'LIBRE', value: 'LIBRE' }
 ];
 
+type ProductosFilters = {
+    tipo_bien: Array<string | number>;
+    sub_clase_bien: Array<string | number>;
+    unidad_medida: Array<string | number>;
+    detraccion_bien_service: Array<string | number>;
+    condicion_estado: Array<string | number>;
+};
+
 export default function ProductosPage() {
     const EMPRESA_ID = "005";
     
-    const initialFilters = {
+    const initialFilters: ProductosFilters = {
         tipo_bien: [],
         sub_clase_bien: [],
         unidad_medida: [],
@@ -43,7 +51,6 @@ export default function ProductosPage() {
         filters, setFilters, fetchData, handleAction 
     } = useCrud<Producto>(productoService, EMPRESA_ID, initialFilters);
 
-    type ProductosFilters = typeof initialFilters;
     const [tempFilters, setTempFilters] = useState<ProductosFilters>(initialFilters);
     const [showFilters, setShowFilters] = useState(false);
     const [showForm, setShowForm] = useState(false);
@@ -129,7 +136,7 @@ export default function ProductosPage() {
 
     // DEFINICIÓN DE COLUMNAS (Lógica recuperada de React)
     const columns = [
-        { header: 'Código', width: '100px', render: (row: Producto) => <span className="font-mono font-bold text-xs">{row.codigo_existencia || 'S/C'}</span> },
+        { header: 'Código Interno', width: '130px', render: (row: Producto) => <span className="font-mono font-bold text-xs">{row.codigo_existencia || 'S/C'}</span> },
         { 
             header: 'Descripción / Marca', 
             render: (row: Producto) => (

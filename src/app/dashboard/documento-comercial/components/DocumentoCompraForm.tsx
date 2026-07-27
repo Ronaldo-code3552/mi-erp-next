@@ -15,13 +15,14 @@ import {
 } from "@tabler/icons-react";
 
 import SearchableSelect from "@/components/forms/SearchableSelect";
+import DocumentoAdjuntosPanel from "@/components/documentos/DocumentoAdjuntosPanel";
+import DocumentoCompraImportModal from "./DocumentoCompraImportModal";
 import OrdenCompraImportModal from "./OrdenCompraImportModal";
 import { documentoCompraService } from "@/services/documentoCompraService";
 import { monedaService } from "@/services/monedaService";
 import { presentacionService } from "@/services/presentacionService";
 import { productoService } from "@/services/productoService";
 import { proveedorService } from "@/services/proveedorService";
-import { tipoCambioUniversalService } from "@/services/tipoCambioUniversalService";
 import { tipoPagoService } from "@/services/tipoPagoService";
 import {
     DocumentoCompra,
@@ -33,12 +34,21 @@ import { OrdenCompraServicio, OrdenCompraServicioDetalle } from "@/types/ordenCo
 import { Producto } from "@/types/producto.types";
 import { Proveedor } from "@/types/proveedor.types";
 import { TipoPago } from "@/types/tipoPago.types";
+import {
+    DOCUMENTO_PDF_REFERENCIAS,
+    DocumentoPdfFormSubmitResult
+} from "@/types/documentoPdf.types";
 
 const EMPRESA_ID = "005";
 const USER_ID = "CU0001";
 const IGV_RATE = 0.18;
-const LOCAL_PURCHASE = "Compra productos locales";
-const IMPORTED_PURCHASE = "Compra productos Importados";
+const CREDIT_DEBIT_NOTE_TYPE_IDS = new Set(["X067", "X068"]);
+const LOCAL_PURCHASE = "COMPRA NACIONAL";
+const IMPORTED_PURCHASE = "IMPORTACION";
+const PURCHASE_TYPE_OPTIONS = [
+    { value: LOCAL_PURCHASE, label: "Compra productos locales" },
+    { value: IMPORTED_PURCHASE, label: "Compra productos Importados" }
+];
 
 type SelectOption = {
     key?: string | number;
@@ -74,6 +84,8 @@ type FormValue = {
     documentoCompraId: string;
     ordenCompraServicioId: string;
     ordenNumero: string;
+    documentoReferenciaId: string;
+    documentoReferenciaNumero: string;
     tipoDocComercialId: string;
     serie: string;
     numero: string;
@@ -101,7 +113,10 @@ interface Props {
     initialValue?: Partial<DocumentoCompra>;
     readOnly?: boolean;
     onBack: () => void;
-    onSubmit: (payload: DocumentoCompraPayload) => Promise<void>;
+    onSubmit: (
+        payload: DocumentoCompraPayload,
+        archivosPendientes: File[]
+    ) => Promise<DocumentoPdfFormSubmitResult | void>;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -138,6 +153,33 @@ const boolOf = (value: unknown, fallback = false) => {
     if (typeof value === "boolean") return value;
     if (typeof value === "number") return value === 1;
     return ["1", "true", "si", "sí", "afecto"].includes(String(value).trim().toLowerCase());
+};
+
+const normalizePurchaseType = (value: unknown) => {
+    const text = String(value || "").trim().toUpperCase();
+    if (text.includes("IMPORT")) return IMPORTED_PURCHASE;
+    return LOCAL_PURCHASE;
+};
+
+const usesDocumentReference = (documentTypeId: unknown) => (
+    CREDIT_DEBIT_NOTE_TYPE_IDS.has(String(documentTypeId || "").trim().toUpperCase())
+);
+
+const currencyIdOf = (currency: Moneda) => currency.monedaId || currency.MonedaId || "";
+const currencyLabelOf = (currency: Moneda) => currency.descripcion || currency.Descripcion || "";
+const currencySymbolOf = (currency?: Moneda) => (
+    currency?.simbolomoneda
+    || currency?.Simbolomoneda
+    || currency?.simbolo
+    || currency?.Simbolo
+    || currency?.abreviatura
+    || currency?.Abreviatura
+    || ""
+);
+const currencyExchangeRateOf = (currency?: Moneda) => {
+    const exchange = currency?.tipoCambioUniversal || currency?.TipoCambioUniversal;
+    const rate = numberOf(exchange?.tc_venta);
+    return rate > 0 ? rate : 1;
 };
 
 const operationOf = (bien: Record<string, unknown>) => {
@@ -224,13 +266,24 @@ const normalizeDetails = (
 const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
     const raw = (source || {}) as Record<string, unknown>;
     const order = nested(raw, ["ordenCompraServicio", "ordencompraServicio", "ordenCompra"]);
+    const referenceValue = raw.documentoReferencia ?? raw.documento_referencia ?? raw.DocumentoReferencia;
+    const reference = referenceValue && typeof referenceValue === "object"
+        ? referenceValue as Record<string, unknown>
+        : {};
     const purchaseType = first(raw, ["tipoCompra", "tipo_compra", "TipoCompra"]);
     const documentId = first(raw, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"]);
     const orderId = first(raw, ["ordencompraservicioId", "ordenCompraServicioId", "OrdenCompraServicioId"]);
+    const referenceId = Object.keys(reference).length
+        ? first(reference, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"])
+        : String(referenceValue || "").trim();
+    const referenceSerie = first(reference, ["serie", "Serie"]);
+    const referenceNumero = first(reference, ["numero", "Numero"]);
     return {
         documentoCompraId: documentId,
         ordenCompraServicioId: orderId,
         ordenNumero: first(order, ["numero_ordencompra", "numeroOrdenCompra"]) || first(raw, ["numeroOrdenCompra"]),
+        documentoReferenciaId: referenceId,
+        documentoReferenciaNumero: [referenceSerie, referenceNumero].filter(Boolean).join("-") || referenceId,
         tipoDocComercialId: first(raw, ["tipodoccomercialId", "tipoDocComercialId", "TipoDocComercialId"]),
         serie: first(raw, ["serie", "Serie"]),
         numero: first(raw, ["numero", "Numero"]),
@@ -239,7 +292,7 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
         proveedorId: first(raw, ["proveedorId", "ProveedorId"]),
         monedaId: first(raw, ["monedaId", "MonedaId"]) || "001",
         tipoPagoId: first(raw, ["tipopagoId", "tipoPagoId", "TipoPagoId"]),
-        tipoCompra: purchaseType.toUpperCase().includes("IMPORT") ? IMPORTED_PURCHASE : LOCAL_PURCHASE,
+        tipoCompra: normalizePurchaseType(purchaseType),
         tipoCambio: first(raw, ["tipoCambio", "tipo_cambio", "TipoCambio"]) || "1",
         observacion: first(raw, ["observacion", "Observacion"]),
         fotoDocumentoCompra: first(raw, ["fotoDocumentocompra", "fotoDocumentoCompra", "foto_documentocompra"]),
@@ -251,7 +304,7 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
         estado: first(raw, ["estado", "Estado"]) || "REGISTRADO",
         detalles: normalizeDetails((source?.detalles || []) as DocumentoCompraDetalle[], {
             bloqueado: Boolean(documentId),
-            origenImportado: Boolean(orderId)
+            origenImportado: Boolean(orderId || referenceId)
         })
     };
 };
@@ -271,29 +324,63 @@ const Input = ({ label, disabled, ...props }: React.InputHTMLAttributes<HTMLInpu
     </div>
 );
 
-export default function DocumentoCompraForm({ title, submitText, initialValue, readOnly = false, onBack, onSubmit }: Props) {
+export default function DocumentoCompraForm({
+    title,
+    submitText,
+    initialValue,
+    readOnly = false,
+    onBack,
+    onSubmit
+}: Props) {
     const [form, setForm] = useState<FormValue>(() => normalizeForm(initialValue));
     const [addDetail, setAddDetail] = useState<DetalleDraft>(emptyDetail);
     const [presentationOptions, setPresentationOptions] = useState<SelectOption[]>([]);
+    const [currencyOptions, setCurrencyOptions] = useState<SelectOption[]>([]);
     const [saving, setSaving] = useState(false);
+    const [archivosPendientes, setArchivosPendientes] = useState<File[]>([]);
+    const [adjuntosRefreshKey, setAdjuntosRefreshKey] = useState(0);
     const [orderModalOpen, setOrderModalOpen] = useState(false);
+    const [documentModalOpen, setDocumentModalOpen] = useState(false);
     const [importedLabels, setImportedLabels] = useState({ provider: "", currency: "", payment: "" });
+    const importsDocument = usesDocumentReference(form.tipoDocComercialId);
     const isEditing = Boolean(form.documentoCompraId);
-    const isReadOnly = readOnly || form.estado.toUpperCase().includes("ANUL");
-    const igvLocked = isReadOnly || Boolean(form.ordenCompraServicioId);
+    const isReadOnly = readOnly || form.estado.trim().toUpperCase() !== "REGISTRADO";
+    const linkedSourceId = importsDocument ? form.documentoReferenciaId : form.ordenCompraServicioId;
+    const igvLocked = isReadOnly || Boolean(linkedSourceId);
 
     useEffect(() => setForm(normalizeForm(initialValue)), [initialValue]);
 
     useEffect(() => {
-        if (isReadOnly || isEditing) return;
-        const loadExchange = async () => {
-            const response = await tipoCambioUniversalService.getAll(1, 2);
-            const raw = (response.data?.[0] || {}) as Record<string, unknown>;
-            const value = numberOf(first(raw, ["tc_venta", "tipo_cambio", "tipoCambio", "venta", "valor"]));
-            if (response.isSuccess && value > 0) setForm(previous => ({ ...previous, tipoCambio: value.toFixed(3) }));
+        let mounted = true;
+
+        const loadCurrencies = async () => {
+            const response = await monedaService.getAll(1, 20);
+            if (!mounted || !response.isSuccess) return;
+
+            const currencies = response.data || [];
+            setCurrencyOptions(currencies.map(currency => ({
+                value: currencyIdOf(currency),
+                label: currencyLabelOf(currency),
+                aux: currencySymbolOf(currency),
+                raw: currency
+            })).filter(option => option.value));
+
+            setForm(previous => {
+                if (previous.documentoCompraId || previous.ordenCompraServicioId || previous.documentoReferenciaId) {
+                    return previous;
+                }
+
+                const selectedCurrency = currencies.find(currency => currencyIdOf(currency) === previous.monedaId);
+                return {
+                    ...previous,
+                    tipoCambio: String(currencyExchangeRateOf(selectedCurrency))
+                };
+            });
         };
-        loadExchange();
-    }, [isEditing, isReadOnly]);
+
+        loadCurrencies();
+        return () => { mounted = false; };
+    }, []);
 
     const totals = useMemo(() => {
         let newAffectAmount = 0;
@@ -319,16 +406,35 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
 
     const labels = useMemo(() => {
         const raw = (initialValue || {}) as Record<string, unknown>;
+        const selectedCurrency = currencyOptions.find(option => String(option.value) === form.monedaId);
         return {
             provider: importedLabels.provider || first(nested(raw, ["proveedor", "Proveedor"]), ["descripcion"]) || form.proveedorId,
-            currency: importedLabels.currency || first(nested(raw, ["moneda", "Moneda"]), ["descripcion", "abreviatura"]) || form.monedaId,
+            currency: importedLabels.currency || first(nested(raw, ["moneda", "Moneda"]), ["descripcion", "abreviatura"]) || selectedCurrency?.label || (form.monedaId ? "Cargando moneda..." : ""),
             payment: importedLabels.payment || first(nested(raw, ["tipoPago", "TipoPago"]), ["descripcion"]) || form.tipoPagoId,
             documentType: first(nested(raw, ["tipoDocumentoComercial", "tipoDocumento"]), ["descripcion"]) || form.tipoDocComercialId,
-            order: form.ordenNumero || form.ordenCompraServicioId
+            order: form.ordenNumero || form.ordenCompraServicioId,
+            reference: form.documentoReferenciaNumero || form.documentoReferenciaId
         };
-    }, [form.monedaId, form.ordenCompraServicioId, form.ordenNumero, form.proveedorId, form.tipoDocComercialId, form.tipoPagoId, importedLabels, initialValue]);
+    }, [currencyOptions, form.documentoReferenciaId, form.documentoReferenciaNumero, form.monedaId, form.ordenCompraServicioId, form.ordenNumero, form.proveedorId, form.tipoDocComercialId, form.tipoPagoId, importedLabels, initialValue]);
+
+    const selectedCurrency = currencyOptions.find(option => String(option.value) === form.monedaId)?.raw as Moneda | undefined;
+    const currencySymbol = currencySymbolOf(selectedCurrency)
+        || first(nested((initialValue || {}) as Record<string, unknown>, ["moneda", "Moneda"]), ["simbolomoneda", "simbolo", "abreviatura"]);
 
     const setField = (name: keyof FormValue, value: string | boolean) => setForm(previous => ({ ...previous, [name]: value }));
+    const exchangeRateByCurrencyId = (currencyId: string) => {
+        const currency = currencyOptions.find(option => String(option.value) === currencyId)?.raw as Moneda | undefined;
+        return String(currencyExchangeRateOf(currency));
+    };
+
+    const handleCurrencyChange = (currencyId: string, option?: SelectOption) => {
+        const currency = option?.raw as Moneda | undefined;
+        setForm(previous => ({
+            ...previous,
+            monedaId: currencyId,
+            tipoCambio: String(currencyExchangeRateOf(currency))
+        }));
+    };
 
     const fetchDocumentTypes = async (term: string): Promise<SelectOption[]> => {
         const response = await documentoCompraService.getTiposDocumento("DOCUMENTO_COMPRA");
@@ -336,6 +442,37 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
         return (response.data || []).filter(item => !normalizedTerm || `${item.descripcion} ${item.abreviatura || ""}`.toLowerCase().includes(normalizedTerm)).map(item => ({
             key: item.tipodoccomercialId, value: item.tipodoccomercialId, label: item.descripcion, aux: item.abreviatura, raw: item
         }));
+    };
+
+    const handleDocumentTypeChange = (documentTypeId: string) => {
+        const changesImportSource = importsDocument !== usesDocumentReference(documentTypeId);
+        const hasImportedSource = Boolean(form.ordenCompraServicioId || form.documentoReferenciaId);
+
+        setOrderModalOpen(false);
+        setDocumentModalOpen(false);
+
+        if (!changesImportSource || !hasImportedSource) {
+            setField("tipoDocComercialId", documentTypeId);
+            return;
+        }
+
+        setImportedLabels({ provider: "", currency: "", payment: "" });
+        setForm(previous => ({
+            ...previous,
+            tipoDocComercialId: documentTypeId,
+            ordenCompraServicioId: "",
+            ordenNumero: "",
+            documentoReferenciaId: "",
+            documentoReferenciaNumero: "",
+            proveedorId: "",
+            monedaId: "001",
+            tipoPagoId: "",
+            tipoCambio: exchangeRateByCurrencyId("001"),
+            subtotalAfectoBase: "0",
+            subtotalExoneradoBase: "0",
+            detalles: previous.detalles.filter(detail => !detail.origenImportado)
+        }));
+        toast.info("Se limpió la importación porque cambió el tipo de documento.");
     };
 
     const handleOrderImported = (order: OrdenCompraServicio) => {
@@ -348,6 +485,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
         const provider = nested(raw, ["proveedor", "Proveedor"]);
         const currency = nested(raw, ["moneda", "Moneda"]);
         const payment = nested(raw, ["tipoPago", "TipoPago"]);
+        const currencyId = first(raw, ["monedaId", "MonedaId"]) || first(currency, ["monedaId"]);
         const details = normalizeDetails((order.detalles || order.Detalles || []) as OrdenCompraServicioDetalle[], {
             bloqueado: true,
             origenImportado: true
@@ -364,9 +502,9 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
             ordenCompraServicioId: id,
             ordenNumero: first(raw, ["numero_ordencompra", "numeroOrdenCompra", "NumeroOrdenCompra"]) || id,
             proveedorId: first(raw, ["proveedorId", "ProveedorId"]) || first(provider, ["proveedorId"]),
-            monedaId: first(raw, ["monedaId", "MonedaId"]) || first(currency, ["monedaId"]),
+            monedaId: currencyId,
             tipoPagoId: first(raw, ["tipopagoId", "tipoPagoId", "TipoPagoId"]) || first(payment, ["tipopagoId"]),
-            tipoCambio: first(raw, ["tipo_cambio", "tipoCambio", "TipoCambio"]) || previous.tipoCambio,
+            tipoCambio: first(raw, ["tipo_cambio", "tipoCambio", "TipoCambio"]) || exchangeRateByCurrencyId(currencyId),
             incluyeIgv: boolOf(raw.incluye_igv ?? raw.incluyeIgv, previous.incluyeIgv),
             subtotalAfectoBase: getValorVentaAfecto(raw) || "0",
             subtotalExoneradoBase: getValorVentaExonerado(raw) || "0",
@@ -385,6 +523,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
             proveedorId: "",
             monedaId: "001",
             tipoPagoId: "",
+            tipoCambio: exchangeRateByCurrencyId("001"),
             subtotalAfectoBase: "0",
             subtotalExoneradoBase: "0",
             detalles: previous.detalles.filter(detail => !detail.origenImportado)
@@ -393,16 +532,77 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
         toast.success("Importación de orden limpiada.");
     };
 
+    const handleDocumentImported = (document: DocumentoCompra) => {
+        const raw = document as Record<string, unknown>;
+        const id = first(raw, ["documentocompraId", "documentoCompraId", "DocumentoCompraId"]);
+        const documentTypeId = first(raw, ["tipodoccomercialId", "tipoDocComercialId", "TipoDocComercialId"]);
+        const status = first(raw, ["estado", "Estado"]).toUpperCase();
+        if (!id) return toast.error("El documento seleccionado no tiene un ID válido.");
+        if (documentTypeId !== "X062") return toast.error("Solo se pueden importar facturas de compra.");
+        if (status.includes("ANUL")) return toast.error("No se puede importar un documento anulado.");
+
+        const provider = nested(raw, ["proveedor", "Proveedor"]);
+        const currency = nested(raw, ["moneda", "Moneda"]);
+        const payment = nested(raw, ["tipoPago", "TipoPago"]);
+        const currencyId = first(raw, ["monedaId", "MonedaId"]) || first(currency, ["monedaId"]);
+        const details = normalizeDetails((document.detalles || []) as DocumentoCompraDetalle[], {
+            bloqueado: true,
+            origenImportado: true
+        });
+        if (!details.length) return toast.warning("El documento seleccionado no contiene productos.");
+
+        const serie = first(raw, ["serie", "Serie"]);
+        const numero = first(raw, ["numero", "Numero"]);
+        const displayNumber = [serie, numero].filter(Boolean).join("-") || id;
+
+        setImportedLabels({
+            provider: first(provider, ["descripcion", "Descripcion"]),
+            currency: first(currency, ["descripcion", "abreviatura", "simbolomoneda"]),
+            payment: first(payment, ["descripcion", "Descripcion"])
+        });
+        setForm(previous => ({
+            ...previous,
+            ordenCompraServicioId: "",
+            ordenNumero: "",
+            documentoReferenciaId: id,
+            documentoReferenciaNumero: displayNumber,
+            proveedorId: first(raw, ["proveedorId", "ProveedorId"]) || first(provider, ["proveedorId"]),
+            monedaId: currencyId,
+            tipoPagoId: first(raw, ["tipopagoId", "tipoPagoId", "TipoPagoId"]) || first(payment, ["tipopagoId"]),
+            tipoCompra: normalizePurchaseType(first(raw, ["tipoCompra", "tipo_compra", "TipoCompra"]) || previous.tipoCompra),
+            tipoCambio: first(raw, ["tipo_cambio", "tipoCambio", "TipoCambio"]) || exchangeRateByCurrencyId(currencyId),
+            incluyeIgv: boolOf(raw.incluye_igv ?? raw.incluyeIgv, previous.incluyeIgv),
+            subtotalAfectoBase: getValorVentaAfecto(raw) || "0",
+            subtotalExoneradoBase: getValorVentaExonerado(raw) || "0",
+            detalles: details
+        }));
+        setDocumentModalOpen(false);
+        toast.success(`Documento ${displayNumber} importado.`);
+    };
+
+    const clearImportedDocument = () => {
+        setImportedLabels({ provider: "", currency: "", payment: "" });
+        setForm(previous => ({
+            ...previous,
+            documentoReferenciaId: "",
+            documentoReferenciaNumero: "",
+            proveedorId: "",
+            monedaId: "001",
+            tipoPagoId: "",
+            tipoCambio: exchangeRateByCurrencyId("001"),
+            subtotalAfectoBase: "0",
+            subtotalExoneradoBase: "0",
+            detalles: previous.detalles.filter(detail => !detail.origenImportado)
+        }));
+        setDocumentModalOpen(false);
+        toast.success("Importación de documento limpiada.");
+    };
+
     const fetchProviderOptions = async (term: string): Promise<SelectOption[]> => {
         const response = await proveedorService.getAll(1, 20, term, { estado: [1] });
         return (response.data || []).map((item: Proveedor) => ({
             value: item.proveedorId || item.ProveedorId || "", label: item.descripcion || item.Descripcion || "", aux: item.numero_doc || item.numeroDoc, raw: item
         })).filter(item => item.value);
-    };
-
-    const fetchCurrencyOptions = async (term: string): Promise<SelectOption[]> => {
-        const response = await monedaService.getAll(1, 20, term);
-        return (response.data || []).map((item: Moneda) => ({ value: item.monedaId || item.MonedaId || "", label: item.descripcion || item.Descripcion || "", aux: item.simbolo || item.Simbolo, raw: item })).filter(item => item.value);
     };
 
     const fetchPaymentOptions = async (term: string): Promise<SelectOption[]> => {
@@ -468,6 +668,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
 
     const validate = () => {
         if (!form.tipoDocComercialId || !form.serie.trim() || !form.numero.trim()) return "Complete tipo de documento, serie y número.";
+        if (importsDocument && !form.documentoReferenciaId) return "Importe la factura de compra que será referenciada.";
         if (!form.fechaDoc || !form.proveedorId || !form.monedaId || !form.tipoPagoId) return "Complete fecha, proveedor, moneda y tipo de pago.";
         if (numberOf(form.tipoCambio) <= 0) return "El tipo de cambio debe ser mayor a cero.";
         if (!form.detalles.length) return "Agregue al menos un producto.";
@@ -476,10 +677,11 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
 
     const submit = async (event: React.FormEvent) => {
         event.preventDefault();
+        if (isReadOnly || saving) return;
         const error = validate();
         if (error) return toast.warning(error);
         const payload: DocumentoCompraPayload = {
-            ordenCompraServicioId: form.ordenCompraServicioId || null,
+            ordenCompraServicioId: importsDocument ? null : form.ordenCompraServicioId || null,
             tipoDocComercialId: form.tipoDocComercialId,
             serie: form.serie.trim().toUpperCase(),
             numero: form.numero.trim(),
@@ -496,10 +698,10 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
             observacion: form.observacion.trim() || null,
             tipoPagoId: form.tipoPagoId,
             detraccion: false,
-            fotoDocumentoCompra: form.fotoDocumentoCompra || null,
+            fotoDocumentoCompra: isEditing ? form.fotoDocumentoCompra || null : null,
             cuentaUsuarioId: USER_ID,
-            tipoCompra: form.tipoCompra,
-            documentoReferencia: null,
+            tipoCompra: normalizePurchaseType(form.tipoCompra),
+            documentoReferencia: importsDocument ? form.documentoReferenciaId : null,
             motivoElectronicoId: null,
             incluyeIgv: form.incluyeIgv,
             tipoCambio: numberOf(form.tipoCambio),
@@ -518,7 +720,17 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
             }))
         };
         setSaving(true);
-        try { await onSubmit(payload); } finally { setSaving(false); }
+        try {
+            const result = await onSubmit(payload, archivosPendientes);
+            if (result) {
+                setArchivosPendientes(result.archivosPendientes);
+                if (result.refreshAdjuntos) {
+                    setAdjuntosRefreshKey(previous => previous + 1);
+                }
+            }
+        } finally {
+            setSaving(false);
+        }
     };
 
     return (
@@ -527,7 +739,7 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
                 <div className="flex items-center justify-between">
                     <div className="flex min-w-0 items-center gap-3">
                         <button type="button" onClick={onBack} className="rounded-lg border border-slate-200 bg-white p-2 text-slate-500 hover:text-blue-600" title="Volver"><IconArrowLeft size={18} /></button>
-                        <div className="min-w-0"><h1 className="truncate text-xl font-bold text-slate-800">{title}</h1><p className="text-xs text-slate-500">Documento de compra y detalle de productos.</p></div>
+                        <div className="min-w-0"><h1 className="truncate text-xl font-bold text-slate-800">{title}</h1><p className="text-xs text-slate-500">{importsDocument ? "Nota de crédito/débito y detalle de productos." : "Documento de compra y detalle de productos."}</p></div>
                     </div>
                     {!isReadOnly && <button type="submit" disabled={saving} className="flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2.5 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-60">{saving ? <IconLoader className="animate-spin" size={17} /> : <IconDeviceFloppy size={17} />}{submitText}</button>}
                 </div>
@@ -536,35 +748,55 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
                     <div className="flex items-center gap-2 border-b border-sky-100 bg-sky-50 px-4 py-3"><IconFileInvoice size={18} className="text-sky-700" /><h2 className="text-sm font-black uppercase text-sky-800">Datos del documento</h2></div>
                     <div className="grid grid-cols-1 gap-5 p-5 xl:grid-cols-[1fr_260px]">
                         <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
-                            <SearchableSelect label="Tipo Doc" value={form.tipoDocComercialId} fetchCustom={fetchDocumentTypes} fallbackLabel={labels.documentType} disabled={isReadOnly} onChange={event => setField("tipoDocComercialId", String(event.target.value))} />
-                            <div className="flex flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-slate-500">Tipo Compra</label><select value={form.tipoCompra} disabled={isReadOnly} onChange={event => setField("tipoCompra", event.target.value)} className="h-[38px] rounded-lg border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100"><option value={LOCAL_PURCHASE}>{LOCAL_PURCHASE}</option><option value={IMPORTED_PURCHASE}>{IMPORTED_PURCHASE}</option></select></div>
+                            <SearchableSelect label="Tipo Doc" value={form.tipoDocComercialId} fetchCustom={fetchDocumentTypes} fallbackLabel={labels.documentType} disabled={isReadOnly || (isEditing && Boolean(linkedSourceId))} onChange={event => handleDocumentTypeChange(String(event.target.value))} />
+                            <div className="flex flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-slate-500">Tipo Compra</label><select value={normalizePurchaseType(form.tipoCompra)} disabled={isReadOnly || (importsDocument && Boolean(linkedSourceId))} onChange={event => setField("tipoCompra", event.target.value)} className="h-[38px] rounded-lg border border-slate-200 bg-white px-2 text-xs disabled:bg-slate-100">{PURCHASE_TYPE_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}</select></div>
                             <Input label="Serie" value={form.serie} maxLength={10} disabled={isReadOnly} onChange={event => setField("serie", event.target.value)} />
                             <Input label="Número" value={form.numero} maxLength={20} disabled={isReadOnly} onChange={event => setField("numero", event.target.value)} />
                             <Input label="Fecha Documento" type="date" value={form.fechaDoc} disabled={isReadOnly} onChange={event => setField("fechaDoc", event.target.value)} />
-                            <div className="flex min-w-0 flex-col gap-1.5 lg:col-span-2">
-                                <label className="text-[10px] font-bold uppercase text-slate-500">N° Orden aprobada</label>
-                                <div className="flex h-[38px] min-w-0 gap-2">
-                                    <input value={labels.order} readOnly placeholder="Sin orden importada" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-100 px-3 font-mono text-xs font-bold text-slate-600 outline-none" />
-                                    {!isReadOnly && !isEditing && form.ordenCompraServicioId && <button type="button" onClick={clearImportedOrder} className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Limpiar orden importada"><IconX size={17} /></button>}
-                                    {!isReadOnly && <button type="button" onClick={() => setOrderModalOpen(true)} disabled={Boolean(form.ordenCompraServicioId)} className="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-45"><IconSearch size={16} /> Cargar orden</button>}
+                            {importsDocument ? (
+                                <div className="flex min-w-0 flex-col gap-1.5 lg:col-span-2">
+                                    <label className="text-[10px] font-bold uppercase text-slate-500">Factura de compra referenciada</label>
+                                    <div className="flex h-[38px] min-w-0 gap-2">
+                                        <input value={labels.reference} readOnly placeholder="Sin documento importado" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-100 px-3 font-mono text-xs font-bold text-slate-600 outline-none" />
+                                        {!isReadOnly && !isEditing && form.documentoReferenciaId && <button type="button" onClick={clearImportedDocument} className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Limpiar documento importado"><IconX size={17} /></button>}
+                                        {!isReadOnly && <button type="button" onClick={() => setDocumentModalOpen(true)} disabled={Boolean(form.documentoReferenciaId)} className="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-45"><IconSearch size={16} /> Cargar documento</button>}
+                                    </div>
                                 </div>
-                            </div>
+                            ) : (
+                                <div className="flex min-w-0 flex-col gap-1.5 lg:col-span-2">
+                                    <label className="text-[10px] font-bold uppercase text-slate-500">N° Orden aprobada</label>
+                                    <div className="flex h-[38px] min-w-0 gap-2">
+                                        <input value={labels.order} readOnly placeholder="Sin orden importada" className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-100 px-3 font-mono text-xs font-bold text-slate-600 outline-none" />
+                                        {!isReadOnly && !isEditing && form.ordenCompraServicioId && <button type="button" onClick={clearImportedOrder} className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-lg border border-red-200 bg-red-50 text-red-600 hover:bg-red-100" title="Limpiar orden importada"><IconX size={17} /></button>}
+                                        {!isReadOnly && <button type="button" onClick={() => setOrderModalOpen(true)} disabled={Boolean(form.ordenCompraServicioId)} className="inline-flex h-[38px] shrink-0 items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 text-xs font-bold text-blue-700 hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-45"><IconSearch size={16} /> Cargar orden</button>}
+                                    </div>
+                                </div>
+                            )}
                             <Input label="N° Guía" value={form.guiasRemisionId} maxLength={12} disabled={isReadOnly} onChange={event => setField("guiasRemisionId", event.target.value)} />
-                            <SearchableSelect label="Proveedor" value={form.proveedorId} fetchCustom={fetchProviderOptions} fallbackLabel={labels.provider} disabled={isReadOnly || Boolean(form.ordenCompraServicioId)} onChange={event => setField("proveedorId", String(event.target.value))} />
-                            <SearchableSelect label="Moneda" value={form.monedaId} fetchCustom={fetchCurrencyOptions} fallbackLabel={labels.currency} disabled={isReadOnly || Boolean(form.ordenCompraServicioId)} onChange={event => setField("monedaId", String(event.target.value))} />
-                            <SearchableSelect label="Tipo Pago" value={form.tipoPagoId} fetchCustom={fetchPaymentOptions} fallbackLabel={labels.payment} disabled={isReadOnly || Boolean(form.ordenCompraServicioId)} onChange={event => setField("tipoPagoId", String(event.target.value))} />
+                            <SearchableSelect label="Proveedor" value={form.proveedorId} fetchCustom={fetchProviderOptions} fallbackLabel={labels.provider} disabled={isReadOnly || Boolean(linkedSourceId)} onChange={event => setField("proveedorId", String(event.target.value))} />
+                            <SearchableSelect label="Moneda" value={form.monedaId} options={currencyOptions} fallbackLabel={labels.currency} disabled={isReadOnly || Boolean(linkedSourceId)} onChange={event => handleCurrencyChange(String(event.target.value), event.option)} />
+                            <SearchableSelect label="Tipo Pago" value={form.tipoPagoId} fetchCustom={fetchPaymentOptions} fallbackLabel={labels.payment} disabled={isReadOnly || Boolean(linkedSourceId)} onChange={event => setField("tipoPagoId", String(event.target.value))} />
                             <Input label="Observaciones" value={form.observacion} maxLength={250} disabled={isReadOnly} onChange={event => setField("observacion", event.target.value)} />
-                            <div className="flex min-w-0 flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-slate-500">Documento de compra</label><input type="file" disabled={isReadOnly} onChange={event => setField("fotoDocumentoCompra", event.target.files?.[0]?.name || "")} className="h-[38px] min-w-0 rounded-lg border border-slate-200 p-1.5 text-xs file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1" /></div>
+                            <DocumentoAdjuntosPanel
+                                compact
+                                referenciaId={form.documentoCompraId || undefined}
+                                referenciaTabla={DOCUMENTO_PDF_REFERENCIAS.DOCUMENTO_COMPRA}
+                                readOnly={isReadOnly}
+                                disabled={saving}
+                                refreshKey={adjuntosRefreshKey}
+                                archivosPendientes={archivosPendientes}
+                                onArchivosPendientesChange={setArchivosPendientes}
+                            />
                             <div className="flex flex-col gap-1.5"><label className="text-[10px] font-bold uppercase text-red-500">¿Incluye IGV?</label><div className={`flex h-[38px] items-center gap-5 rounded-lg border border-slate-200 px-3 text-xs font-bold ${igvLocked ? "bg-slate-100 text-slate-500" : ""}`}><label className="flex gap-2"><input type="radio" checked={form.incluyeIgv} disabled={igvLocked} onChange={() => setField("incluyeIgv", true)} />Sí</label><label className="flex gap-2"><input type="radio" checked={!form.incluyeIgv} disabled={igvLocked} onChange={() => setField("incluyeIgv", false)} />No</label></div></div>
                             <Input label="Máximo Exceso" type="number" min="0" step="1" value={form.maximoExceso} disabled={isReadOnly} onChange={event => setField("maximoExceso", event.target.value)} />
                         </div>
                         <aside className="space-y-4">
-                            <Input label="Tipo Cambio" type="number" min="0.000001" step="0.001" value={form.tipoCambio} disabled={isReadOnly} onChange={event => setField("tipoCambio", event.target.value)} />
+                            <Input label="Tipo Cambio" type="text" value={[currencySymbol, form.tipoCambio].filter(Boolean).join(" ")} disabled />
                             <div className="space-y-4 rounded-lg border border-blue-200 bg-blue-50/40 p-4 text-sm">
-                                <div><p className="text-xs font-black uppercase">Subtotal (Afecto)</p><p className="mt-1 text-lg font-black">S/ {money(totals.subtotalAfecto)}</p></div>
-                                <div><p className="text-xs font-black uppercase">Subtotal (Exonerado)</p><p className="mt-1 text-lg font-black">S/ {money(totals.subtotalExonerado)}</p></div>
-                                <div><p className="text-xs font-black uppercase">IGV</p><p className="mt-1 text-lg font-black">S/ {money(totals.igv)}</p></div>
-                                <div><p className="text-xs font-black uppercase">Total</p><p className="mt-1 text-xl font-black text-blue-700">S/ {money(totals.total)}</p></div>
+                                <div><p className="text-xs font-black uppercase">Subtotal (Afecto)</p><p className="mt-1 text-lg font-black">{currencySymbol} {money(totals.subtotalAfecto)}</p></div>
+                                <div><p className="text-xs font-black uppercase">Subtotal (Exonerado)</p><p className="mt-1 text-lg font-black">{currencySymbol} {money(totals.subtotalExonerado)}</p></div>
+                                <div><p className="text-xs font-black uppercase">IGV</p><p className="mt-1 text-lg font-black">{currencySymbol} {money(totals.igv)}</p></div>
+                                <div><p className="text-xs font-black uppercase">Total</p><p className="mt-1 text-xl font-black text-blue-700">{currencySymbol} {money(totals.total)}</p></div>
                             </div>
                         </aside>
                     </div>
@@ -720,7 +952,8 @@ export default function DocumentoCompraForm({ title, submitText, initialValue, r
                         </tbody></table></div>
                 </section>
             </form>
-            <OrdenCompraImportModal isOpen={orderModalOpen} onClose={() => setOrderModalOpen(false)} onImport={handleOrderImported} />
+            {!importsDocument && <OrdenCompraImportModal isOpen={orderModalOpen} onClose={() => setOrderModalOpen(false)} onImport={handleOrderImported} />}
+            {importsDocument && <DocumentoCompraImportModal isOpen={documentModalOpen} onClose={() => setDocumentModalOpen(false)} onImport={handleDocumentImported} />}
         </div>
     );
 }

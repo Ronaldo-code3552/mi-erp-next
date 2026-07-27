@@ -2,12 +2,18 @@ import apiClient from '@/api/apiCliente';
 import { ApiResponse } from '@/types';
 import {
     OrdenCompraServicio,
+    OrdenCompraServicioCreatedDto,
     OrdenCompraServicioCreatePayload,
     OrdenCompraServicioDetalleCreatePayload,
     OrdenCompraServicioFilters,
     OrdenCompraServicioPayload,
     OrdenCompraServicioUpdatePayload
 } from '@/types/ordenCompraServicio.types';
+import {
+    buildTimestampedFileName,
+    downloadBlob,
+    getFileNameFromContentDisposition
+} from '@/utils/fileDownload';
 
 const EMPRESA_ID = '005';
 const USER_ID = 'CU0001';
@@ -53,6 +59,28 @@ const asNumber = (value?: number | string | null) => {
     return Number.isFinite(parsed) ? parsed : null;
 };
 
+const buildReportParams = (filters: OrdenCompraServicioFilters = {}) => {
+    const params: Record<string, string | number> = {
+        PageNumber: 1,
+        PageSize: 10000
+    };
+
+    const estado = singleValue(filters.estado);
+    const tipoOrden = singleValue(filters.tipoOrden);
+    const proveedorId = singleValue(filters.proveedorId);
+    const monedaId = singleValue(filters.monedaId);
+
+    if (filters.searchTerm?.trim()) params.SearchTerm = filters.searchTerm.trim();
+    if (estado) params.FiltroEstado = estado;
+    if (tipoOrden) params.TipoOrden = tipoOrden;
+    if (proveedorId) params.ProveedorId = proveedorId;
+    if (monedaId) params.MonedaId = monedaId;
+    if (filters.fechaInicio) params.FechaInicio = filters.fechaInicio;
+    if (filters.fechaFin) params.FechaFin = filters.fechaFin;
+
+    return params;
+};
+
 const toCreatePayload = (payload: OrdenCompraServicioPayload): OrdenCompraServicioCreatePayload => ({
     TipoOrden: payload.tipoOrden?.trim(),
     PedidoCompraId: payload.pedidoCompraId?.trim() || null,
@@ -94,6 +122,47 @@ const toUpdatePayload = (payload: OrdenCompraServicioPayload): OrdenCompraServic
     const { TipoOrden, ...updatePayload } = toCreatePayload(payload);
     void TipoOrden;
     return updatePayload;
+};
+
+const normalizeCreatedOrder = (payload: unknown): ApiResponse<OrdenCompraServicioCreatedDto> => {
+    const response = (typeof payload === 'object' && payload !== null
+        ? payload
+        : {}) as Record<string, unknown>;
+    const dataValue = response.data ?? response.Data;
+    const data = (typeof dataValue === 'object' && dataValue !== null
+        ? dataValue
+        : response) as Record<string, unknown>;
+    const ordenCompraServicioId = typeof dataValue === 'string'
+        ? dataValue.trim()
+        : firstStringValue(data, [
+            'ordenCompraServicioId',
+            'ordencompraservicioId',
+            'OrdenCompraServicioId'
+        ]);
+    const numeroOrdenCompra = firstStringValue(data, [
+        'numeroOrdenCompra',
+        'numero_ordencompra',
+        'NumeroOrdenCompra'
+    ]);
+    const successValue = response.isSuccess ?? response.IsSuccess;
+
+    return {
+        isSuccess: typeof successValue === 'boolean'
+            ? successValue
+            : Boolean(ordenCompraServicioId),
+        data: { ordenCompraServicioId, numeroOrdenCompra },
+        message: firstStringValue(response, ['message', 'Message']) || undefined
+    };
+};
+
+const firstStringValue = (source: Record<string, unknown>, keys: string[]) => {
+    for (const key of keys) {
+        const value = source[key];
+        if (value !== null && value !== undefined && String(value).trim()) {
+            return String(value).trim();
+        }
+    }
+    return '';
 };
 
 export const ordenCompraServicioService = {
@@ -154,20 +223,16 @@ export const ordenCompraServicioService = {
         }
     },
 
-    create: async (payload: OrdenCompraServicioPayload): Promise<ApiResponse<{
-        ordenCompraServicioId?: string;
-        ordencompraservicioId?: string;
-        OrdenCompraServicioId?: string;
-        numeroOrdenCompra?: string;
-        NumeroOrdenCompra?: string;
-    }>> => {
+    create: async (
+        payload: OrdenCompraServicioPayload
+    ): Promise<ApiResponse<OrdenCompraServicioCreatedDto>> => {
         try {
             const response = await apiClient.post(`${BASE_URL}/empresa/${EMPRESA_ID}`, toCreatePayload(payload));
-            return response.data;
+            return normalizeCreatedOrder(response.data);
         } catch (error) {
             return {
                 isSuccess: false,
-                data: {},
+                data: { ordenCompraServicioId: '', numeroOrdenCompra: '' },
                 message: getErrorMessage(error, 'Error al crear la orden de compra/servicio')
             };
         }
@@ -228,6 +293,37 @@ export const ordenCompraServicioService = {
                 message: getErrorMessage(error, 'Error al imprimir la orden de compra/servicio')
             };
         }
+    },
+
+    descargarReporteExcel: async (filters: OrdenCompraServicioFilters = {}): Promise<void> => {
+        const response = await apiClient.get(`${BASE_URL}/empresa/${EMPRESA_ID}/reporte/excel`, {
+            params: buildReportParams(filters),
+            responseType: 'blob'
+        });
+        const filename = getFileNameFromContentDisposition(
+            response.headers['content-disposition']
+        ) || buildTimestampedFileName('Reporte_Ordenes_Compra', 'xlsx');
+        downloadBlob(new Blob(
+            [response.data],
+            {
+                type: response.headers['content-type']
+                    || 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            }
+        ), filename);
+    },
+
+    descargarReportePdf: async (filters: OrdenCompraServicioFilters = {}): Promise<void> => {
+        const response = await apiClient.get(`${BASE_URL}/empresa/${EMPRESA_ID}/reporte/pdf`, {
+            params: buildReportParams(filters),
+            responseType: 'blob'
+        });
+        const filename = getFileNameFromContentDisposition(
+            response.headers['content-disposition']
+        ) || buildTimestampedFileName('Reporte_Ordenes_Compra', 'pdf');
+        downloadBlob(new Blob(
+            [response.data],
+            { type: response.headers['content-type'] || 'application/pdf' }
+        ), filename);
     },
 
     aprobar: async (id: string): Promise<ApiResponse<unknown>> => {

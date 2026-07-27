@@ -35,6 +35,18 @@ export interface DocumentoCompraEmpresa {
     ruc?: string;
 }
 
+export interface DocumentoCompraReferencia {
+    documentocompraId?: string;
+    documentoCompraId?: string;
+    tipodoccomercialId?: string;
+    serie?: string;
+    numero?: string;
+    fecha_emision?: string;
+    fechaEmision?: string;
+    total?: number;
+    estado?: string;
+}
+
 export interface DocumentoCompraDetalleBien {
     bienId?: string;
     descripcion?: string;
@@ -127,7 +139,7 @@ export interface DocumentoCompra {
     cuentaUsuarioId?: string | null;
     tipoCompra?: string | null;
     tipo_compra?: string | null;
-    documentoReferencia?: string | null;
+    documentoReferencia?: string | DocumentoCompraReferencia | null;
     documento_referencia?: string | null;
     motivoelectronicoId?: string | null;
     incluyeIgv?: boolean | null;
@@ -154,6 +166,13 @@ export interface DocumentoCompraFiltros {
     fecha_fin?: string;
     tipo_compra?: string;
     estados_excluidos?: Array<string | number>;
+}
+
+export interface DocumentoCompraReporteParams {
+    search?: string;
+    filters?: DocumentoCompraFiltros;
+    soloDisponibles?: boolean;
+    soloStock?: boolean;
 }
 
 export interface DocumentoCompraDetallePayload {
@@ -196,6 +215,10 @@ export interface DocumentoCompraPayload {
     tipoCambio: number;
     igvPorcentaje: number;
     detalles: DocumentoCompraDetallePayload[];
+}
+
+export interface DocumentoCompraCreatedDto {
+    documentoCompraId: string;
 }
 
 export interface TipoDocumentoComercialCompra {

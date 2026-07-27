@@ -174,6 +174,7 @@ export interface OrdenCompraServicio {
 }
 
 export interface OrdenCompraServicioFilters {
+    searchTerm?: string;
     estado?: Array<string | number>;
     tipoOrden?: Array<string | number>;
     proveedorId?: Array<string | number>;
@@ -207,6 +208,11 @@ export interface OrdenCompraServicioPayload {
     cuentaUsuarioId?: string | null;
     incluyeIgv?: boolean | null;
     detalles?: OrdenCompraServicioDetallePayload[];
+}
+
+export interface OrdenCompraServicioCreatedDto {
+    ordenCompraServicioId: string;
+    numeroOrdenCompra: string;
 }
 
 export interface OrdenCompraServicioDetallePayload {

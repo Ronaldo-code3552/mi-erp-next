@@ -50,7 +50,9 @@ export interface Producto {
     
     // Relaciones (Foreign Keys directos)
     operacionesItemId?: string;
+    operacionesitemId?: string;
     detraccionbienserviceId?: string;
+    detraccionBienServiceId?: string;
     cuenta_contable?: string;
     cuentausuarioId?: string;
     cod_admin?: number; // En JSON viene como número (100001)
@@ -91,6 +93,52 @@ export interface Producto {
     detraccionBienService?: {
         descripcion?: string;
     };
+}
+
+export interface ProductoCreateRequest {
+    empresaId: string;
+    descripcion: string;
+    marca?: string | null;
+    tipobienId?: number | null;
+    precio?: number | null;
+    costo?: number | null;
+    subclasebienId?: string | null;
+    unidadmedidaId: string;
+    codigo_barra?: string | null;
+    afecto_inafecto?: boolean | null;
+    detraccion_porcentaje?: number | null;
+    imagen?: string | null;
+    cuentausuarioId?: string | null;
+    observacion?: string | null;
+    codigo_osce?: string | null;
+    ubidst?: string | null;
+    emite_ticket?: boolean | null;
+    condicion_estado?: string | null;
+    operacionesItemId?: string | null;
+    detraccionbienserviceId?: string | null;
+    cuenta_contable?: string | null;
+}
+
+export interface ProductoUpdateRequest extends Omit<ProductoCreateRequest, 'empresaId'> {
+    codigo_existencia: string;
+    empresaId?: string | null;
+    cod_admin?: number | null;
+}
+
+export interface ProductoCreatedDto {
+    bienId: string;
+    codigo_existencia: string;
+    cod_admin: number;
+    presentacionId: string;
+}
+
+export interface ProductoUpdatedDto {
+    bienId: string;
+    empresaId: string;
+    codigo_existencia: string;
+    cod_admin: number;
+    descripcion: string;
+    unidadmedidaId: string;
 }
 
 export interface ApiResponse<T> {

@@ -500,6 +500,13 @@ export default function CrearNotaSalidaPage() {
     };
 
     const handleItemChange = async (index: number, field: keyof InternalNotaSalidaDetalle, value: any) => {
+        if (field === 'bienId' || field === 'presentacionId') {
+            setLotesAsignados(prev => ({
+                ...prev,
+                [index]: []
+            }));
+        }
+
         setItems(prev => {
             const updated = [...prev];
             const item = { ...updated[index], [field]: value };
@@ -1018,23 +1025,15 @@ export default function CrearNotaSalidaPage() {
         const stockDisponible = Number(lote.raw?.stock_disponible || 0);
 
         if (!lote?.value) return toast.warning("Seleccione un lote válido.");
+        if (activeItemLotes.some(item => String(item.loteId) === String(lote.value))) {
+            return toast.info(`El lote ${lote.value} ya fue asignado a este producto.`);
+        }
         if (cantidadSolicitada <= 0) return toast.warning("La cantidad debe ser mayor a 0.");
         if (cantidadSolicitada > pendingQty) return toast.error(`Solo requiere asignar ${pendingQty} a este lote.`);
         if (cantidadSolicitada > stockDisponible) return toast.error(`El lote solo tiene ${stockDisponible} disponibles.`);
 
         setLotesAsignados(prev => {
             const current = prev[activeLoteIndex!] || [];
-            const existe = current.find(x => x.loteId === lote.value);
-            if (existe) {
-                return {
-                    ...prev,
-                    [activeLoteIndex!]: current.map(x =>
-                        x.loteId === lote.value
-                            ? { ...x, cantidad: Number(x.cantidad) + cantidadSolicitada, stockDisponible }
-                            : x
-                    )
-                };
-            }
             return {
                 ...prev,
                 [activeLoteIndex!]: [
@@ -1347,8 +1346,17 @@ export default function CrearNotaSalidaPage() {
                                             const factor = selectedUM?.cantidad_pres || 1;
                                             const conversionTotal = (Number(item.cantidad) * factor).toFixed(2);
                                             const hasStockError = item.cantidad > (item.stockReal || 0);
-                                            const lotesSum = (lotesAsignados[idx] || []).reduce((acc, curr) => acc + Number(curr.cantidad), 0);
+                                            const assignedLotes = lotesAsignados[idx] || [];
+                                            const lotesSum = assignedLotes.reduce((acc, curr) => acc + Number(curr.cantidad), 0);
                                             const isLoteComplete = lotesSum === item.cantidad;
+                                            const assignedLotesLabel = assignedLotes
+                                                .map(lote => {
+                                                    const loteNombre = lote.loteLabel && lote.loteLabel !== lote.loteId
+                                                        ? `${lote.loteId} · ${lote.loteLabel}`
+                                                        : lote.loteId;
+                                                    return `${loteNombre} (${lote.cantidad})`;
+                                                })
+                                                .join(', ');
                                             const isCambioTx = transaccionRules.esCambioCodigo || transaccionRules.esCambioPresentacion;
                                             const isCambioReady = !isCambioTx
                                                 ? true
@@ -1436,32 +1444,42 @@ export default function CrearNotaSalidaPage() {
                                                     </td>
 
                                                     <td className="p-3 text-center">
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            {isCambioTx && (
+                                                        <div className="flex min-w-0 flex-col gap-1">
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                {isCambioTx && (
+                                                                    <button
+                                                                        type="button"
+                                                                        onClick={() => transaccionRules.esCambioPresentacion ? handleOpenXP(idx) : handleOpenSC(idx)}
+                                                                        title={transaccionRules.esCambioPresentacion ? "Configurar conversión (XP)" : "Configurar destino (SC)"}
+                                                                        className="p-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors rounded border border-emerald-200 shadow-sm"
+                                                                    >
+                                                                        <IconExchange size={16} />
+                                                                    </button>
+                                                                )}
                                                                 <button
                                                                     type="button"
-                                                                    onClick={() => transaccionRules.esCambioPresentacion ? handleOpenXP(idx) : handleOpenSC(idx)}
-                                                                    title={transaccionRules.esCambioPresentacion ? "Configurar conversión (XP)" : "Configurar destino (SC)"}
-                                                                    className="p-1.5 bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors rounded border border-emerald-200 shadow-sm"
+                                                                    disabled={isCambioTx && !isCambioReady}
+                                                                    onClick={() => handleOpenLotes(idx)}
+                                                                    title={isCambioTx && !isCambioReady ? "Primero configure el destino y luego asigne lotes" : "Distribución de lotes"}
+                                                                    className={`px-2 py-1.5 rounded text-[10px] font-bold transition-all shadow-sm border w-full flex justify-center items-center
+                                                                        ${isCambioTx && !isCambioReady
+                                                                            ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
+                                                                            : assignedLotes.length > 0
+                                                                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200'
+                                                                                : 'bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-700 border-slate-200'}`}
                                                                 >
-                                                                    <IconExchange size={16} />
+                                                                    <IconListDetails size={14} className="mr-1" />
+                                                                    {isLoteComplete ? 'OK' : 'Lotes'}
                                                                 </button>
+                                                            </div>
+                                                            {assignedLotes.length > 0 && (
+                                                                <span
+                                                                    className="max-w-32 truncate text-[9px] font-bold text-emerald-700"
+                                                                    title={assignedLotesLabel}
+                                                                >
+                                                                    {assignedLotesLabel}
+                                                                </span>
                                                             )}
-                                                            <button 
-                                                                type="button"
-                                                                disabled={isCambioTx && !isCambioReady}
-                                                                onClick={() => handleOpenLotes(idx)} 
-                                                                title={isCambioTx && !isCambioReady ? "Primero configure el destino y luego asigne lotes" : "Distribución de lotes"}
-                                                                className={`px-2 py-1.5 rounded text-[10px] font-bold transition-all shadow-sm border w-full flex justify-center items-center
-                                                                    ${isCambioTx && !isCambioReady
-                                                                        ? 'bg-slate-100 text-slate-400 border-slate-200 cursor-not-allowed'
-                                                                        : isLoteComplete && item.loteId 
-                                                                            ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-200' 
-                                                                            : 'bg-slate-50 text-slate-600 hover:bg-blue-50 hover:text-blue-700 border-slate-200'}`}
-                                                            >
-                                                                <IconListDetails size={14} className="mr-1" />
-                                                                {isLoteComplete ? 'OK' : 'Lotes'}
-                                                            </button>
                                                         </div>
                                                     </td>
                                                     <td className="p-3 text-center flex justify-center gap-1">
@@ -1902,8 +1920,7 @@ export default function CrearNotaSalidaPage() {
                         </div>
                     </div>
 
-                    {pendingQty > 0 && (
-                        <div className="space-y-3 bg-blue-50/50 p-3 rounded-xl border border-blue-100">
+                    <div className="space-y-3 bg-blue-50/50 p-3 rounded-xl border border-blue-100">
                             <div className="flex gap-3 items-end">
                                 <div className="flex-1 relative">
                                     <IconSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
@@ -1920,8 +1937,9 @@ export default function CrearNotaSalidaPage() {
                                         label="Cant. a Asignar"
                                         type="number"
                                         min="1"
-                                        max={pendingQty}
+                                        max={Math.max(pendingQty, 1)}
                                         value={loteInput.cantidad}
+                                        disabled={pendingQty <= 0}
                                         onChange={(e:any) => setLoteInput({ cantidad: Number(e.target.value) })}
                                     />
                                 </div>
@@ -1947,35 +1965,50 @@ export default function CrearNotaSalidaPage() {
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {lotesDisponibles.map((lote: any) => (
-                                                <tr key={lote.value} className="border-t hover:bg-slate-50">
-                                                    <td className="p-2 font-mono font-bold text-slate-700">{lote.value}</td>
-                                                    <td className="p-2 text-slate-600 min-w-[180px]" title={lote.label}>{lote.label}</td>
-                                                    <td className="p-2 text-right font-mono font-bold text-blue-700 whitespace-nowrap">
-                                                        {Number(lote.raw?.stock_disponible || 0).toFixed(2)}
-                                                    </td>
-                                                    <td className="p-2 text-slate-600 whitespace-nowrap">
-                                                        {lote.raw?.fecha_produccion ? format(new Date(lote.raw.fecha_produccion), 'dd/MM/yyyy') : '-'}
-                                                    </td>
-                                                    <td className="p-2 text-slate-600 whitespace-nowrap">
-                                                        {lote.raw?.fecha_vencimiento ? format(new Date(lote.raw.fecha_vencimiento), 'dd/MM/yyyy') : '-'}
-                                                    </td>
-                                                    <td className="p-2 text-center">
-                                                        <button
-                                                            onClick={() => handleAssignLoteDisponible(lote)}
-                                                            className="bg-blue-100 text-blue-700 px-3 py-1 rounded font-bold hover:bg-blue-200 w-full"
-                                                        >
-                                                            Asignar
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {lotesDisponibles.map((lote: any) => {
+                                                const assignedLote = activeItemLotes.find(
+                                                    item => String(item.loteId) === String(lote.value)
+                                                );
+
+                                                return (
+                                                    <tr key={lote.value} className={`border-t ${assignedLote ? 'bg-emerald-50/70' : 'hover:bg-slate-50'}`}>
+                                                        <td className="p-2 font-mono font-bold text-slate-700">{lote.value}</td>
+                                                        <td className="p-2 text-slate-600 min-w-[180px]" title={lote.label}>{lote.label}</td>
+                                                        <td className="p-2 text-right font-mono font-bold text-blue-700 whitespace-nowrap">
+                                                            {Number(lote.raw?.stock_disponible || 0).toFixed(2)}
+                                                        </td>
+                                                        <td className="p-2 text-slate-600 whitespace-nowrap">
+                                                            {lote.raw?.fecha_produccion ? format(new Date(lote.raw.fecha_produccion), 'dd/MM/yyyy') : '-'}
+                                                        </td>
+                                                        <td className="p-2 text-slate-600 whitespace-nowrap">
+                                                            {lote.raw?.fecha_vencimiento ? format(new Date(lote.raw.fecha_vencimiento), 'dd/MM/yyyy') : '-'}
+                                                        </td>
+                                                        <td className="p-2 text-center">
+                                                            <button
+                                                                type="button"
+                                                                disabled={Boolean(assignedLote) || pendingQty <= 0}
+                                                                onClick={() => handleAssignLoteDisponible(lote)}
+                                                                className={`w-full rounded px-3 py-1 font-bold transition-colors ${
+                                                                    assignedLote
+                                                                        ? 'cursor-not-allowed bg-emerald-600 text-white'
+                                                                        : pendingQty <= 0
+                                                                            ? 'cursor-not-allowed bg-slate-100 text-slate-400'
+                                                                            : 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                                                }`}
+                                                            >
+                                                                {assignedLote
+                                                                    ? `Asignado (${assignedLote.cantidad})`
+                                                                    : pendingQty <= 0 ? 'Completo' : 'Asignar'}
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
                                         </tbody>
                                     </table>
                                 </div>
                             )}
-                        </div>
-                    )}
+                    </div>
 
                     <div className="border rounded-xl overflow-hidden">
                         <table className="w-full text-left text-xs">
@@ -1997,7 +2030,12 @@ export default function CrearNotaSalidaPage() {
                                 ) : (
                                     activeItemLotes.map((l, i) => (
                                         <tr key={i}>
-                                            <td className="p-3 font-mono font-bold text-slate-700">{l.loteLabel || l.loteId}</td>
+                                            <td className="p-3">
+                                                <p className="font-mono font-bold text-slate-700">{l.loteId}</p>
+                                                {l.loteLabel && l.loteLabel !== l.loteId && (
+                                                    <p className="mt-0.5 text-[10px] font-semibold text-slate-500">{l.loteLabel}</p>
+                                                )}
+                                            </td>
                                             <td className="p-3 text-right font-mono text-slate-500">{Number(l.stockDisponible || 0).toFixed(2)}</td>
                                             <td className="p-3 text-right font-bold text-blue-600">{l.cantidad}</td>
                                             <td className="p-3 text-center">

@@ -100,6 +100,7 @@ export default function ProductDetailModal({ isOpen, productId, onClose }: Props
 
                             <div className="mt-3 grid grid-cols-1 gap-x-6 sm:grid-cols-2">
                                 <DetailItem label="Código interno" value={<span className="inline-flex items-center gap-1.5"><IconTag size={15} />{product.codigo_existencia}</span>} />
+                                <DetailItem label="Código administrativo" value={<span className="inline-flex items-center gap-1.5"><IconTag size={15} />{product.cod_admin}</span>} />
                                 <DetailItem label="Código de barras" value={<span className="inline-flex items-center gap-1.5"><IconBarcode size={15} />{product.codigo_barra}</span>} />
                                 <DetailItem label="Tipo de bien" value={<span className="inline-flex items-center gap-1.5"><IconBox size={15} />{product.tipoBien?.descripcion}</span>} />
                                 <DetailItem label="Clase / Subclase" value={<span className="inline-flex items-center gap-1.5"><IconCategory size={15} />{[product.claseBien?.descripcion, product.subclaseBien?.descripcion || product.subClaseBien?.descripcion].filter(Boolean).join(" / ")}</span>} />

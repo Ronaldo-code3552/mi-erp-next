@@ -5,7 +5,7 @@ import { productoService } from '@/services/productoService';
 import { useCatalogs } from '@/hooks/useCatalogs'; // 🚀 NUEVO HOOK IMPORTADO
 import Modal from '@/components/ui/Modal';
 import SearchableSelect from '@/components/forms/SearchableSelect';
-import { 
+import {
     IconInfoCircle, 
     IconCurrencyDollar, 
     IconTags, 
@@ -16,7 +16,12 @@ import {
     IconPhotoOff
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
-import { Producto } from '@/types/producto.types';
+import { SelectOption as CatalogOption } from '@/types/catalog.types';
+import {
+    Producto,
+    ProductoCreateRequest,
+    ProductoUpdateRequest
+} from '@/types/producto.types';
 
 // Opciones estáticas (reemplazan al catálogo quemado en la BD)
 const CONDICION_ESTADO_OPTIONS = [
@@ -33,7 +38,7 @@ interface Props {
 
 type Tabs = 'general' | 'economico' | 'clasificacion' | 'otros';
 
-const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: Tabs, label: string, icon: any, activeTab: Tabs, onClick: (id: Tabs) => void }) => (
+const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: Tabs, label: string, icon: React.ComponentType<{ size?: number }>, activeTab: Tabs, onClick: (id: Tabs) => void }) => (
     <button
         type="button"
         onClick={() => onClick(id)}
@@ -47,15 +52,58 @@ const TabButton = ({ id, label, icon: Icon, activeTab, onClick }: { id: Tabs, la
     </button>
 );
 
-const FormInput = ({ label, className, ...props }: any) => (
+type FormInputProps = React.InputHTMLAttributes<HTMLInputElement> & {
+    label: string;
+    error?: string;
+    helpText?: string;
+};
+
+const FormInput = ({ label, className, error, helpText, ...props }: FormInputProps) => (
     <div className="flex flex-col gap-1.5">
         <label className="text-[10px] font-black text-slate-500 uppercase ml-1">{label}</label>
         <input 
-            className={`w-full border border-slate-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 ${className || ''}`}
+            aria-invalid={Boolean(error)}
+            className={`w-full border p-2 rounded-lg focus:ring-2 outline-none transition-all disabled:bg-slate-50 disabled:text-slate-400 ${error ? 'border-red-400 focus:border-red-500 focus:ring-red-100' : 'border-slate-200 focus:ring-blue-500'} ${className || ''}`}
             {...props}
         />
+        {(error || helpText) && (
+            <p className={`px-1 text-[10px] ${error ? 'font-semibold text-red-600' : 'text-slate-400'}`}>
+                {error || helpText}
+            </p>
+        )}
     </div>
 );
+
+const nullableText = (value: unknown) => {
+    const text = String(value ?? '').trim();
+    return text || null;
+};
+
+const nullableNumber = (value: unknown) => {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+    const number = Number(text);
+    return Number.isFinite(number) ? number : null;
+};
+
+const hasMoreThanDecimals = (value: unknown, maxDecimals: number) => {
+    const decimals = String(value ?? '').trim().split('.')[1];
+    return Boolean(decimals && decimals.length > maxDecimals);
+};
+
+const isCodigoInternoError = (message: string) => {
+    const normalized = message.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    return normalized.includes('codigo interno') || normalized.includes('codigo_existencia');
+};
+
+type FieldChangeEvent = {
+    target: {
+        name?: string;
+        value: string | number;
+        type?: string;
+        checked?: boolean;
+    };
+};
 
 export default function ProductFormModal({ isOpen, onClose, onSuccess, productToEdit }: Props) {
     const [activeTab, setActiveTab] = useState<Tabs>('general');
@@ -63,6 +111,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
     const [formData, setFormData] = useState<Partial<Producto>>({});
     const [imageError, setImageError] = useState(false);
     const [selectedClaseBienId, setSelectedClaseBienId] = useState('');
+    const [codigoInternoError, setCodigoInternoError] = useState('');
 
     const isReadOnly = !!(productToEdit && productToEdit.estado === false);
     const isEditing = !!productToEdit; 
@@ -88,7 +137,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         }] : [])
     ] : []);
 
-    const normalizeId = (value: any): string => {
+    const normalizeId = (value: unknown): string => {
         if (value === null || value === undefined) return '';
         return String(value).trim();
     };
@@ -110,8 +159,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                     tipobienId: productToEdit.tipobienId, 
                     subclasebienId: normalizeId(productToEdit.subclasebienId) || '', 
                     unidadmedidaId: normalizeId(productToEdit.unidadmedidaId) || '',
-                    operacionesItemId: normalizeId(productToEdit.operacionesItemId || (productToEdit as any).operacionesitemId) || '',
-                    detraccionbienserviceId: normalizeId(productToEdit.detraccionbienserviceId || (productToEdit as any).detraccionBienServiceId) || '000',
+                    operacionesItemId: normalizeId(productToEdit.operacionesItemId || productToEdit.operacionesitemId) || '',
+                    detraccionbienserviceId: normalizeId(productToEdit.detraccionbienserviceId || productToEdit.detraccionBienServiceId) || '000',
                     condicion_estado: productToEdit.condicion_estado || 'STOCK',
                     detraccion_porcentaje: productToEdit.detraccion_porcentaje || 0
                 });
@@ -120,18 +169,18 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 setFormData({ 
                     descripcion: '', codigo_existencia: '', codigo_barra: '', marca: '', 
                     codigo_osce: '', imagen: '', 
-                    precio: '' as any, costo: '' as any, 
+                    precio: undefined, costo: undefined,
                     detraccionbienserviceId: '000', 
                     detraccion_porcentaje: 0,
                     cuenta_contable: '', operacionesItemId: '',
                     tipobienId: 0, unidadmedidaId: '', subclasebienId: '', 
-                    condicion_estado: 'STOCK', observacion: '',
-                    estado: true
+                    condicion_estado: 'STOCK', observacion: ''
                 });
                 setSelectedClaseBienId('');
             }
             setActiveTab('general');
             setImageError(false);
+            setCodigoInternoError('');
         }
     }, [isOpen, productToEdit]);
 
@@ -139,11 +188,13 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         setImageError(false);
     }, [formData.imagen]);
 
-    const handleInputChange = (e: any) => {
+    const handleInputChange = (e: FieldChangeEvent) => {
         if (isReadOnly) return;
         const { name, value, type, checked } = e.target;
+        if (!name) return;
 
         if (name === 'detraccion_porcentaje') return;
+        if (name === 'codigo_existencia') setCodigoInternoError('');
 
         if (name === 'precio' || name === 'costo' || name === 'detraccion_porcentaje') {
             if (value === '') {
@@ -152,6 +203,9 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
             }
             const numericValue = Number(value);
             if (Number.isFinite(numericValue) && numericValue < 0) return;
+
+            const maxDecimals = name === 'detraccion_porcentaje' ? 2 : 4;
+            if (hasMoreThanDecimals(value, maxDecimals)) return;
         }
 
         const normalizedValue =
@@ -169,15 +223,17 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
     const handleDetraccionChange = (selectedKey: string) => {
         if (isReadOnly) return;
         // Buscamos en el nuevo array de DetraccionBien
-        const selectedOption = catalogs['DetraccionBien']?.find((opt: any) =>
-            String(opt.value) === String(selectedKey) || String(opt.key) === String(selectedKey)
+        const selectedOption = catalogs['DetraccionBien']?.find((opt: CatalogOption) =>
+            String(opt.value) === String(selectedKey)
         );
         
         setFormData(prev => ({
             ...prev,
             detraccionbienserviceId: selectedKey,
             // 'aux' ahora trae la tasa configurada en catalogService
-            detraccion_porcentaje: selectedOption && selectedOption.aux ? parseFloat(selectedOption.aux) : 0
+            detraccion_porcentaje: selectedOption && selectedOption.aux
+                ? Math.round(parseFloat(selectedOption.aux) * 100) / 100
+                : 0
         }));
     };
 
@@ -192,94 +248,112 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const descripcion = String(formData.descripcion || '').trim();
+        const codigoInterno = String(formData.codigo_existencia || '').trim();
+
+        setCodigoInternoError('');
+
+        if (isEditing && !codigoInterno) {
+            setActiveTab('general');
+            setCodigoInternoError('El Código Interno es obligatorio.');
+            return toast.error("El Código Interno es obligatorio.");
+        }
+        if (isEditing && codigoInterno.length > 100) {
+            setActiveTab('general');
+            setCodigoInternoError('El Código Interno admite como máximo 100 caracteres.');
+            return toast.error("El Código Interno admite como máximo 100 caracteres.");
+        }
         if (!descripcion) {
             setActiveTab('general');
             return toast.error("La descripción del producto es obligatoria.");
-        }
-        const precioStr = String(formData.precio ?? '').trim();
-        if (!precioStr) {
-            setActiveTab('economico');
-            return toast.error("Precio venta es obligatorio.");
-        }
-        const costoStr = String(formData.costo ?? '').trim();
-        if (!costoStr) {
-            setActiveTab('economico');
-            return toast.error("Costo compra es obligatorio.");
-        }
-        const detraccionStr = String(formData.detraccion_porcentaje ?? '').trim();
-        if (!detraccionStr) {
-            setActiveTab('economico');
-            return toast.error("% detracción es obligatorio.");
-        }
-        if (!String(formData.detraccionbienserviceId || '').trim()) {
-            setActiveTab('economico');
-            return toast.error("Tipo de detracción es obligatorio.");
-        }
-        if (!String(formData.operacionesItemId || '').trim()) {
-            setActiveTab('economico');
-            return toast.error("Tipo de afectación es obligatorio.");
-        }
-        const tipobienNum = Number(formData.tipobienId || 0);
-        if (!Number.isFinite(tipobienNum) || tipobienNum <= 0) {
-            setActiveTab('clasificacion');
-            return toast.error("Tipo de bien es obligatorio.");
         }
         if (!String(formData.unidadmedidaId || '').trim()) {
             setActiveTab('clasificacion');
             return toast.error("Unidad de medida es obligatoria.");
         }
-        if (!selectedClaseBienId) {
-            setActiveTab('clasificacion');
-            return toast.error("Clase de bien es obligatoria.");
-        }
-        if (!String(formData.subclasebienId || '').trim()) {
-            setActiveTab('clasificacion');
-            return toast.error("Subclase es obligatoria.");
-        }
-        if (!String(formData.condicion_estado || '').trim()) {
-            setActiveTab('otros');
-            return toast.error("Condición del stock es obligatoria.");
-        }
 
-        const precioNum = parseFloat(String(formData.precio || 0));
-        const costoNum = parseFloat(String(formData.costo || 0));
-        const detraccionNum = parseFloat(String(formData.detraccion_porcentaje || 0));
-        if (precioNum < 0 || costoNum < 0 || detraccionNum < 0) {
+        const precioNum = nullableNumber(formData.precio);
+        const costoNum = nullableNumber(formData.costo);
+        const detraccionNum = nullableNumber(formData.detraccion_porcentaje) ?? 0;
+        const parsedTipoBien = nullableNumber(formData.tipobienId);
+        const tipobienNum = parsedTipoBien !== null && parsedTipoBien > 0 ? parsedTipoBien : null;
+        if ((precioNum !== null && precioNum < 0) || (costoNum !== null && costoNum < 0) || detraccionNum < 0) {
             toast.error("Precio venta, costo compra y % detracción no pueden ser negativos.");
             return;
+        }
+        if (detraccionNum > 100) {
+            setActiveTab('economico');
+            return toast.error("% detracción debe estar entre 0 y 100.");
+        }
+        if (hasMoreThanDecimals(formData.precio, 4) || hasMoreThanDecimals(formData.costo, 4)) {
+            setActiveTab('economico');
+            return toast.error("Precio venta y costo compra admiten como máximo 4 decimales.");
+        }
+        if (hasMoreThanDecimals(formData.detraccion_porcentaje, 2)) {
+            setActiveTab('economico');
+            return toast.error("% detracción admite como máximo 2 decimales.");
         }
 
         setLoading(true);
         try {
-            const payload = {
-                ...formData,
-                descripcion: String(formData.descripcion || '').toUpperCase(),
-                marca: String(formData.marca || '').toUpperCase(),
+            const commonPayload: ProductoCreateRequest = {
                 empresaId: '005',
-                cuentausuarioId: 'CU0001',
-                afecto_inafecto: true,
-                ubidst: '000000',
-                emite_ticket: false,
-                cod_admin: 100001,
+                descripcion: descripcion.toUpperCase(),
+                marca: nullableText(formData.marca)?.toUpperCase() || null,
+                tipobienId: tipobienNum,
                 precio: precioNum,
                 costo: costoNum,
-                detraccion_porcentaje: detraccionNum
+                subclasebienId: nullableText(formData.subclasebienId),
+                unidadmedidaId: String(formData.unidadmedidaId || '').trim(),
+                codigo_barra: nullableText(formData.codigo_barra),
+                afecto_inafecto: formData.afecto_inafecto ?? true,
+                detraccion_porcentaje: detraccionNum,
+                imagen: nullableText(formData.imagen),
+                cuentausuarioId: 'CU0001',
+                observacion: nullableText(formData.observacion),
+                codigo_osce: nullableText(formData.codigo_osce),
+                ubidst: nullableText(formData.ubidst),
+                emite_ticket: formData.emite_ticket ?? false,
+                condicion_estado: nullableText(formData.condicion_estado),
+                operacionesItemId: nullableText(formData.operacionesItemId),
+                detraccionbienserviceId: nullableText(formData.detraccionbienserviceId),
+                cuenta_contable: nullableText(formData.cuenta_contable)
             };
 
-            const res = productToEdit 
-                ? await productoService.update(productToEdit.bienId, payload)
-                : await productoService.create(payload);
-            
-            if (res.isSuccess) {
-                toast.success(productToEdit ? "Producto actualizado correctamente" : "Producto creado con éxito");
-                onSuccess();
-                onClose();
+            if (productToEdit) {
+                const updatePayload: ProductoUpdateRequest = {
+                    ...commonPayload,
+                    codigo_existencia: codigoInterno,
+                    cod_admin: productToEdit.cod_admin ?? null
+                };
+                const response = await productoService.update(productToEdit.bienId, updatePayload);
+                if (!response.isSuccess) {
+                    const message = response.message || "Error al actualizar el producto";
+                    if (isCodigoInternoError(message)) {
+                        setActiveTab('general');
+                        setCodigoInternoError(message);
+                    }
+                    toast.error(message);
+                    return;
+                }
+
+                setFormData(previous => ({ ...previous, ...response.data }));
+                toast.success(`Producto actualizado. Código Interno: ${response.data.codigo_existencia}`);
             } else {
-                toast.error(res.message || "Error al procesar la solicitud");
+                const response = await productoService.create(commonPayload);
+                if (!response.isSuccess) {
+                    toast.error(response.message || "Error al crear el producto");
+                    return;
+                }
+
+                setFormData(previous => ({ ...previous, ...response.data }));
+                toast.success(`Producto creado. Código Interno: ${response.data.codigo_existencia}`);
             }
+
+            onSuccess();
+            onClose();
         } catch (error) {
             console.error(error);
-            toast.error("Error crítico en el servidor");
+            toast.error(error instanceof Error ? error.message : "Error crítico en el servidor");
         } finally {
             setLoading(false);
         }
@@ -308,7 +382,19 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                             <div className="md:col-span-2">
                                 <FormInput label="Descripción del Producto *" name="descripcion" required disabled={isReadOnly} value={formData.descripcion || ''} onChange={handleInputChange} className="border-2 border-slate-100 p-2.5 rounded-xl uppercase font-semibold text-slate-700" />
                             </div>
-                            <FormInput label="Código Interno" name="codigo_existencia" value={formData.codigo_existencia || ''} onChange={handleInputChange} disabled={isReadOnly} />
+                            <FormInput
+                                label={isEditing ? "Código Interno *" : "Código Interno"}
+                                name="codigo_existencia"
+                                value={isEditing ? formData.codigo_existencia || '' : 'Se generará automáticamente'}
+                                onChange={handleInputChange}
+                                disabled={isReadOnly || !isEditing}
+                                required={isEditing}
+                                maxLength={100}
+                                error={codigoInternoError}
+                                helpText={isEditing
+                                    ? "Debe ser único dentro de la empresa."
+                                    : "El Código Interno será generado automáticamente al guardar el producto."}
+                            />
                             <FormInput label="Código de Barras" name="codigo_barra" value={formData.codigo_barra || ''} onChange={handleInputChange} disabled={isReadOnly} />
                             <FormInput label="Marca" name="marca" value={formData.marca || ''} onChange={handleInputChange} disabled={isReadOnly} />
                             <FormInput label="Código OSCE" name="codigo_osce" value={formData.codigo_osce || ''} onChange={handleInputChange} disabled={isReadOnly} />
@@ -353,11 +439,11 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                         {/* ... (Inputs de Precio y Costo intactos) ... */}
                         <div className={`p-3 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-emerald-50/40 border-emerald-100'}`}>
                             <label className="text-[10px] font-black text-emerald-700 uppercase">Precio Venta (S/)</label>
-                            <input type="number" min="0" step="0.01" name="precio" className="w-full bg-transparent text-xl font-black text-emerald-900 outline-none" value={formData.precio} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
+                            <input type="number" min="0" step="0.0001" name="precio" className="w-full bg-transparent text-xl font-black text-emerald-900 outline-none" value={formData.precio ?? ''} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.0000" />
                         </div>
                         <div className={`p-3 border rounded-xl flex flex-col gap-2 ${isReadOnly ? 'bg-slate-100' : 'bg-rose-50/40 border-rose-100'}`}>
                             <label className="text-[10px] font-black text-rose-700 uppercase">Costo Compra (S/)</label>
-                            <input type="number" min="0" step="0.01" name="costo" className="w-full bg-transparent text-xl font-black text-rose-900 outline-none" value={formData.costo} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.00" />
+                            <input type="number" min="0" step="0.0001" name="costo" className="w-full bg-transparent text-xl font-black text-rose-900 outline-none" value={formData.costo ?? ''} onChange={handleInputChange} disabled={isReadOnly} placeholder="0.0000" />
                         </div>
                         <div className="md:col-span-1">
                             <FormInput
@@ -365,6 +451,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 name="detraccion_porcentaje"
                                 type="number"
                                 min="0"
+                                max="100"
                                 step="0.01"
                                 value={formData.detraccion_porcentaje}
                                 onChange={handleInputChange}
@@ -378,7 +465,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 label="Tipo de Detracción (Catálogo 54)" 
                                 name="detraccionbienserviceId" 
                                 value={formData.detraccionbienserviceId || ''} 
-                                onChange={(e:any) => handleDetraccionChange(e.target.value)} 
+                                onChange={(event) => handleDetraccionChange(String(event.target.value))}
                                 // 🚀 Le pasamos el catálogo limpio sin mapeos extra
                                 options={catalogs['DetraccionBien'] || []}
                                 disabled={isReadOnly || loadingCatalogs}
@@ -406,12 +493,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                             label="Tipo de Bien" 
                             name="tipobienId" 
                             value={formData.tipobienId || ''} 
-                            options={catalogs['TipoBien']?.map((opt: any) => ({
-                                key: opt.key || opt.value,
-                                value: opt.value,
-                                label: opt.label || opt.descripcion || String(opt.value),
-                                aux: opt.aux
-                            })) || []}
+                            options={catalogs['TipoBien'] || []}
                             onChange={handleInputChange}
                             disabled={isReadOnly || loadingCatalogs} 
                         />
@@ -420,14 +502,9 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                             label="Unidad Medida" 
                             name="unidadmedidaId" 
                             value={formData.unidadmedidaId || ''} 
-                            options={catalogs['UnidadMedida']?.map((opt: any) => ({
-                                key: opt.key || opt.value,
-                                value: opt.value,
-                                label: opt.label || opt.descripcion || String(opt.value),
-                                aux: opt.aux
-                            })) || []}
+                            options={catalogs['UnidadMedida'] || []}
                             onChange={handleInputChange} 
-                            disabled={isReadOnly || isEditing || loadingCatalogs} 
+                            disabled={isReadOnly || loadingCatalogs}
                         />
 
                         <div className="md:col-span-2">
@@ -435,13 +512,8 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 label="Clase de Bien"
                                 name="clasebienId"
                                 value={selectedClaseBienId}
-                                options={catalogs['ClaseBien']?.map((opt: any) => ({
-                                    key: opt.key || opt.value,
-                                    value: opt.value,
-                                    label: opt.label || opt.descripcion || String(opt.value),
-                                    aux: opt.aux
-                                })) || []}
-                                onChange={(e: any) => handleClaseBienChange(e.target.value)}
+                                options={catalogs['ClaseBien'] || []}
+                                onChange={(event) => handleClaseBienChange(event.target.value)}
                                 disabled={isReadOnly || loadingCatalogs}
                                 placeholder="-- Seleccione una clase --"
                             />
@@ -452,12 +524,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 label="Subclase / Categoría" 
                                 name="subclasebienId" 
                                 value={formData.subclasebienId || ''} 
-                                options={catalogs['SubClaseBien']?.map((opt: any) => ({
-                                    key: opt.key || opt.value,
-                                    value: opt.value,
-                                    label: opt.label || opt.descripcion || String(opt.value),
-                                    aux: opt.aux
-                                })) || []}
+                                options={catalogs['SubClaseBien'] || []}
                                 onChange={handleInputChange} 
                                 disabled={isReadOnly || !selectedClaseBienId || loadingCatalogs}
                                 placeholder={selectedClaseBienId ? "-- Seleccione una subclase --" : "Seleccione primero una clase"}

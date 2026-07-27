@@ -15,11 +15,11 @@ import {
 } from "@tabler/icons-react";
 
 import SearchableSelect from "@/components/forms/SearchableSelect";
+import DocumentoAdjuntosPanel from "@/components/documentos/DocumentoAdjuntosPanel";
 import { monedaService } from "@/services/monedaService";
 import { presentacionService } from "@/services/presentacionService";
 import { productoService } from "@/services/productoService";
 import { proveedorService } from "@/services/proveedorService";
-import { tipoCambioUniversalService } from "@/services/tipoCambioUniversalService";
 import { tipoOrdenService } from "@/services/tipoOrdenService";
 import { tipoPagoService } from "@/services/tipoPagoService";
 import { trabajadorService } from "@/services/trabajadorService";
@@ -31,10 +31,13 @@ import {
 import { Moneda } from "@/types/moneda.types";
 import { Producto } from "@/types/producto.types";
 import { Proveedor } from "@/types/proveedor.types";
-import { TipoCambioUniversal } from "@/types/tipoCambioUniversal.types";
 import { TipoOrden } from "@/types/tipoOrden.types";
 import { TipoPago } from "@/types/tipoPago.types";
 import { Trabajador } from "@/types/trabajador.types";
+import {
+    DOCUMENTO_PDF_REFERENCIAS,
+    DocumentoPdfFormSubmitResult
+} from "@/types/documentoPdf.types";
 
 const EMPRESA_ID = "005";
 const USER_ID = "CU0001";
@@ -98,7 +101,10 @@ interface OrdenCompraServicioFormProps {
     initialValue?: Partial<OrdenCompraServicio>;
     readOnly?: boolean;
     onBack: () => void;
-    onSubmit: (payload: OrdenCompraServicioPayload) => Promise<void>;
+    onSubmit: (
+        payload: OrdenCompraServicioPayload,
+        archivosPendientes: File[]
+    ) => Promise<DocumentoPdfFormSubmitResult | void>;
 }
 
 const todayInput = () => new Date().toISOString().slice(0, 10);
@@ -268,22 +274,21 @@ const normalizeOrden = (source?: Partial<OrdenCompraServicio>): OrdenFormValue =
     };
 };
 
-const extractTipoCambio = (items: TipoCambioUniversal[]) => {
-    const item = items[0] as Record<string, unknown> | undefined;
-    if (!item) return 0;
-
-    const value = firstString(item, [
-        "tc_venta",
-        "tipo_cambio",
-        "tipoCambio",
-        "TipoCambio",
-        "cambio",
-        "valor",
-        "venta",
-        "precio_venta"
-    ]);
-
-    return toNumber(value);
+const currencyIdOf = (currency: Moneda) => currency.monedaId || currency.MonedaId || "";
+const currencyLabelOf = (currency: Moneda) => currency.descripcion || currency.Descripcion || "";
+const currencySymbolOf = (currency?: Moneda) => (
+    currency?.simbolomoneda
+    || currency?.Simbolomoneda
+    || currency?.simbolo
+    || currency?.Simbolo
+    || currency?.abreviatura
+    || currency?.Abreviatura
+    || ""
+);
+const currencyExchangeRateOf = (currency?: Moneda) => {
+    const exchange = currency?.tipoCambioUniversal || currency?.TipoCambioUniversal;
+    const rate = toNumber(exchange?.tc_venta);
+    return rate > 0 ? rate : 1;
 };
 
 const FormInput = ({
@@ -332,7 +337,9 @@ export default function OrdenCompraServicioForm({
 }: OrdenCompraServicioFormProps) {
     const [formData, setFormData] = useState<OrdenFormValue>(() => normalizeOrden(initialValue));
     const [saving, setSaving] = useState(false);
-    const [loadingTipoCambio, setLoadingTipoCambio] = useState(false);
+    const [archivosPendientes, setArchivosPendientes] = useState<File[]>([]);
+    const [adjuntosRefreshKey, setAdjuntosRefreshKey] = useState(0);
+    const [currencyOptions, setCurrencyOptions] = useState<SelectOption[]>([]);
     const [presentacionOptions, setPresentacionOptions] = useState<SelectOption[]>([]);
     const [addForm, setAddForm] = useState<OrdenDetalleDraft>({
         bienId: "",
@@ -362,36 +369,37 @@ export default function OrdenCompraServicioForm({
     }, [initialValue]);
 
     useEffect(() => {
-        if (!formData.fechaEmision || isReadOnly) return;
+        let mounted = true;
 
-        let isMounted = true;
+        const loadCurrencies = async () => {
+            const response = await monedaService.getAll(1, 20);
+            if (!mounted || !response.isSuccess) return;
 
-        const fetchTipoCambio = async () => {
-            setLoadingTipoCambio(true);
+            const currencies = response.data || [];
+            setCurrencyOptions(currencies.map(currency => ({
+                key: currencyIdOf(currency),
+                value: currencyIdOf(currency),
+                label: currencyLabelOf(currency),
+                aux: currencySymbolOf(currency),
+                raw: currency
+            })).filter(option => option.value));
 
-            try {
-                const response = await tipoCambioUniversalService.getAll(1, 2);
+            setFormData(previous => {
+                if (previous.ordenCompraServicioId) return previous;
 
-                if (!isMounted || !response.isSuccess) return;
-
-                const tipoCambio = extractTipoCambio(response.data || []);
-                if (tipoCambio > 0) {
-                    setFormData(prev => ({
-                        ...prev,
-                        tipoCambio: tipoCambio.toFixed(3)
-                    }));
-                }
-            } finally {
-                if (isMounted) setLoadingTipoCambio(false);
-            }
+                const selectedCurrency = currencies.find(
+                    currency => currencyIdOf(currency) === previous.monedaId
+                );
+                return {
+                    ...previous,
+                    tipoCambio: String(currencyExchangeRateOf(selectedCurrency))
+                };
+            });
         };
 
-        fetchTipoCambio();
-
-        return () => {
-            isMounted = false;
-        };
-    }, [formData.fechaEmision, isReadOnly]);
+        void loadCurrencies();
+        return () => { mounted = false; };
+    }, []);
 
     const totals = useMemo(() => {
         let sumaAfectoBruto = 0;
@@ -459,15 +467,32 @@ export default function OrdenCompraServicioForm({
         const tipoOrden = getNested(raw, ["tipoOrden", "tipoOrdenDetalle", "TipoOrdenDetalle"]);
         const trabajador = getNested(raw, ["trabajador", "Trabajador"]);
         const trabajadorNombre = [trabajador.nombres, trabajador.apellidos].filter(Boolean).join(" ").trim();
+        const selectedCurrency = currencyOptions.find(
+            option => String(option.value) === formData.monedaId
+        );
 
         return {
             proveedor: String(proveedor.descripcion || formData.proveedorId || ""),
-            moneda: String(moneda.descripcion || moneda.simbolomoneda || formData.monedaId || ""),
+            moneda: String(
+                moneda.descripcion
+                || selectedCurrency?.label
+                || (formData.monedaId ? "Cargando moneda..." : "")
+            ),
             tipoPago: String(tipoPago.descripcion || formData.tipoPagoId || ""),
             tipoOrden: String(tipoOrden.descripcion || formData.tipoOrden || ""),
             trabajador: String(trabajador.descripcion || trabajadorNombre || formData.trabajadorId || "")
         };
-    }, [formData.monedaId, formData.proveedorId, formData.tipoOrden, formData.tipoPagoId, formData.trabajadorId, initialValue]);
+    }, [currencyOptions, formData.monedaId, formData.proveedorId, formData.tipoOrden, formData.tipoPagoId, formData.trabajadorId, initialValue]);
+
+    const selectedCurrency = currencyOptions.find(
+        option => String(option.value) === formData.monedaId
+    )?.raw as Moneda | undefined;
+    const currencySymbol = currencySymbolOf(selectedCurrency)
+        || firstString(
+            getNested((initialValue || {}) as Record<string, unknown>, ["moneda", "Moneda"]),
+            ["simbolomoneda", "simbolo", "abreviatura"]
+        )
+        || "S/";
 
     const handleChange = (event: { target: { name?: string; value: string | number; checked?: boolean; type?: string } }) => {
         const name = event.target.name;
@@ -480,6 +505,15 @@ export default function OrdenCompraServicioForm({
         setFormData(prev => ({
             ...prev,
             [name]: value
+        }));
+    };
+
+    const handleCurrencyChange = (currencyId: string, option?: SelectOption) => {
+        const currency = option?.raw as Moneda | undefined;
+        setFormData(previous => ({
+            ...previous,
+            monedaId: currencyId,
+            tipoCambio: String(currencyExchangeRateOf(currency))
         }));
     };
 
@@ -506,20 +540,6 @@ export default function OrdenCompraServicioForm({
             const label = firstString(raw, ["descripcion", "Descripcion", "nombre", "value"]) || id;
 
             return { key: id, value: id, label, raw: item };
-        }).filter(item => item.value);
-    };
-
-    const fetchMonedaOptions = async (term: string): Promise<SelectOption[]> => {
-        const response = await monedaService.getAll(1, 20, term);
-        if (!response.isSuccess) return [];
-
-        return (response.data || []).map((item: Moneda) => {
-            const raw = item as Record<string, unknown>;
-            const id = firstString(raw, ["monedaId", "MonedaId", "key"]);
-            const label = firstString(raw, ["descripcion", "Descripcion", "nombre", "value"]) || id;
-            const aux = firstString(raw, ["simbolomoneda", "simbolo", "Simbolo", "abreviatura"]);
-
-            return { key: id, value: id, label, aux, raw: item };
         }).filter(item => item.value);
     };
 
@@ -727,7 +747,7 @@ export default function OrdenCompraServicioForm({
         tipoOrden: formData.tipoOrden.trim(),
         pedidoCompraId: formData.pedidoCompraId.trim() || null,
         numeroCotizacion: formData.numeroCotizacion.trim() || null,
-        fotoCotizacion: formData.fotoCotizacion.trim() || null,
+        fotoCotizacion: isEditing ? formData.fotoCotizacion.trim() || null : null,
         fechaEmision: formData.fechaEmision,
         fechaEntrega: formData.fechaEntrega,
         monedaId: formData.monedaId.trim() || null,
@@ -765,7 +785,7 @@ export default function OrdenCompraServicioForm({
         if (!formData.fechaEntrega) return "La fecha de entrega es obligatoria.";
         if (formData.fechaEntrega < formData.fechaEmision) return "La fecha de entrega no puede ser menor que la fecha de emisión.";
         if (!formData.monedaId) return "La moneda es obligatoria.";
-        if (toNumber(formData.tipoCambio) < 0) return "El tipo de cambio no puede ser negativo.";
+        if (toNumber(formData.tipoCambio) <= 0) return "El tipo de cambio debe ser mayor a cero.";
         if (!formData.tipoPagoId) return "El tipo de pago es obligatorio.";
         if (!formData.proveedorId) return "El proveedor es obligatorio.";
         if (toNumber(formData.descuentoGlobal) < 0) return "El descuento global no puede ser negativo.";
@@ -786,7 +806,7 @@ export default function OrdenCompraServicioForm({
 
     const handleSubmit = async (event: React.FormEvent) => {
         event.preventDefault();
-        if (isReadOnly) return;
+        if (isReadOnly || saving) return;
 
         const error = validate();
         if (error) {
@@ -797,7 +817,13 @@ export default function OrdenCompraServicioForm({
         setSaving(true);
 
         try {
-            await onSubmit(buildPayload());
+            const result = await onSubmit(buildPayload(), archivosPendientes);
+            if (result) {
+                setArchivosPendientes(result.archivosPendientes);
+                if (result.refreshAdjuntos) {
+                    setAdjuntosRefreshKey(previous => previous + 1);
+                }
+            }
         } finally {
             setSaving(false);
         }
@@ -895,9 +921,12 @@ export default function OrdenCompraServicioForm({
                                         label="Moneda"
                                         name="monedaId"
                                         value={formData.monedaId}
-                                        fetchCustom={fetchMonedaOptions}
+                                        options={currencyOptions}
                                         fallbackLabel={fallbackLabels.moneda}
-                                        onChange={handleChange}
+                                        onChange={event => handleCurrencyChange(
+                                            String(event.target.value),
+                                            event.option as SelectOption | undefined
+                                        )}
                                         disabled={isReadOnly}
                                     />
                                 </div>
@@ -915,20 +944,16 @@ export default function OrdenCompraServicioForm({
                                         disabled={isReadOnly}
                                         placeholder="-Seleccione-"
                                     />
-                                    <div className="flex w-full flex-col gap-1.5">
-                                        <label className="ml-1 text-[10px] font-bold uppercase text-slate-500">Cargar Cotización</label>
-                                        <input
-                                            type="file"
-                                            disabled={isReadOnly}
-                                            onChange={(event) => {
-                                                const file = event.target.files?.[0];
-                                                if (!file) return;
-                                                setFormData(prev => ({ ...prev, fotoCotizacion: file.name }));
-                                            }}
-                                            className="h-[38px] w-full rounded-lg border border-slate-200 bg-white p-1.5 text-xs outline-none file:mr-3 file:rounded-md file:border-0 file:bg-slate-100 file:px-3 file:py-1.5 file:text-xs file:font-bold file:text-slate-600 disabled:cursor-not-allowed disabled:bg-slate-100"
-                                        />
-                                        {formData.fotoCotizacion && <span className="truncate text-[10px] font-semibold text-slate-400">{formData.fotoCotizacion}</span>}
-                                    </div>
+                                    <DocumentoAdjuntosPanel
+                                        compact
+                                        referenciaId={formData.ordenCompraServicioId || undefined}
+                                        referenciaTabla={DOCUMENTO_PDF_REFERENCIAS.ORDEN_COMPRA_SERVICIO}
+                                        readOnly={isReadOnly}
+                                        disabled={saving}
+                                        refreshKey={adjuntosRefreshKey}
+                                        archivosPendientes={archivosPendientes}
+                                        onArchivosPendientesChange={setArchivosPendientes}
+                                    />
                                 </div>
 
                                 <div className="grid grid-cols-1 gap-4 lg:grid-cols-[210px_1fr_430px]">
@@ -960,32 +985,28 @@ export default function OrdenCompraServicioForm({
 
                         <aside className="space-y-3 rounded-xl border border-blue-200 bg-white p-4">
                             <FormInput
-                                label={loadingTipoCambio ? "Tipo Cambio (consultando...)" : "Tipo Cambio"}
-                                name="tipoCambio"
-                                type="number"
-                                min="0"
-                                step="0.001"
-                                value={formData.tipoCambio}
-                                onChange={handleChange}
-                                disabled={isReadOnly}
+                                label="Tipo Cambio"
+                                type="text"
+                                value={[currencySymbol, formData.tipoCambio].filter(Boolean).join(" ")}
+                                disabled
                             />
                             <div className="rounded-lg border border-blue-100 bg-blue-50/40 p-3">
                                 <div className="space-y-4 text-sm">
                                     <div>
                                         <p className="text-xs font-black uppercase text-slate-800">Subtotal (Afecto):</p>
-                                        <p className="mt-1 text-lg font-black text-slate-900">S/ {toMoney(totals.subtotalAfecto)}</p>
+                                        <p className="mt-1 text-lg font-black text-slate-900">{currencySymbol} {toMoney(totals.subtotalAfecto)}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs font-black uppercase text-slate-800">Subtotal (Exonerado):</p>
-                                        <p className="mt-1 text-lg font-black text-slate-900">S/ {toMoney(totals.subtotalExonerado)}</p>
+                                        <p className="mt-1 text-lg font-black text-slate-900">{currencySymbol} {toMoney(totals.subtotalExonerado)}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs font-black uppercase text-slate-800">IGV:</p>
-                                        <p className="mt-1 text-lg font-black text-slate-900">S/ {toMoney(totals.igv)}</p>
+                                        <p className="mt-1 text-lg font-black text-slate-900">{currencySymbol} {toMoney(totals.igv)}</p>
                                     </div>
                                     <div>
                                         <p className="text-xs font-black uppercase text-slate-800">Total:</p>
-                                        <p className="mt-1 text-xl font-black text-blue-700">S/ {toMoney(totals.total)}</p>
+                                        <p className="mt-1 text-xl font-black text-blue-700">{currencySymbol} {toMoney(totals.total)}</p>
                                     </div>
                                 </div>
                             </div>

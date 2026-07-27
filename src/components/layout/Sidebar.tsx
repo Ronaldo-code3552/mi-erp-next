@@ -36,9 +36,17 @@ const Sidebar = () => {
   const menuItems = [
     { title: 'Inventario / Productos', icon: <IconPackages size={20} />, path: '/dashboard/productos' },
     { title: 'Maestro Conductores', icon: <IconSteeringWheel size={20} />, path: '/dashboard/conductores' },
-    { title: 'Proveedores', icon: <IconBuildingStore size={20} />, path: '/dashboard/proveedor' },
-    { title: 'Orden Compra/Servicio', icon: <IconShoppingCart size={20} />, path: '/dashboard/orden-compra-servicio' },
-    { title: 'Documento Comercial', icon: <IconReceipt size={20} />, path: '/dashboard/documento-comercial' },
+    {
+      title: 'Módulo Compras',
+      icon: <IconShoppingCart size={20} />,
+      path: '/dashboard/orden-compra-servicio',
+      children: [
+        { title: 'Orden Compra/Servicio', icon: <IconShoppingCart size={17} />, path: '/dashboard/orden-compra-servicio' },
+        { title: 'Proveedores', icon: <IconBuildingStore size={17} />, path: '/dashboard/proveedor' },
+        { title: 'Documento Comercial', icon: <IconReceipt size={17} />, path: '/dashboard/documento-comercial' },
+        { title: 'Reportes', icon: <IconReportAnalytics size={17} />, path: '/dashboard/compras/reportes' }
+      ]
+    },
     { title: 'Transportistas', icon: <IconTruckDelivery size={20} />, path: '/dashboard/transportistas' },
     { title: 'Unidad Transportistas', icon: <IconTruck size={20} />, path: '/dashboard/unidad-transporte' },
     { title: 'Guias Remision', icon: <IconFileInvoice size={20} />, path: '/dashboard/guias-remision' },
@@ -74,13 +82,14 @@ const Sidebar = () => {
       
       <nav className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar">
         {menuItems.map((item) => {
-          // Lógica para saber si el item está activo
-          const isActive = pathname.startsWith(item.path);
+          const children = 'children' in item ? item.children : undefined;
+          const isActive = pathname.startsWith(item.path)
+            || Boolean(children?.some(child => pathname.startsWith(child.path)));
 
           return <div key={item.path}>
               <Link href={item.path} className={`flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all ${isActive ? 'bg-blue-600 text-white shadow-lg shadow-blue-200' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'}`}>{item.icon}{item.title}</Link>
-              {'children' in item && item.children && isActive && <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-2">{item.children.map(child => {
-                const childActive = child.path === '/dashboard/whatsapp' ? pathname === child.path : pathname.startsWith(child.path);
+              {children && isActive && <div className="ml-5 mt-1 space-y-1 border-l border-slate-200 pl-2">{children.map(child => {
+                const childActive = child.path === item.path ? pathname === child.path : pathname.startsWith(child.path);
                 return <Link key={child.path} href={child.path} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition-colors ${childActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-400 hover:bg-slate-50 hover:text-slate-700'}`}>{child.icon}{child.title}</Link>;
               })}</div>}
           </div>;

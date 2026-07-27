@@ -37,8 +37,13 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
     
     // 🧹 ELIMINADO: const [units, setUnits] = useState<any[]>([]);
     
-    const { hasError, clearError, validate, resetErrors, errors } = useValidation();
+    const { hasError, addError, clearError, validate, resetErrors, errors } = useValidation();
     const normalizeId = (value: unknown) => (typeof value === 'string' ? value.trim() : value);
+    const baseUnitId = String(normalizeId(product?.unidadmedidaId) || '');
+    const normalizeQuantity = (value: number | string) => {
+        const quantity = Number(value);
+        return Number.isFinite(quantity) ? quantity : null;
+    };
     const getBackendErrorMessage = (error: unknown, fallback: string) => {
         let rawMessage = '';
 
@@ -88,12 +93,13 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                 ...row,
                 unidadmedidaId: String(normalizeId(row.unidadmedidaId) || '')
             }));
-            const baseUnitId = String(normalizeId(product!.unidadmedidaId) || '');
-            
             // 🚀 ACTUALIZADO: Buscamos por 'value' (ID) y obtenemos 'label' (Descripción)
             const baseUnitName = currentUnits.find((u) => String(normalizeId(u.value)) === baseUnitId)?.label || '';
 
-            const baseIndex = loadedRows.findIndex((r) => String(normalizeId(r.unidadmedidaId)) === baseUnitId);
+            const baseIndex = loadedRows.findIndex((row) => (
+                String(normalizeId(row.unidadmedidaId)) === baseUnitId
+                && normalizeQuantity(row.cantidad) === 1
+            ));
 
             if (baseIndex >= 0) {
                 const [baseRow] = loadedRows.splice(baseIndex, 1);
@@ -219,6 +225,44 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
             toast.error("Por favor complete los campos marcados en rojo.");
             return;
         }
+
+        const seenKeys = new Map<string, number>();
+        const duplicatedRows: number[] = [];
+        const repeatedBaseRows = validRows.filter((row) => (
+            row.idx !== 0
+            && String(normalizeId(row.unidadmedidaId) || '') === baseUnitId
+        ));
+
+        if (repeatedBaseRows.length > 0) {
+            repeatedBaseRows.forEach((row) => {
+                addError(`${row.idx}-unidadmedidaId`);
+            });
+            toast.error("La unidad de medida de la presentación automática no puede volver a seleccionarse.");
+            return;
+        }
+
+        validRows.forEach((row) => {
+            const unitId = String(normalizeId(row.unidadmedidaId) || '');
+            const quantity = normalizeQuantity(row.idx === 0 ? 1 : row.cantidad);
+            const key = `${unitId}|${quantity ?? ''}`;
+            const duplicatedIndex = seenKeys.get(key);
+
+            if (duplicatedIndex !== undefined) {
+                duplicatedRows.push(duplicatedIndex, row.idx);
+            } else {
+                seenKeys.set(key, row.idx);
+            }
+        });
+
+        if (duplicatedRows.length > 0) {
+            Array.from(new Set(duplicatedRows)).forEach((idx) => {
+                addError(`${idx}-unidadmedidaId`);
+                addError(`${idx}-cantidad`);
+            });
+            toast.error("No puede repetir la misma unidad de medida con la misma cantidad.");
+            return;
+        }
+
         setLoading(true);
         try {
             for (const row of validRows) {
@@ -249,15 +293,13 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
         }
     };
 
-    const getAvailableUnits = (currentRowIndex: number): UnidadMedidaOption[] => {
+    const getAvailableUnits = (rowIndex: number, selectedUnitId: string): UnidadMedidaOption[] => {
         const currentUnits = (catalogs['UnidadMedida'] as UnidadMedidaOption[]) || [];
-        const allSelectedIds = rows.map(r => String(normalizeId(r.unidadmedidaId)));
-        return currentUnits.filter(u => {
-            // 🚀 Usamos u.value en vez de u.key para el chequeo de disponibilidad
-            const unitValue = String(normalizeId(u.value));
-            const isSelectedInCurrentRow = unitValue === String(normalizeId(rows[currentRowIndex].unidadmedidaId));
-            const isNotSelectedElsewhere = !allSelectedIds.includes(unitValue);
-            return isSelectedInCurrentRow || isNotSelectedElsewhere;
+        if (rowIndex === 0) return currentUnits;
+
+        return currentUnits.filter((unit) => {
+            const unitId = String(normalizeId(unit.value) || '');
+            return unitId !== baseUnitId || unitId === selectedUnitId;
         });
     };
 
@@ -300,8 +342,20 @@ export default function PresentacionesModal({ isOpen, onClose, product }: Props)
                                         >
                                             <option value="">-- SEL --</option>
                                             {/* 🚀 Usamos u.value y u.label */}
-                                            {getAvailableUnits(idx).map((u) => (
-                                                <option key={u.value} value={u.value}>{u.label} {u.aux ? `(${u.aux})` : ''}</option>
+                                            {getAvailableUnits(
+                                                idx,
+                                                String(normalizeId(row.unidadmedidaId) || '')
+                                            ).map((u) => (
+                                                <option
+                                                    key={u.value}
+                                                    value={u.value}
+                                                    disabled={
+                                                        idx !== 0
+                                                        && String(normalizeId(u.value) || '') === baseUnitId
+                                                    }
+                                                >
+                                                    {u.label} {u.aux ? `(${u.aux})` : ''}
+                                                </option>
                                             ))}
                                         </select>
                                         {hasError(`${idx}-unidadmedidaId`) && <IconAlertCircle size={14} className="text-red-500 absolute right-8 top-1/2 -translate-y-1/2" />}

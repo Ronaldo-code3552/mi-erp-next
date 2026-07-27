@@ -1,7 +1,23 @@
 // src/services/productoService.ts
 import apiClient from '../api/apiCliente';
-import { Producto } from '../types/producto.types';
+import {
+    Producto,
+    ProductoCreatedDto,
+    ProductoCreateRequest,
+    ProductoUpdatedDto,
+    ProductoUpdateRequest
+} from '../types/producto.types';
 import { ApiResponse } from '../types';
+
+const getErrorMessage = (error: unknown, fallback: string) => {
+    if (typeof error === 'object' && error !== null) {
+        const response = (error as { response?: { data?: { message?: unknown } } }).response;
+        if (typeof response?.data?.message === 'string' && response.data.message.trim()) {
+            return response.data.message;
+        }
+    }
+    return error instanceof Error && error.message ? error.message : fallback;
+};
 
 export const productoService = {
     getByEmpresa: async (
@@ -9,7 +25,7 @@ export const productoService = {
         page = 1, 
         pageSize = 20, 
         term = "", 
-        filters: any = null,
+        filters: unknown = null,
         estado?: boolean
     ): Promise<ApiResponse<Producto[]>> => {
         // NOTA: En este backend, el estado se filtra via `filters={"estado":[1]}` (no via `estado=true`).
@@ -38,8 +54,11 @@ export const productoService = {
             return Number.isFinite(n) ? [n] : null;
         };
 
-        let filtersInput: any = filters;
-        if (!filtersInput || typeof filtersInput !== 'object' || Array.isArray(filtersInput)) filtersInput = null;
+        let filtersInput: Record<string, unknown> | null = (
+            filters && typeof filters === 'object' && !Array.isArray(filters)
+                ? filters as Record<string, unknown>
+                : null
+        );
 
         // Si el caller pasó `estado`, lo imponemos.
         if (typeof estado === 'boolean') {
@@ -52,7 +71,7 @@ export const productoService = {
 
         let filtersToSend = null;
         if (filtersInput) {
-            const cleaned: any = {};
+            const cleaned: Record<string, unknown> = {};
             let hasData = false;
             Object.keys(filtersInput).forEach(key => {
                 if (Array.isArray(filtersInput[key]) && filtersInput[key].length > 0) {
@@ -74,9 +93,17 @@ export const productoService = {
 
     // ¡ELIMINADO getFormDropdowns! 🚀
 
-    create: async (data: Partial<Producto>): Promise<ApiResponse<Producto>> => {
-        const response = await apiClient.post(`/Producto`, data);
-        return response.data;
+    create: async (data: ProductoCreateRequest): Promise<ApiResponse<ProductoCreatedDto>> => {
+        try {
+            const response = await apiClient.post(`/Producto`, data);
+            return response.data;
+        } catch (error) {
+            return {
+                isSuccess: false,
+                data: {} as ProductoCreatedDto,
+                message: getErrorMessage(error, 'Error al crear el producto')
+            };
+        }
     },
 
     getById: async (id: string | number): Promise<ApiResponse<Producto>> => {
@@ -84,17 +111,25 @@ export const productoService = {
         return response.data;
     },
 
-    update: async (id: string | number, data: Partial<Producto>): Promise<ApiResponse<Producto>> => {
-        const response = await apiClient.put(`/Producto/${id}`, data);
-        return response.data;
+    update: async (id: string | number, data: ProductoUpdateRequest): Promise<ApiResponse<ProductoUpdatedDto>> => {
+        try {
+            const response = await apiClient.put(`/Producto/${id}`, data);
+            return response.data;
+        } catch (error) {
+            return {
+                isSuccess: false,
+                data: {} as ProductoUpdatedDto,
+                message: getErrorMessage(error, 'Error al actualizar el producto')
+            };
+        }
     },
 
-    delete: async (id: string | number): Promise<ApiResponse<any>> => {
+    delete: async (id: string | number): Promise<ApiResponse<unknown>> => {
         const response = await apiClient.delete(`/Producto/${id}`);
         return response.data;
     },
 
-    anular: async (id: string | number): Promise<ApiResponse<any>> => {
+    anular: async (id: string | number): Promise<ApiResponse<unknown>> => {
         const response = await apiClient.patch(`/Producto/anular/${id}`);
         return response.data;
     }
