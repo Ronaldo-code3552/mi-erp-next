@@ -1,7 +1,7 @@
 // src/app/dashboard/guias-remision/editar/[id]/page.tsx
 "use client";
 import { useState, useEffect, useMemo, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 
@@ -11,6 +11,7 @@ import { productoService } from '@/services/productoService';
 import { presentacionService } from '@/services/presentacionService'; 
 import { useCatalogs } from '@/hooks/useCatalogs'; 
 import { GuiaRemisionPayload, GuiaRemisionDetalle } from '@/types/guiaRemision.types';
+import { getSafeDashboardReturnPath } from '@/utils/referenciasUso';
 
 // UI Components
 import SearchableSelect from '@/components/forms/SearchableSelect';
@@ -43,7 +44,13 @@ const FormInput = ({ label, className, disabled, value, ...props }: any) => (
 
 export default function DetalleGuiaPage({ params }: { params: Promise<{ id: string }> }) {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { id } = use(params); 
+    const returnPath = getSafeDashboardReturnPath(
+        searchParams.get('returnTo'),
+        '/dashboard/guias-remision'
+    );
+    const hasReturnContext = Boolean(searchParams.get('returnTo'));
 
     const EMPRESA_ID = "005";
     const ALMACEN_ID = "001";
@@ -51,7 +58,21 @@ export default function DetalleGuiaPage({ params }: { params: Promise<{ id: stri
     const ruc = "20100100100";
 
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const isReadOnly = true; // 🔒 MODO SOLO LECTURA
+    const handleBack = () => {
+        if (hasReturnContext) {
+            router.push(returnPath);
+            return;
+        }
+
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+
+        router.push('/dashboard/guias-remision');
+    };
 
     const [products, setProducts] = useState<any[]>([]);
     const [formData, setFormData] = useState<Partial<GuiaRemisionPayload> & { 
@@ -84,6 +105,7 @@ export default function DetalleGuiaPage({ params }: { params: Promise<{ id: stri
     useEffect(() => {
         const loadInitialData = async () => {
             setLoading(true);
+            setLoadError('');
             try {
                 const [resProducts, resGuia] = await Promise.all([
                     productoService.getByEmpresa(EMPRESA_ID, 1, 500),
@@ -185,18 +207,21 @@ export default function DetalleGuiaPage({ params }: { params: Promise<{ id: stri
 	                        setItems(mappedItems);
 	                    }
                 } else {
-                    toast.error("No se pudo cargar la guía");
-                    router.push('/dashboard/guias-remision');
+                    const message = "No se pudo obtener el detalle del documento referenciado.";
+                    toast.error(message);
+                    setLoadError(message);
                 }
-            } catch (error) {
-                toast.error("Error al cargar los datos de la guía");
+            } catch {
+                const message = "No se pudo obtener el detalle del documento referenciado.";
+                toast.error(message);
+                setLoadError(message);
             } finally {
                 setLoading(false);
             }
         };
 
         loadInitialData();
-    }, [id, router]);
+    }, [id]);
 
     // =========================================================================
     // INYECTORES DE OPCIONES (Para evitar Selects en blanco en modo lectura)
@@ -267,13 +292,31 @@ export default function DetalleGuiaPage({ params }: { params: Promise<{ id: stri
         return <div className="flex justify-center items-center h-screen"><span className="animate-spin text-blue-600 font-bold"><IconLoader size={40} /></span></div>;
     }
 
+    if (loadError) {
+        return (
+            <div className="p-6">
+                <div className="mx-auto max-w-xl rounded-lg border border-red-200 bg-white p-6 text-center shadow-sm">
+                    <p className="text-sm font-bold text-red-700">{loadError}</p>
+                    <p className="mt-1 text-xs text-slate-500">El documento referenciado ya no está disponible.</p>
+                    <button
+                        type="button"
+                        onClick={handleBack}
+                        className="mt-5 rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700"
+                    >
+                        Volver
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-6 max-w-7xl mx-auto pb-20 animate-fade-in-up opacity-95">
             
             {/* HEADER SIN BOTONES DE GUARDAR */}
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="p-2 hover:bg-slate-200 rounded-full text-slate-600 transition-colors">
+                    <button onClick={handleBack} className="p-2 hover:bg-slate-200 rounded-full text-slate-600 transition-colors">
                         <IconArrowLeft size={24} />
                     </button>
                     <div>

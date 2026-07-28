@@ -17,6 +17,7 @@ import {
 
 import SearchableSelect from "@/components/forms/SearchableSelect";
 import DocumentoAdjuntosPanel from "@/components/documentos/DocumentoAdjuntosPanel";
+import DocumentosReferenciados from "@/components/documentos/DocumentosReferenciados";
 import DocumentoCompraImportModal from "./DocumentoCompraImportModal";
 import OrdenCompraImportModal from "./OrdenCompraImportModal";
 import { documentoCompraService } from "@/services/documentoCompraService";
@@ -89,6 +90,7 @@ type DetalleDraft = {
     importeDesdeBackend: boolean;
     observacion: string;
     maximoExceso: string;
+    saldoTemporal: string;
     bloqueado: boolean;
     origenImportado: boolean;
 };
@@ -127,6 +129,7 @@ interface Props {
     submitText: string;
     initialValue?: Partial<DocumentoCompra>;
     readOnly?: boolean;
+    showReferencedDocuments?: boolean;
     onBack: () => void;
     onSubmit: (
         payload: DocumentoCompraPayload,
@@ -279,6 +282,7 @@ const normalizeDetails = (
         importeDesdeBackend: hasImporte,
         observacion: first(raw, ["observacion", "Observacion"]),
         maximoExceso: first(raw, ["maximoExceso", "maximo_exceso", "MaximoExceso"]) || "0",
+        saldoTemporal: first(raw, ["saldoTemporal", "saldo_temporal", "SaldoTemporal"]),
         bloqueado: options.bloqueado ?? false,
         origenImportado: options.origenImportado ?? false
     };
@@ -358,7 +362,7 @@ const emptyDetail = (): DetalleDraft => ({
     afectoInafecto: false, presentacionId: "", presentacionLabel: "", presentacionCantidad: 1,
     cantidad: "1", costo: "0", conversionTotal: "", conversionTotalDesdeBackend: false,
     importe: "", importeDesdeBackend: false, observacion: "", maximoExceso: "0",
-    bloqueado: false, origenImportado: false
+    saldoTemporal: "", bloqueado: false, origenImportado: false
 });
 
 const Input = ({ label, disabled, ...props }: React.InputHTMLAttributes<HTMLInputElement> & { label: string }) => (
@@ -373,6 +377,7 @@ export default function DocumentoCompraForm({
     submitText,
     initialValue,
     readOnly = false,
+    showReferencedDocuments = false,
     onBack,
     onSubmit
 }: Props) {
@@ -394,6 +399,11 @@ export default function DocumentoCompraForm({
     const isReadOnly = readOnly || form.estado.trim().toUpperCase() !== "REGISTRADO";
     const linkedSourceId = importsDocument ? form.documentoReferenciaId : form.ordenCompraServicioId;
     const igvLocked = isReadOnly || Boolean(linkedSourceId);
+    const currentReferenceModule = form.tipoDocComercialId === DOCUMENTO_COMPRA_TIPO_IDS.NOTA_CREDITO
+        ? "NOTA_CREDITO"
+        : form.tipoDocComercialId === DOCUMENTO_COMPRA_TIPO_IDS.NOTA_DEBITO
+            ? "NOTA_DEBITO"
+            : "DOCUMENTO_COMPRA";
 
     useEffect(() => {
         setForm(normalizeForm(initialValue));
@@ -1056,6 +1066,14 @@ export default function DocumentoCompraForm({
                     </div>
                 </section>
 
+                {showReferencedDocuments && (
+                    <DocumentosReferenciados
+                        referenciasUso={initialValue?.referenciasUso ?? initialValue?.ReferenciasUso}
+                        currentModule={currentReferenceModule}
+                        currentId={form.documentoCompraId}
+                    />
+                )}
+
                 <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
                     <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2"><div className="flex items-center gap-2"><IconPackage size={19} className="text-blue-600" /><h2 className="text-sm font-bold uppercase">Detalle de productos</h2></div><span className="text-xs font-bold text-slate-400">{form.detalles.length} producto(s)</span></div>
                     <div className="overflow-auto"><table className="w-full min-w-[980px] text-left text-xs"><thead className="bg-slate-50 uppercase text-slate-500"><tr><th className="p-3">#</th><th className="w-[36%] p-3">Producto</th><th className="p-3">Presentación</th><th className="p-3 text-right">Cantidad</th><th className="p-3 text-right">Costo</th><th className="p-3 text-right">Total</th>{!isReadOnly && <th className="p-3 text-center">Acc.</th>}</tr></thead>
@@ -1157,7 +1175,20 @@ export default function DocumentoCompraForm({
                                         </td>
                                         <td className="p-3 text-right">
                                             {rowLocked ? (
-                                                <span className="font-mono font-bold text-slate-700">{money(numberOf(detail.cantidad))}</span>
+                                                <div className="flex flex-col items-end gap-1.5">
+                                                    <span className="font-mono font-bold text-slate-700">
+                                                        {money(numberOf(detail.cantidad))}
+                                                    </span>
+                                                    {detail.saldoTemporal !== "" && (
+                                                        <span className={`inline-flex rounded border px-1.5 py-0.5 text-[9px] font-black uppercase ${
+                                                            numberOf(detail.saldoTemporal) > 0
+                                                                ? "border-orange-200 bg-orange-50 text-orange-700"
+                                                                : "border-red-200 bg-red-50 text-red-700"
+                                                        }`}>
+                                                            Pendiente: {money(numberOf(detail.saldoTemporal))}
+                                                        </span>
+                                                    )}
+                                                </div>
                                             ) : (
                                                 <input
                                                     type="number"

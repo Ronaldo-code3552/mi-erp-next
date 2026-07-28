@@ -39,3 +39,4 @@ export * from './cuentasProveedor.types';
 export * from './documentoCompra.types';
 export * from './documentoPdf.types';
 export * from './motivoNcNdElectronico.types';
+export * from './referenciasUso.types';

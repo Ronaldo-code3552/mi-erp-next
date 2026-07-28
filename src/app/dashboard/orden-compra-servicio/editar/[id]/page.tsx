@@ -12,6 +12,7 @@ import {
 import { ordenCompraServicioService } from "@/services/ordenCompraServicioService";
 import { OrdenCompraServicio, OrdenCompraServicioPayload } from "@/types/ordenCompraServicio.types";
 import { DOCUMENTO_PDF_REFERENCIAS } from "@/types/documentoPdf.types";
+import { getSafeDashboardReturnPath } from "@/utils/referenciasUso";
 
 export default function EditarOrdenCompraServicioPage() {
     const router = useRouter();
@@ -19,33 +20,58 @@ export default function EditarOrdenCompraServicioPage() {
     const searchParams = useSearchParams();
     const id = String(params?.id || "");
     const isViewMode = searchParams.get("mode") === "view";
+    const returnPath = getSafeDashboardReturnPath(
+        searchParams.get("returnTo"),
+        "/dashboard/orden-compra-servicio"
+    );
+    const hasReturnContext = Boolean(searchParams.get("returnTo"));
 
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState("");
     const [orden, setOrden] = useState<OrdenCompraServicio | null>(null);
+    const handleBack = () => {
+        if (hasReturnContext) {
+            router.push(returnPath);
+            return;
+        }
+
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+
+        router.push("/dashboard/orden-compra-servicio");
+    };
 
     useEffect(() => {
         const fetchOrden = async () => {
             if (!id) return;
 
             setLoading(true);
+            setLoadError("");
 
             try {
                 const response = await ordenCompraServicioService.getById(id);
 
-                if (!response.isSuccess) {
-                    toast.error(response.message || "No se pudo cargar la orden.");
-                    router.push("/dashboard/orden-compra-servicio");
+                if (!response.isSuccess || !response.data) {
+                    const message = "No se pudo obtener el detalle del documento referenciado.";
+                    toast.error(message);
+                    setLoadError(message);
                     return;
                 }
 
                 setOrden(response.data || null);
+            } catch {
+                const message = "No se pudo obtener el detalle del documento referenciado.";
+                toast.error(message);
+                setLoadError(message);
             } finally {
                 setLoading(false);
             }
         };
 
         fetchOrden();
-    }, [id, router]);
+    }, [id]);
 
     const handleSubmit = async (
         payload: OrdenCompraServicioPayload,
@@ -93,6 +119,24 @@ export default function EditarOrdenCompraServicioPage() {
         );
     }
 
+    if (loadError) {
+        return (
+            <div className="p-6">
+                <div className="mx-auto max-w-xl rounded-lg border border-red-200 bg-white p-6 text-center shadow-sm">
+                    <p className="text-sm font-bold text-red-700">{loadError}</p>
+                    <p className="mt-1 text-xs text-slate-500">El documento referenciado ya no está disponible.</p>
+                    <button
+                        type="button"
+                        onClick={handleBack}
+                        className="mt-5 rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700"
+                    >
+                        Volver
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (!orden) {
         return (
             <div className="p-6">
@@ -111,7 +155,8 @@ export default function EditarOrdenCompraServicioPage() {
             submitText="Guardar cambios"
             initialValue={orden}
             readOnly={isViewMode}
-            onBack={() => router.push("/dashboard/orden-compra-servicio")}
+            showReferencedDocuments={isViewMode}
+            onBack={handleBack}
             onSubmit={handleSubmit}
         />
     );

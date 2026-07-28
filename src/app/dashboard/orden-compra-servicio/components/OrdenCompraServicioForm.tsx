@@ -16,6 +16,7 @@ import {
 
 import SearchableSelect from "@/components/forms/SearchableSelect";
 import DocumentoAdjuntosPanel from "@/components/documentos/DocumentoAdjuntosPanel";
+import DocumentosReferenciados from "@/components/documentos/DocumentosReferenciados";
 import { monedaService } from "@/services/monedaService";
 import { presentacionService } from "@/services/presentacionService";
 import { productoService } from "@/services/productoService";
@@ -68,6 +69,7 @@ type OrdenDetalleDraft = {
     importe: string;
     importeDesdeBackend: boolean;
     observacion: string;
+    saldoTemporal: string;
 };
 
 type OrdenFormValue = {
@@ -100,6 +102,7 @@ interface OrdenCompraServicioFormProps {
     submitText: string;
     initialValue?: Partial<OrdenCompraServicio>;
     readOnly?: boolean;
+    showReferencedDocuments?: boolean;
     onBack: () => void;
     onSubmit: (
         payload: OrdenCompraServicioPayload,
@@ -240,7 +243,12 @@ const normalizeDetalles = (source?: Partial<OrdenCompraServicio>): OrdenDetalleD
             conversionTotalDesdeBackend: hasConversionTotal,
             importe,
             importeDesdeBackend: hasImporte,
-            observacion: firstString(raw, ["observacion", "Observacion"])
+            observacion: firstString(raw, ["observacion", "Observacion"]),
+            saldoTemporal: firstString(raw, [
+                "saldoTemporal",
+                "saldo_temporal",
+                "SaldoTemporal"
+            ])
         };
     });
 };
@@ -332,6 +340,7 @@ export default function OrdenCompraServicioForm({
     submitText,
     initialValue,
     readOnly = false,
+    showReferencedDocuments = false,
     onBack,
     onSubmit
 }: OrdenCompraServicioFormProps) {
@@ -357,7 +366,8 @@ export default function OrdenCompraServicioForm({
         conversionTotalDesdeBackend: false,
         importe: "",
         importeDesdeBackend: false,
-        observacion: ""
+        observacion: "",
+        saldoTemporal: ""
     });
 
     const isEditing = Boolean(formData.ordenCompraServicioId);
@@ -631,7 +641,8 @@ export default function OrdenCompraServicioForm({
             conversionTotalDesdeBackend: false,
             importe: "",
             importeDesdeBackend: false,
-            observacion: ""
+            observacion: "",
+            saldoTemporal: ""
         });
         setPresentacionOptions([]);
     };
@@ -1018,6 +1029,14 @@ export default function OrdenCompraServicioForm({
                     </div>
                 </div>
 
+                {showReferencedDocuments && (
+                    <DocumentosReferenciados
+                        referenciasUso={initialValue?.referenciasUso ?? initialValue?.ReferenciasUso}
+                        currentModule="ORDEN_COMPRA_SERVICIO"
+                        currentId={formData.ordenCompraServicioId}
+                    />
+                )}
+
                 <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div className="mb-4 flex items-center justify-between border-b border-slate-200 pb-2">
                         <div className="flex items-center gap-2 text-slate-800">
@@ -1156,7 +1175,20 @@ export default function OrdenCompraServicioForm({
                                                 </td>
                                                 <td className="p-3 text-right">
                                                     {isReadOnly ? (
-                                                        <span className="font-mono font-bold text-slate-700">{toMoney(toNumber(detalle.cantidad))}</span>
+                                                        <div className="flex flex-col items-end gap-1.5">
+                                                            <span className="font-mono font-bold text-slate-700">
+                                                                {toMoney(toNumber(detalle.cantidad))}
+                                                            </span>
+                                                            {detalle.saldoTemporal !== "" && (
+                                                                <span className={`inline-flex rounded border px-1.5 py-0.5 text-[9px] font-black uppercase ${
+                                                                    toNumber(detalle.saldoTemporal) > 0
+                                                                        ? "border-orange-200 bg-orange-50 text-orange-700"
+                                                                        : "border-red-200 bg-red-50 text-red-700"
+                                                                }`}>
+                                                                    Pendiente: {toMoney(toNumber(detalle.saldoTemporal))}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                     ) : (
                                                         <input
                                                             type="number"

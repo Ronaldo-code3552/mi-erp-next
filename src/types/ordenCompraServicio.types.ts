@@ -1,3 +1,5 @@
+import type { ReferenciasUso } from "./referenciasUso.types";
+
 export interface OrdenCompraServicioRelation {
     descripcion?: string;
     nombre?: string;
@@ -42,6 +44,9 @@ export interface OrdenCompraServicioDetalle {
     AfectoInafecto?: boolean | number | string | null;
     observacion?: string | null;
     Observacion?: string | null;
+    saldoTemporal?: number | string | null;
+    saldo_temporal?: number | string | null;
+    SaldoTemporal?: number | string | null;
     bien?: {
         bienId?: string;
         descripcion?: string;
@@ -171,6 +176,8 @@ export interface OrdenCompraServicio {
     Trabajador?: OrdenCompraServicioRelation;
     detalles?: OrdenCompraServicioDetalle[];
     Detalles?: OrdenCompraServicioDetalle[];
+    referenciasUso?: Pick<ReferenciasUso, "DOCUMENTO_COMPRA"> | string | null;
+    ReferenciasUso?: Pick<ReferenciasUso, "DOCUMENTO_COMPRA"> | string | null;
 }
 
 export interface OrdenCompraServicioFilters {

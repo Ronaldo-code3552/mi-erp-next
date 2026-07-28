@@ -1,11 +1,12 @@
 "use client";
 import { useEffect, useMemo, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { format, parseISO } from 'date-fns';
 import { toast } from 'sonner';
 
 import { notaIngresoService } from '@/services/notaIngresoService';
 import { NotaIngresoResponse } from '@/types/notaIngreso.types';
+import { getSafeDashboardReturnPath } from '@/utils/referenciasUso';
 
 import {
     IconArrowLeft,
@@ -46,39 +47,64 @@ const ReadonlySelect = ({ label, value }: { label: string; value: string }) => (
 
 export default function VerNotaIngresoPage() {
     const router = useRouter();
+    const searchParams = useSearchParams();
     const params = useParams<{ id: string }>();
     const notaId = String(params?.id || '');
+    const returnPath = getSafeDashboardReturnPath(
+        searchParams.get('returnTo'),
+        '/dashboard/notas-ingreso'
+    );
+    const hasReturnContext = Boolean(searchParams.get('returnTo'));
 
     const [loading, setLoading] = useState(true);
+    const [loadError, setLoadError] = useState('');
     const [nota, setNota] = useState<NotaIngresoResponse | null>(null);
+    const handleBack = () => {
+        if (hasReturnContext) {
+            router.push(returnPath);
+            return;
+        }
+
+        if (window.history.length > 1) {
+            router.back();
+            return;
+        }
+
+        router.push('/dashboard/notas-ingreso');
+    };
 
     useEffect(() => {
         const load = async () => {
             if (!notaId) {
-                toast.error('Nota de ingreso inválida.');
-                router.push('/dashboard/notas-ingreso');
+                const message = 'No se pudo obtener el detalle del documento referenciado.';
+                toast.error(message);
+                setLoadError(message);
+                setLoading(false);
                 return;
             }
 
             setLoading(true);
+            setLoadError('');
             try {
                 const res = await notaIngresoService.getById(notaId);
                 if (!res?.isSuccess || !res?.data) {
-                    toast.error(res?.message || 'No se pudo cargar la nota de ingreso.');
-                    router.push('/dashboard/notas-ingreso');
+                    const message = 'No se pudo obtener el detalle del documento referenciado.';
+                    toast.error(message);
+                    setLoadError(message);
                     return;
                 }
                 setNota(res.data);
-            } catch (error: any) {
-                toast.error(error?.message || 'Error al cargar la nota de ingreso.');
-                router.push('/dashboard/notas-ingreso');
+            } catch {
+                const message = 'No se pudo obtener el detalle del documento referenciado.';
+                toast.error(message);
+                setLoadError(message);
             } finally {
                 setLoading(false);
             }
         };
 
         load();
-    }, [notaId, router]);
+    }, [notaId]);
 
     const transaccionRules = useMemo(() => {
         const t = nota?.transaccionId || '';
@@ -129,13 +155,31 @@ export default function VerNotaIngresoPage() {
         );
     }
 
+    if (loadError) {
+        return (
+            <div className="p-6">
+                <div className="mx-auto max-w-xl rounded-lg border border-red-200 bg-white p-6 text-center shadow-sm">
+                    <p className="text-sm font-bold text-red-700">{loadError}</p>
+                    <p className="mt-1 text-xs text-slate-500">El documento referenciado ya no está disponible.</p>
+                    <button
+                        type="button"
+                        onClick={handleBack}
+                        className="mt-5 rounded-lg bg-slate-800 px-4 py-2 text-xs font-bold text-white hover:bg-slate-700"
+                    >
+                        Volver
+                    </button>
+                </div>
+            </div>
+        );
+    }
+
     if (!nota) return null;
 
     return (
         <div className="p-6 max-w-[95%] mx-auto pb-20 animate-fade-in-up">
             <div className="flex justify-between items-center mb-6">
                 <div className="flex items-center gap-4">
-                    <button onClick={() => router.back()} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
+                    <button onClick={handleBack} className="p-2 hover:bg-slate-100 rounded-full text-slate-500 transition-colors">
                         <IconArrowLeft size={24} />
                     </button>
                     <div>

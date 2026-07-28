@@ -1,3 +1,5 @@
+import type { ReferenciasUso } from "./referenciasUso.types";
+
 export interface DocumentoCompraTipoDocumentoComercial {
     tipodoccomercialId?: string;
     descripcion?: string;
@@ -101,6 +103,7 @@ export interface DocumentoCompraDetalle {
     afecto_inafecto?: boolean;
     observacion?: string;
     saldoTemporal?: number;
+    saldo_temporal?: number;
     igvCosto?: number;
     condicionEstado?: string;
     maximoExceso?: number;
@@ -170,6 +173,8 @@ export interface DocumentoCompra {
     cuentaUsuario?: DocumentoCompraCuentaUsuario;
     empresa?: DocumentoCompraEmpresa;
     detalles?: DocumentoCompraDetalle[];
+    referenciasUso?: ReferenciasUso | string | null;
+    ReferenciasUso?: ReferenciasUso | string | null;
 }
 
 export interface DocumentoCompraFiltros {
