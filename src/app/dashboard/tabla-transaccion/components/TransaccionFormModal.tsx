@@ -9,6 +9,7 @@ import { IconDeviceFloppy, IconLoader } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { TablaTransacciones, TablaTransaccionesPayload } from '@/types/tablaTransacciones.types';
 import { useValidation } from '@/hooks/useValidation';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 interface Props {
     isOpen: boolean;
@@ -29,7 +30,6 @@ const FormInput = ({ label, className, ...props }: any) => (
 
 export default function TransaccionFormModal({ isOpen, onClose, onSuccess, dataToEdit }: Props) {
     const [loading, setLoading] = useState(false);
-    const EMPRESA_ID = "005"; 
     const { hasError, addError, clearError, resetErrors } = useValidation();
 
     // 🚀 OBTENER CATÁLOGOS LIMPIOS

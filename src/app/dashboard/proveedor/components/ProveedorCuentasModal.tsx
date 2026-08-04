@@ -19,6 +19,7 @@ import { Banco } from "@/types/banco.types";
 import { CuentaProveedor } from "@/types/cuentasProveedor.types";
 import { Moneda } from "@/types/moneda.types";
 import { Proveedor } from "@/types/proveedor.types";
+import { MONEDA_ID_DEFAULT } from "@/config/appConfig";
 
 type CuentaForm = {
     bancosId: string;
@@ -41,7 +42,7 @@ const initialForm: CuentaForm = {
     bancosId: "",
     numeroCuenta: "",
     cci: "",
-    monedaId: "001",
+    monedaId: MONEDA_ID_DEFAULT,
     observacion: "",
     totalPagado: "0.00"
 };
@@ -221,7 +222,7 @@ export default function ProveedorCuentasModal({
             bancosId: bancosId ? String(bancosId) : "",
             numeroCuenta: getCuentaNumero(cuenta) === "-" ? "" : getCuentaNumero(cuenta),
             cci: getCuentaCci(cuenta) === "-" ? "" : getCuentaCci(cuenta),
-            monedaId: cuenta.monedaId || cuenta.MonedaId || cuenta.moneda?.monedaId || cuenta.Moneda?.monedaId || "001",
+            monedaId: cuenta.monedaId || cuenta.MonedaId || cuenta.moneda?.monedaId || cuenta.Moneda?.monedaId || MONEDA_ID_DEFAULT,
             observacion: cuenta.observacion || cuenta.Observacion || "",
             totalPagado: round2(Number(totalPagado || 0)).toFixed(2)
         });

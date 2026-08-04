@@ -10,6 +10,7 @@ import { IconDeviceFloppy, IconLoader } from '@tabler/icons-react';
 import { toast } from 'sonner';
 import { Transportista } from '@/types/transportista.types';
 import { RucResponse, DniResponse } from '@/types/apiExternal.types';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 interface Props {
     isOpen: boolean;
@@ -33,7 +34,6 @@ const FormInput = ({ label, className, ...props }: any) => (
 export default function TransportistaFormModal({ isOpen, onClose, onSuccess, transportistaToEdit }: Props) {
     const [loading, setLoading] = useState(false);
 
-    const EMPRESA_ID = "005"; 
     const isReadOnly = !!(transportistaToEdit && transportistaToEdit.estado === false);
     const isEditing = !!transportistaToEdit;
 

@@ -22,12 +22,11 @@ import {
     ProductoCreateRequest,
     ProductoUpdateRequest
 } from '@/types/producto.types';
-
-// Opciones estáticas (reemplazan al catálogo quemado en la BD)
-const CONDICION_ESTADO_OPTIONS = [
-    { key: 'STOCK', value: 'STOCK', label: 'STOCK' },
-    { key: 'LIBRE', value: 'LIBRE', label: 'LIBRE' }
-];
+import {
+    EMPRESA_ID,
+    PRODUCTO_CONDICION_ESTADO_OPTIONS,
+    USER_ID
+} from '@/config/appConfig';
 
 interface Props {
     isOpen: boolean;
@@ -296,7 +295,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
         setLoading(true);
         try {
             const commonPayload: ProductoCreateRequest = {
-                empresaId: '005',
+                empresaId: EMPRESA_ID,
                 descripcion: descripcion.toUpperCase(),
                 marca: nullableText(formData.marca)?.toUpperCase() || null,
                 tipobienId: tipobienNum,
@@ -308,7 +307,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                 afecto_inafecto: formData.afecto_inafecto ?? true,
                 detraccion_porcentaje: detraccionNum,
                 imagen: nullableText(formData.imagen),
-                cuentausuarioId: 'CU0001',
+                cuentausuarioId: USER_ID,
                 observacion: nullableText(formData.observacion),
                 codigo_osce: nullableText(formData.codigo_osce),
                 ubidst: nullableText(formData.ubidst),
@@ -546,7 +545,7 @@ export default function ProductFormModal({ isOpen, onClose, onSuccess, productTo
                                 className="w-full border border-slate-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white transition-all disabled:bg-slate-50 disabled:text-slate-400"
                             >
                                 {/* 🚀 Usamos el Array estático */}
-                                {CONDICION_ESTADO_OPTIONS.map((opt) => (
+                                {PRODUCTO_CONDICION_ESTADO_OPTIONS.map((opt) => (
                                     <option key={opt.key} value={opt.value}>{opt.label}</option>
                                 ))}
                             </select>

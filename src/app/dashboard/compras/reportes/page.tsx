@@ -33,6 +33,12 @@ import {
     downloadBlob,
     getDownloadErrorMessage
 } from "@/utils/fileDownload";
+import {
+    DOCUMENTO_COMPRA_ESTADOS,
+    EMPRESA_ID,
+    ORDEN_COMPRA_ESTADOS,
+    PURCHASE_TYPES
+} from "@/config/appConfig";
 
 type ReportFormat = "excel" | "pdf";
 type ReportType = "orden" | "documento";
@@ -62,10 +68,6 @@ type SelectOption = {
     aux?: string | number;
     raw?: unknown;
 };
-
-const estadoOptions = ["REGISTRADO", "PENDIENTE", "APROBADO", "COMPROMETIDO", "ANULADO"];
-const documentoEstadoOptions = ["REGISTRADO", "COMPROMETIDO", "ANULADO"];
-const EMPRESA_ID = "005";
 
 const initialOrderFilters: OrderFilterState = {
     estado: "",
@@ -406,7 +408,7 @@ export default function ComprasReportesPage() {
                                         className={inputClass}
                                     >
                                         <option value="">Todos</option>
-                                        {documentoEstadoOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                        {DOCUMENTO_COMPRA_ESTADOS.map(option => <option key={option} value={option}>{option}</option>)}
                                     </select>
                                 </Field>
 
@@ -455,8 +457,8 @@ export default function ComprasReportesPage() {
                                         className={inputClass}
                                     >
                                         <option value="">Todos</option>
-                                        <option value="COMPRA NACIONAL">Compra productos locales</option>
-                                        <option value="IMPORTACION">Compra productos importados</option>
+                                        <option value={PURCHASE_TYPES.LOCAL}>Compra productos locales</option>
+                                        <option value={PURCHASE_TYPES.IMPORTED}>Compra productos importados</option>
                                     </select>
                                 </Field>
 
@@ -489,7 +491,7 @@ export default function ComprasReportesPage() {
                                         className={inputClass}
                                     >
                                         <option value="">Todos</option>
-                                        {estadoOptions.map(option => <option key={option} value={option}>{option}</option>)}
+                                        {ORDEN_COMPRA_ESTADOS.map(option => <option key={option} value={option}>{option}</option>)}
                                     </select>
                                 </Field>
 

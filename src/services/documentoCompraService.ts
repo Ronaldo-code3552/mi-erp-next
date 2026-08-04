@@ -12,8 +12,8 @@ import {
     FileDownloadResult,
     getFileNameFromContentDisposition
 } from "@/utils/fileDownload";
+import { EMPRESA_ID } from "@/config/appConfig";
 
-const EMPRESA_ID = "005";
 const BASE_URL = "/DocumentoCompra";
 
 const getErrorMessage = (error: unknown, fallback: string) => {

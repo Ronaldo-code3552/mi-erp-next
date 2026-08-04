@@ -28,9 +28,7 @@ import {
 } from "@/types/proveedor.types";
 import { Ubigeo } from "@/types/ubigeo.types";
 import ProveedorCuentasModal from "./ProveedorCuentasModal";
-
-const EMPRESA_ID = "005";
-const TENANT_ID = "1";
+import { EMPRESA_ID, TENANT_ID_TEXT } from "@/config/appConfig";
 
 type SelectOption = {
     key?: string | number;
@@ -109,7 +107,7 @@ const normalizeProveedor = (source?: Partial<Proveedor>): ProveedorFormValue => 
         website: String(raw.website || raw.Website || "").trim(),
         estado: estado === undefined || estado === null ? true : Boolean(estado),
         ubidst: String(raw.ubidst || raw.Ubidst || "").trim(),
-        tenantId: String(raw.tenantId || raw.TenantId || TENANT_ID).trim(),
+        tenantId: String(raw.tenantId || raw.TenantId || TENANT_ID_TEXT).trim(),
         ubigeoPais: String(ubigeo?.ubipan || "").trim(),
         ubigeoDepartamento: String(ubigeo?.ubiden || "").trim(),
         ubigeoProvincia: String(ubigeo?.ubiprn || "").trim(),
@@ -428,7 +426,7 @@ export default function ProveedorForm({
         website: formData.website.trim(),
         estado: formData.estado,
         ubidst: formData.ubidst.trim(),
-        tenantId: formData.tenantId || TENANT_ID
+        tenantId: formData.tenantId || TENANT_ID_TEXT
     });
 
     const handleUbigeoChange = (

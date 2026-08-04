@@ -18,10 +18,9 @@ import {
     IconEdit, IconTrash, IconBuildingWarehouse 
 } from '@tabler/icons-react';
 import { toast } from 'sonner';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 export default function TablaTransaccionesPage() {
-    const EMPRESA_ID = "005";
-
     const initialFilters = { tipo_movimiento: [], tipo_operacion: [] };
 
     const { 

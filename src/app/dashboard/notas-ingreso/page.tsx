@@ -11,6 +11,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useCatalogs } from "@/hooks/useCatalogs"; 
 import { notaIngresoService } from "@/services/notaIngresoService";
 import { NotaIngresoResponse } from "@/types/notaIngreso.types";
+import { EMPRESA_ID, NOTA_INGRESO_ESTADO_OPTIONS } from "@/config/appConfig";
 
 import DataTable from "@/components/shared/DataTable";
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
@@ -25,7 +26,6 @@ import {
 } from '@tabler/icons-react';
 
 export default function NotasIngresoPage() {
-    const EMPRESA_ID = "005";
     const today = new Date();
     const defaultFechaFin = format(today, 'yyyy-MM-dd');
     const defaultFechaInicio = format(subMonths(today, 1), 'yyyy-MM-dd');
@@ -394,14 +394,6 @@ export default function NotasIngresoPage() {
         })) || [];
     };
 
-    // Filtro Manual de Estados (Como pediste en el prompt)
-    const estadoOptions = [
-        { value: 'REGISTRADO', label: 'REGISTRADO' },
-        { value: 'APROBADO', label: 'APROBADO' },
-        { value: 'ANULADO', label: 'ANULADO' },
-        { value: 'COMPROMETIDO', label: 'COMPROMETIDO' }
-    ];
-
     return (
         <div className="p-6 animate-fade-in-up">
             {/* Header */}
@@ -520,7 +512,7 @@ export default function NotasIngresoPage() {
 
                         <hr className="border-slate-100"/>
 
-                        <MultiSelect label="Estado" options={estadoOptions} value={tempFilters.estadoJson} onChange={(v) => setTempFilters({...tempFilters, estadoJson: v})} />
+                        <MultiSelect label="Estado" options={NOTA_INGRESO_ESTADO_OPTIONS} value={tempFilters.estadoJson} onChange={(v) => setTempFilters({...tempFilters, estadoJson: v})} />
                         <MultiSelect label="Transacción" options={getOpts('TablaTransacciones')} value={tempFilters.transaccionJson} onChange={(v) => setTempFilters({...tempFilters, transaccionJson: v})} />
                         <MultiSelect label="Tipo Documento" options={getOpts('TipoDocumentoComercial')} value={tempFilters.tipocomercialJson} onChange={(v) => setTempFilters({...tempFilters, tipocomercialJson: v})} />
                         <MultiSelect label="Cuenta Usuario" options={getOpts('CuentaUsuario')} value={tempFilters.usuarioJson} onChange={(v) => setTempFilters({...tempFilters, usuarioJson: v})} />

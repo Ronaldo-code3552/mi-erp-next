@@ -15,17 +15,12 @@ import MultiSelect from "@/components/forms/MultiSelect";
 import ProductFormModal from "./components/ProductFormModal";
 import PresentacionesModal from "./components/PresentacionesModal";
 import ProductDetailModal from "./components/ProductDetailModal";
+import { EMPRESA_ID, PRODUCTO_CONDICION_ESTADO_OPTIONS } from "@/config/appConfig";
 
 import { 
     IconPlus, IconRefresh, IconSearch, IconFilter, 
     IconEdit, IconTrash, IconEye, IconStack2, IconLoader2
 } from '@tabler/icons-react';
-
-// Constante para los estados (reemplaza el hardcodeo del SP anterior)
-const CONDICION_ESTADO_OPTIONS = [
-    { label: 'STOCK', value: 'STOCK' },
-    { label: 'LIBRE', value: 'LIBRE' }
-];
 
 type ProductosFilters = {
     tipo_bien: Array<string | number>;
@@ -36,8 +31,6 @@ type ProductosFilters = {
 };
 
 export default function ProductosPage() {
-    const EMPRESA_ID = "005";
-    
     const initialFilters: ProductosFilters = {
         tipo_bien: [],
         sub_clase_bien: [],
@@ -330,7 +323,7 @@ export default function ProductosPage() {
                         />
                         <MultiSelect 
                             label="Condición del Stock" 
-                            options={CONDICION_ESTADO_OPTIONS} // Usamos la constante local
+                            options={PRODUCTO_CONDICION_ESTADO_OPTIONS}
                             value={tempFilters.condicion_estado}
                             onChange={(vals) => setTempFilters({...tempFilters, condicion_estado: vals})}
                         />

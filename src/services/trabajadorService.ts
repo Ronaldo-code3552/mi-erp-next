@@ -1,8 +1,7 @@
 import apiClient from '@/api/apiCliente';
 import { ApiResponse } from '@/types';
 import { Trabajador, TrabajadorFilters } from '@/types/trabajador.types';
-
-const EMPRESA_ID = '005';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 const normalizeMeta = (
     meta: ApiResponse<unknown>['meta'],

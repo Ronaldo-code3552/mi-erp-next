@@ -24,6 +24,12 @@ import {
     IconLoader, IconListDetails, IconExchange, IconX
 } from '@tabler/icons-react';
 import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
+import {
+    EMPRESA_ID,
+    MONEDA_ID_DEFAULT,
+    USER_ID,
+    USUARIO_NOMBRE
+} from '@/config/appConfig';
 
 const SectionTitle = ({ title, icon: Icon }: any) => (
     <div className="flex items-center gap-2 text-slate-800 border-b border-slate-200 pb-2 mb-4 mt-6">
@@ -60,10 +66,6 @@ interface InternalNotaSalidaDetalle extends NotaSalidaDetalle {
 
 export default function CrearNotaSalidaPage() {
     const router = useRouter();
-    
-    const EMPRESA_ID = "005";
-    const USER_ID = "CU0001";     
-    const USER_NAME = "BIOSNET";  
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -78,7 +80,7 @@ export default function CrearNotaSalidaPage() {
         transaccionId: '', 
         tipodoccomercialId: '', 
         doc_referencia_numero: '', 
-        monedaId: '001', 
+        monedaId: MONEDA_ID_DEFAULT,
         tipo_cambio: 1.0, 
         observaciones: '',
         almacenDestinoId: '' 
@@ -128,7 +130,7 @@ export default function CrearNotaSalidaPage() {
         { endpoint: 'TablaTransacciones', params: { empresaId: EMPRESA_ID } },
         { endpoint: 'Almacen', params: { empresaId: EMPRESA_ID } },
         ...(formData.almacenId
-            ? [{ endpoint: 'TablaTransaccionesPerfil', params: { cuentausuarioId: USER_NAME, almacenId: formData.almacenId } }]
+            ? [{ endpoint: 'TablaTransaccionesPerfil', params: { cuentausuarioId: USUARIO_NOMBRE, almacenId: formData.almacenId } }]
             : [])
     ]);
 
@@ -260,7 +262,7 @@ export default function CrearNotaSalidaPage() {
                 tipodoccomercialId: '',
                 doc_referencia: '',
                 doc_referencia_numero: '',
-                monedaId: '001',
+                monedaId: MONEDA_ID_DEFAULT,
                 tipo_cambio: 1.0,
                 observaciones: '',
                 almacenDestinoId: ''
@@ -296,7 +298,7 @@ export default function CrearNotaSalidaPage() {
         setFormData({
             empresaId: EMPRESA_ID, almacenId: formData.almacenId || '', cuentausuario: USER_ID, estado: 'REGISTRADO',
             transaccionId: formData.transaccionId, tipodoccomercialId: '', doc_referencia: '', doc_referencia_numero: '', 
-            monedaId: '001', tipo_cambio: 1.0, observaciones: '', almacenDestinoId: '' 
+            monedaId: MONEDA_ID_DEFAULT, tipo_cambio: 1.0, observaciones: '', almacenDestinoId: ''
         });
         setItems([]);
         setLotesAsignados({});
@@ -345,7 +347,7 @@ export default function CrearNotaSalidaPage() {
                 tipodoccomercialId: String(cabecera.tipodoccomercialId || '').trim(),
                 doc_referencia: tablaReferencia,
                 doc_referencia_numero: realDocId,
-                monedaId: cabecera.monedaId || '001',
+                monedaId: cabecera.monedaId || MONEDA_ID_DEFAULT,
                 tipo_cambio: cabecera.tipo_cambio || cabecera.tipoCambio || 1
             };
 
@@ -1105,7 +1107,7 @@ export default function CrearNotaSalidaPage() {
 
             const payload: NotaSalidaPayload = {
                 transaccionId: formData.transaccionId,
-                monedaId: formData.monedaId || '001',
+                monedaId: formData.monedaId || MONEDA_ID_DEFAULT,
                 tipo_cambio: Number(formData.tipo_cambio) || 1,
                 tipodoccomercialId: formData.tipodoccomercialId || '',
                 doc_referencia: formData.doc_referencia || '', 
@@ -1155,7 +1157,7 @@ export default function CrearNotaSalidaPage() {
 
                     const ingresoPayload = {
                         transaccionId: ingresoTransaccionId,
-                        monedaId: formData.monedaId || '001',
+                        monedaId: formData.monedaId || MONEDA_ID_DEFAULT,
                         tipo_cambio: Number(formData.tipo_cambio) || 1,
                         tipodoccomercialId: '',
                         doc_referencia: 'NOTA_SALIDA',

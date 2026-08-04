@@ -1,6 +1,6 @@
 // src/app/dashboard/notas-ingreso/crear/page.tsx
 "use client";
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { format, addMonths } from 'date-fns';
@@ -20,10 +20,19 @@ import Modal from '@/components/ui/Modal';
 import { 
     IconDeviceFloppy, IconArrowLeft, IconFileDescription, 
     IconBuildingStore, IconPackage, IconPlus, IconTrash, IconSearch,
-    IconLoader, IconEraser, IconEye,
+    IconLoader, IconEye,
     IconX
 } from '@tabler/icons-react';
 import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
+import {
+    CURRENCY_IDS,
+    DOCUMENT_TYPE_IDS,
+    EMPRESA_ID,
+    MONEDA_ID_DEFAULT,
+    PURCHASE_TYPES,
+    USER_ID,
+    USUARIO_NOMBRE
+} from '@/config/appConfig';
 
 const SectionTitle = ({ title, icon: Icon }: any) => (
     <div className="flex items-center gap-2 text-slate-800 border-b border-slate-200 pb-2 mb-4 mt-6">
@@ -51,13 +60,18 @@ interface InternalNotaIngresoDetalle extends NotaIngresoDetalle {
     loteLabel?: string;
 }
 
+const toFiniteNumber = (value: unknown, fallback = 0) => {
+    const parsedValue = Number(value);
+    return Number.isFinite(parsedValue) ? parsedValue : fallback;
+};
+
+const roundDecimal = (value: number, decimals: number) => {
+    const factor = 10 ** decimals;
+    return Math.round((value + Number.EPSILON) * factor) / factor;
+};
+
 export default function CrearNotaIngresoPage() {
     const router = useRouter();
-    
-    const EMPRESA_ID = "005";
-    const USER_ID = "CU0001";     
-    const USER_NAME = "BIOSNET";  
-    const TENANT_ID = 1;
 
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 
@@ -74,7 +88,7 @@ export default function CrearNotaIngresoPage() {
         doc_referencia: '', 
         doc_referencia_numero: '', 
         proveedorId: '', 
-        monedaId: '001', 
+        monedaId: MONEDA_ID_DEFAULT,
         tipo_cambio: 1.0, 
         nro_contenedor: '',
         observaciones: '' 
@@ -113,7 +127,7 @@ export default function CrearNotaIngresoPage() {
         'TipoDocumentoComercial', 
         'MotivoTraslado', 
         ...(formData.almacenId
-            ? [{ endpoint: 'TablaTransaccionesPerfil', params: { cuentausuarioId: USER_NAME, almacenId: formData.almacenId } }]
+            ? [{ endpoint: 'TablaTransaccionesPerfil', params: { cuentausuarioId: USUARIO_NOMBRE, almacenId: formData.almacenId } }]
             : [])
     ]);
 
@@ -135,12 +149,12 @@ export default function CrearNotaIngresoPage() {
             allowedDocTypes: 
                 t === 'TA' ? ['X031', 'X029'] :                  
                 t === 'DV' ? ['X037', 'X077'] :  // X037 y X077 permitidos
-                ['CI', 'CL'].includes(t || '') ? ['X034', 'X061', 'X062', 'X029', 'X067'] : 
+                ['CI', 'CL'].includes(t || '') ? ['X034', 'X061', DOCUMENT_TYPE_IDS.FACTURA, 'X029', DOCUMENT_TYPE_IDS.NOTA_CREDITO] :
                 [],
             
             tipoCompraFiltro: 
-                t === 'CI' ? 'IMPORTACION' : 
-                t === 'CL' ? 'COMPRA NACIONAL' : 
+                t === 'CI' ? PURCHASE_TYPES.IMPORTED :
+                t === 'CL' ? PURCHASE_TYPES.LOCAL :
                 null,
 
             filtrosGuia: t === 'TA' ? {
@@ -190,7 +204,7 @@ export default function CrearNotaIngresoPage() {
                 doc_referencia: '',
                 doc_referencia_numero: '',
                 proveedorId: '',
-                monedaId: '001',
+                monedaId: MONEDA_ID_DEFAULT,
                 tipo_cambio: 1.0,
                 nro_contenedor: '',
                 observaciones: ''
@@ -218,7 +232,7 @@ export default function CrearNotaIngresoPage() {
                 doc_referencia: '',
                 doc_referencia_numero: '',
                 proveedorId: '',
-                monedaId: '001',
+                monedaId: MONEDA_ID_DEFAULT,
                 tipo_cambio: 1.0,
                 nro_contenedor: '',
                 observaciones: ''
@@ -237,7 +251,7 @@ export default function CrearNotaIngresoPage() {
         setFormData({
             empresaId: EMPRESA_ID, almacenId: formData.almacenId || '', cuentausuario: USER_ID, estado: 'REGISTRADO',
             fecha_doc: todayStr, transaccionId: '', tipodoccomercialId: '', doc_referencia: '', doc_referencia_numero: '', 
-            proveedorId: '', monedaId: '001', tipo_cambio: 1.0, nro_contenedor: '', observaciones: '' 
+            proveedorId: '', monedaId: MONEDA_ID_DEFAULT, tipo_cambio: 1.0, nro_contenedor: '', observaciones: ''
         });
         setItems([]);
         setShowLoteModal(false);
@@ -266,6 +280,12 @@ export default function CrearNotaIngresoPage() {
         // 🚀 IDENTIFICACIÓN DINÁMICA DEL DOCUMENTO IMPORTADO
         const isGuia = !!cabecera.guiasremisionId;
         const isVenta = !!cabecera.documentoventaId; // Para el caso DV
+        const monedaImportadaId = String(cabecera.monedaId || MONEDA_ID_DEFAULT).trim();
+        const tipoCambioRecibido = toFiniteNumber(cabecera.tipo_cambio ?? cabecera.tipoCambio, 1);
+        const tipoCambioImportado = tipoCambioRecibido > 0 ? tipoCambioRecibido : 1;
+        const requiereConversionMoneda = monedaImportadaId === CURRENCY_IDS.DOLARES
+            || monedaImportadaId === CURRENCY_IDS.EUROS;
+        const factorConversionCosto = requiereConversionMoneda ? tipoCambioImportado : 1;
         const provIdLimpio = String(
             isVenta
                 ? (cabecera.clienteId || '')
@@ -291,8 +311,8 @@ export default function CrearNotaIngresoPage() {
             doc_referencia: tablaReferencia,       
             doc_referencia_numero: realDocId,      
             proveedorId: provIdLimpio,
-            monedaId: cabecera.monedaId || '001',
-            tipo_cambio: cabecera.tipo_cambio || cabecera.tipoCambio || 1,
+            monedaId: monedaImportadaId,
+            tipo_cambio: tipoCambioImportado,
         }));
         
         toast.info("Procesando y calculando unidades disponibles...");
@@ -331,8 +351,9 @@ export default function CrearNotaIngresoPage() {
                     const presOriginal = det.presentacionId ? String(det.presentacionId).trim() : opcionesUM[0]?.presentacionId || '';
 
                     const cantidadDisponible = Number(det.saldoTemporal ?? det.saldo_temporal ?? det.cantidad ?? 0);
-                    const costoUnitario = Number(det.costo ?? det.precio ?? 0);
-                    const importeCalculado = parseFloat((cantidadDisponible * costoUnitario).toFixed(2));
+                    const costoOrigen = toFiniteNumber(det.costo ?? det.precio, 0);
+                    const costoUnitario = roundDecimal(costoOrigen * factorConversionCosto, 6);
+                    const importeCalculado = roundDecimal(cantidadDisponible * costoUnitario, 2);
 
                     return {
                         item: index + 1,
@@ -358,7 +379,10 @@ export default function CrearNotaIngresoPage() {
             } else {
                 setItems(itemsValidos);
                 setIsImportModalOpen(false);
-                toast.success(`Documento cargado con ${itemsValidos.length} ítems disponibles.`);
+                const conversionAplicada = requiereConversionMoneda
+                    ? ` Costos convertidos a soles con TC ${tipoCambioImportado}.`
+                    : '';
+                toast.success(`Documento cargado con ${itemsValidos.length} ítems disponibles.${conversionAplicada}`);
             }
 
         } catch (error) {
@@ -617,7 +641,7 @@ export default function CrearNotaIngresoPage() {
         try {
             const payload: NotaIngresoPayload = {
                 transaccionId: formData.transaccionId,
-                monedaId: '001',
+                monedaId: MONEDA_ID_DEFAULT,
                 tipo_cambio: Number(formData.tipo_cambio) || 1,
                 tipodoccomercialId: formData.tipodoccomercialId || '',
                 doc_referencia: formData.doc_referencia || '', 

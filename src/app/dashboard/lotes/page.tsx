@@ -23,6 +23,7 @@ import {
     IconChevronLeft, IconChevronRight, IconBan, IconX, IconEraser
 } from '@tabler/icons-react';
 import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 type SelectOption = {
     key?: string | number;
@@ -106,7 +107,6 @@ const getDetalleLabel = (detalle: LoteDetalleItem) => {
 };
 
 export default function LotesPage() {
-    const EMPRESA_ID = "005";
     const PAGE_SIZE = 20;
     const todayStr = format(new Date(), 'yyyy-MM-dd');
 

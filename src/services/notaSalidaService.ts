@@ -2,6 +2,7 @@
 import apiClient from '../api/apiCliente';
 import { NotaSalidaPayload, NotaSalidaResponse } from '../types/notaSalida.types';
 import { ApiResponse } from '../types';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 export const notaSalidaService = {
     /**
@@ -16,7 +17,7 @@ export const notaSalidaService = {
         pageSize = 20,
         term = '',
         filters: unknown = null,
-        empresaId: string = '005'
+        empresaId: string = EMPRESA_ID
     ): Promise<ApiResponse<NotaSalidaResponse[]>> => {
         try {
             const trimmedAlmacenId = String(almacenId ?? '').trim();

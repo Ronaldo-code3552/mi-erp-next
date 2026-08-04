@@ -20,9 +20,7 @@ import { presentacionService } from "@/services/presentacionService";
 import { productoService } from "@/services/productoService";
 import { SolicitudReposicionCreatePayload } from "@/types/solicitudReposicion.types";
 import { getAlmacenesActivosOrdenados } from "@/utils/almacenOptions";
-
-const EMPRESA_ID = "005";
-const USER_ID = "CU0001";
+import { EMPRESA_ID, USER_ID } from "@/config/appConfig";
 
 type PresentacionOption = {
     key: string;

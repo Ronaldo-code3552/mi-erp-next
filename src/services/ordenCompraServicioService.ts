@@ -14,9 +14,8 @@ import {
     downloadBlob,
     getFileNameFromContentDisposition
 } from '@/utils/fileDownload';
+import { EMPRESA_ID, USER_ID } from '@/config/appConfig';
 
-const EMPRESA_ID = '005';
-const USER_ID = 'CU0001';
 const BASE_URL = '/OrdenCompraServicio';
 
 const getErrorMessage = (error: unknown, fallback: string) => {

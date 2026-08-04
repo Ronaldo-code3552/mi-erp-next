@@ -30,17 +30,11 @@ import {
     SolicitudReposicionResponse
 } from '@/types/solicitudReposicion.types';
 import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
-
-const EMPRESA_ID = '005';
-const USER_ID = 'CU0001';
-
-const estadoSolicitudOptions = [
-    { value: 'POR APROBAR', label: 'POR APROBAR' },
-    { value: 'POR ATENDER', label: 'POR ATENDER' },
-    { value: 'ATENDIDO', label: 'ATENDIDO' },
-    { value: 'RECHAZADO', label: 'RECHAZADO' },
-    { value: 'ANULADO', label: 'ANULADO' }
-];
+import {
+    EMPRESA_ID,
+    SOLICITUD_REPOSICION_ESTADO_OPTIONS,
+    USER_ID
+} from '@/config/appConfig';
 const formatDate = (value?: string) => {
     if (!value) return '-';
 
@@ -675,7 +669,7 @@ export default function SolicitudesReposicionPage() {
 
                     <MultiSelect
                         label="Estado"
-                        options={estadoSolicitudOptions}
+                        options={SOLICITUD_REPOSICION_ESTADO_OPTIONS}
                         value={draftFilters.FiltroEstado || []}
                         onChange={(value) => setDraftFilters((prev: SolicitudReposicionFilters) => ({
                             ...prev,

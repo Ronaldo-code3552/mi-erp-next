@@ -6,6 +6,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { transportistaService } from "@/services/transportistaService";
 import { useCatalogs } from "@/hooks/useCatalogs"; // Nuevo hook importado
 import { Transportista } from "@/types/transportista.types";
+import { EMPRESA_ID } from "@/config/appConfig";
 
 import DataTable from "@/components/shared/DataTable";
 import SidebarFiltros from "@/components/filter/FiltrosAvanzados";
@@ -18,8 +19,6 @@ import {
 } from '@tabler/icons-react';
 
 export default function TransportistasPage() {
-    const EMPRESA_ID = "005";
-    
     // Configuración inicial de filtros
     const initialFilters = { documento_identidad: [] };
 

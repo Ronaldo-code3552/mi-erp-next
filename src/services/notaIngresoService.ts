@@ -3,6 +3,7 @@
 import apiClient from '../api/apiCliente';
 import { NotaIngresoPayload, NotaIngresoResponse, NotaIngresoFilters } from '../types/notaIngreso.types';
 import { ApiResponse } from '../types';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 export const notaIngresoService = {
     // 1. Obtener Listado Paginado por Almacén (con filtros avanzados)
@@ -12,7 +13,7 @@ export const notaIngresoService = {
         pageSize: number = 20, 
         search: string = '', 
         filters: any = {}, // <-- El useCrud inyectará { estadoJson: [], transaccionJson: [], etc } aquí
-        empresaId: string = '005'
+        empresaId: string = EMPRESA_ID
     ) => {
         try {
             const params = new URLSearchParams();

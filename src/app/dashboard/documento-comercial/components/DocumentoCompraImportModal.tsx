@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import Modal from "@/components/ui/Modal";
 import { documentoCompraService } from "@/services/documentoCompraService";
 import { DocumentoCompra, DocumentoCompraDetalle } from "@/types/documentoCompra.types";
+import { DOCUMENT_TYPE_IDS, EMPRESA_ID } from "@/config/appConfig";
 
 interface Props {
     isOpen: boolean;
@@ -22,8 +23,7 @@ interface Props {
 }
 
 const PAGE_SIZE = 20;
-const EMPRESA_ID = "005";
-const INVOICE_DOCUMENT_TYPE = "X062";
+const INVOICE_DOCUMENT_TYPE = DOCUMENT_TYPE_IDS.FACTURA;
 
 const inputDate = (date: Date) => {
     const year = date.getFullYear();

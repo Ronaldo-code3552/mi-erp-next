@@ -6,6 +6,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { conductorService } from "@/services/conductorService";
 import { useCatalogs } from "@/hooks/useCatalogs"; // 🚀 NUEVO HOOK
 import { Conductor } from "@/types/conductor.types";
+import { EMPRESA_ID } from "@/config/appConfig";
 
 import DataTable from "@/components/shared/DataTable";
 import SidebarFiltros from "@/components/filter/FiltrosAvanzados"; 
@@ -18,8 +19,6 @@ import {
 } from '@tabler/icons-react';
 
 export default function ConductoresPage() {
-    const EMPRESA_ID = "005";
-    
     const initialFilters = { documento_identidad: [] };
 
     const { 

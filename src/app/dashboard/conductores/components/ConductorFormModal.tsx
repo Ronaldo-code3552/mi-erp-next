@@ -13,6 +13,7 @@ import { Conductor } from '@/types/conductor.types';
 import { DniResponse, Licencia, LicenciaConducirResponse, RucResponse } from '@/types/apiExternal.types';
 import { useValidation } from '@/hooks/useValidation';
 import { getInputClasses } from '@/utils/formStyles';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 interface Props {
     isOpen: boolean;
@@ -25,7 +26,6 @@ export default function ConductorFormModal({ isOpen, onClose, onSuccess, conduct
     const [loading, setLoading] = useState(false);
     const [licenciasEncontradas, setLicenciasEncontradas] = useState<Licencia[]>([]);
 
-    const EMPRESA_ID = "005";
     const isReadOnly = conductorToEdit?.estado === false;
     const isEditing = !!conductorToEdit;
 

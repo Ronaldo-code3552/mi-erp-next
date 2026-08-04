@@ -15,6 +15,7 @@ import {
     SolicitudReposicionResponse,
     SolicitudReposicionUpdatePayload
 } from "@/types/solicitudReposicion.types";
+import { USER_ID } from "@/config/appConfig";
 
 const toDateInput = (value?: string) => {
     if (!value) return "";
@@ -97,7 +98,7 @@ export default function EditarSolicitudReposicionPage() {
             almacen_destinoId: solicitud.almacen_destinoId || "",
             fecha_plazo_solicitud: toDateInput(solicitud.fecha_plazo_solicitud),
             observacion: solicitud.observacion || "",
-            cuentausuarioId: solicitud.cuentausuarioId || "CU0001",
+            cuentausuarioId: solicitud.cuentausuarioId || USER_ID,
             detalle: (solicitud.detalles || []).map((item) => ({
                 bienId: item.bienId || "",
                 presentacionId: item.presentacionId || "",

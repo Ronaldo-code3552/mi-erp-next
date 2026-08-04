@@ -45,20 +45,22 @@ import {
     DOCUMENTO_PDF_REFERENCIAS,
     DocumentoPdfFormSubmitResult
 } from "@/types/documentoPdf.types";
+import {
+    DOCUMENT_TYPE_IDS,
+    EMPRESA_ID,
+    IGV_RATE,
+    MONEDA_ID_DEFAULT,
+    PURCHASE_TYPES,
+    USER_ID
+} from "@/config/appConfig";
 
-const EMPRESA_ID = "005";
-const USER_ID = "CU0001";
-const IGV_RATE = 0.18;
-const DOCUMENTO_COMPRA_TIPO_IDS = {
-    NOTA_CREDITO: "X067",
-    NOTA_DEBITO: "X068"
-} as const;
+const DOCUMENTO_COMPRA_TIPO_IDS = DOCUMENT_TYPE_IDS;
 const TIPO_MOTIVO_BY_TIPO_DOCUMENTO: Record<string, TipoDocumentoNota> = {
     [DOCUMENTO_COMPRA_TIPO_IDS.NOTA_CREDITO]: TIPO_DOCUMENTO_NOTA.NC,
     [DOCUMENTO_COMPRA_TIPO_IDS.NOTA_DEBITO]: TIPO_DOCUMENTO_NOTA.ND
 };
-const LOCAL_PURCHASE = "COMPRA NACIONAL";
-const IMPORTED_PURCHASE = "IMPORTACION";
+const LOCAL_PURCHASE = PURCHASE_TYPES.LOCAL;
+const IMPORTED_PURCHASE = PURCHASE_TYPES.IMPORTED;
 const PURCHASE_TYPE_OPTIONS = [
     { value: LOCAL_PURCHASE, label: "Compra productos locales" },
     { value: IMPORTED_PURCHASE, label: "Compra productos Importados" }
@@ -336,7 +338,7 @@ const normalizeForm = (source?: Partial<DocumentoCompra>): FormValue => {
         fechaDoc: dateInput(first(raw, ["fechaDoc", "fecha_doc", "FechaDoc", "fechaEmision", "fecha_emision"])) || today(),
         guiasRemisionId: first(raw, ["guiasremisionId", "guiasRemisionId", "GuiasRemisionId"]),
         proveedorId: first(raw, ["proveedorId", "ProveedorId"]),
-        monedaId: first(raw, ["monedaId", "MonedaId"]) || "001",
+        monedaId: first(raw, ["monedaId", "MonedaId"]) || MONEDA_ID_DEFAULT,
         tipoPagoId: first(raw, ["tipopagoId", "tipoPagoId", "TipoPagoId"]),
         tipoCompra: requiresElectronicReason
             ? ""
@@ -615,9 +617,9 @@ export default function DocumentoCompraForm({
             documentoReferenciaId: "",
             documentoReferenciaNumero: "",
             proveedorId: "",
-            monedaId: "001",
+            monedaId: MONEDA_ID_DEFAULT,
             tipoPagoId: "",
-            tipoCambio: exchangeRateByCurrencyId("001"),
+            tipoCambio: exchangeRateByCurrencyId(MONEDA_ID_DEFAULT),
             subtotalAfectoBase: "0",
             subtotalExoneradoBase: "0",
             detalles: previous.detalles.filter(detail => !detail.origenImportado)
@@ -672,9 +674,9 @@ export default function DocumentoCompraForm({
             ordenCompraServicioId: "",
             ordenNumero: "",
             proveedorId: "",
-            monedaId: "001",
+            monedaId: MONEDA_ID_DEFAULT,
             tipoPagoId: "",
-            tipoCambio: exchangeRateByCurrencyId("001"),
+            tipoCambio: exchangeRateByCurrencyId(MONEDA_ID_DEFAULT),
             subtotalAfectoBase: "0",
             subtotalExoneradoBase: "0",
             detalles: previous.detalles.filter(detail => !detail.origenImportado)
@@ -693,7 +695,7 @@ export default function DocumentoCompraForm({
             toast.error("El documento seleccionado no tiene un ID válido.");
             return;
         }
-        if (documentTypeId !== "X062") {
+        if (documentTypeId !== DOCUMENT_TYPE_IDS.FACTURA) {
             toast.error("Solo se pueden importar facturas de compra.");
             return;
         }
@@ -786,9 +788,9 @@ export default function DocumentoCompraForm({
             documentoReferenciaId: "",
             documentoReferenciaNumero: "",
             proveedorId: "",
-            monedaId: "001",
+            monedaId: MONEDA_ID_DEFAULT,
             tipoPagoId: "",
-            tipoCambio: exchangeRateByCurrencyId("001"),
+            tipoCambio: exchangeRateByCurrencyId(MONEDA_ID_DEFAULT),
             subtotalAfectoBase: "0",
             subtotalExoneradoBase: "0",
             detalles: previous.detalles.filter(detail => !detail.origenImportado)

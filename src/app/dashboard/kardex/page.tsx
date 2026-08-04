@@ -9,6 +9,7 @@ import KardexDataTable from '@/components/kardex/KardexDataTable';
 import { columnsKardexPres, columnsKardexGral } from '@/components/kardex/KardexGrid';
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { getAlmacenesActivosOrdenados } from '@/utils/almacenOptions';
+import { ALMACEN_ID, EMPRESA_ID } from '@/config/appConfig';
 
 // Servicios
 import { kardexService } from '@/services/kardexService';
@@ -61,10 +62,6 @@ export default function KardexPage() {
     // Tipado union para soportar ambas tablas
     const [movimientos, setMovimientos] = useState<Array<MovimientoInventarioDto | MovimientoEmpresaDto>>([]);
     const [saldos, setSaldos] = useState({ real: 0, disponible: 0, futuro: 0 });
-
-    // IDS Temporales (A futuro: venir de tu contexto de sesión)
-    const ALMACEN_ID = '001';
-    const EMPRESA_ID = '005';
 
     // --- FILTROS ---
     const [filtros, setFiltros] = useState({

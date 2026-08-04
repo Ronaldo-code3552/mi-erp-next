@@ -7,8 +7,7 @@ import {
     ProveedorPayload,
     ProveedorUpdatePayload
 } from '@/types/proveedor.types';
-
-const TENANT_ID = 1;
+import { TENANT_ID } from '@/config/appConfig';
 
 const getErrorMessage = (error: unknown, fallback: string) => {
     if (typeof error === 'object' && error !== null) {

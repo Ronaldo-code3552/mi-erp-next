@@ -12,6 +12,7 @@ import { presentacionService } from '@/services/presentacionService';
 import { useCatalogs } from '@/hooks/useCatalogs'; 
 import { GuiaRemisionPayload, GuiaRemisionDetalle } from '@/types/guiaRemision.types';
 import { getSafeDashboardReturnPath } from '@/utils/referenciasUso';
+import { EMPRESA_ID, EMPRESA_RUC, TENANT_ID } from '@/config/appConfig';
 
 // UI Components
 import SearchableSelect from '@/components/forms/SearchableSelect';
@@ -52,10 +53,7 @@ export default function DetalleGuiaPage({ params }: { params: Promise<{ id: stri
     );
     const hasReturnContext = Boolean(searchParams.get('returnTo'));
 
-    const EMPRESA_ID = "005";
-    const ALMACEN_ID = "001";
-    const TENANT_ID = 1; 
-    const ruc = "20100100100";
+    const ruc = EMPRESA_RUC;
 
     const [loading, setLoading] = useState(true);
     const [loadError, setLoadError] = useState('');

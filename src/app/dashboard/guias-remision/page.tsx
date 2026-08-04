@@ -10,6 +10,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { guiaRemisionService } from "@/services/guiaRemisionService";
 import { useCatalogs } from "@/hooks/useCatalogs"; // 🚀 NUESTRO HOOK MÁGICO
 import { GuiaRemisionResponse } from "@/types/guiaRemision.types";
+import { EMPRESA_ID } from "@/config/appConfig";
 
 import DataTable from "@/components/shared/DataTable";
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
@@ -22,8 +23,6 @@ import {
 } from '@tabler/icons-react';
 
 export default function GuiasRemisionPage() {
-    const EMPRESA_ID = "005";
-
     const initialFilters = { 
         estadoJson: [], 
         tipoMovimientoJson: [],

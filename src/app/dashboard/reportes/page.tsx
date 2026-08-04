@@ -21,6 +21,7 @@ import { tablaTransaccionesService } from '@/services/tablaTransaccionesService'
 import { useCatalogs } from '@/hooks/useCatalogs';
 import { getAlmacenesActivosOrdenados, getTipoAlmacenId } from '@/utils/almacenOptions';
 import { SelectOption } from '@/types/catalog.types';
+import { ALMACEN_ID, EMPRESA_ID as empresaId } from '@/config/appConfig';
 
 type TipoAlmacenApi = { tipoalmacenId: number; descripcion: string; estado: string; };
 
@@ -125,8 +126,6 @@ function DownloadButton({
 }
 
 export default function ReportesPage() {
-    const empresaId = "005";
-
     const [loading, setLoading] = useState<string | null>(null);
     const [activeAction, setActiveAction] = useState<ReportActionId | null>(null);
     const [expandedGroup, setExpandedGroup] = useState<string | null>('pendientes');
@@ -206,7 +205,7 @@ export default function ReportesPage() {
 
         fetchTransacciones();
         return () => { isMounted = false; };
-    }, [empresaId]);
+    }, []);
 
     useEffect(() => {
         if (shouldLockStockAlmacen && stockParams.almacenId !== "000") {
@@ -225,7 +224,7 @@ export default function ReportesPage() {
             }));
 
         return [{ value: "0", label: "TODAS LAS TRANSACCIONES" }, ...opciones];
-    }, [empresaId]);
+    }, []);
 
     const reportItems = useMemo<ReportListItem[]>(() => [
         {
@@ -341,7 +340,7 @@ export default function ReportesPage() {
 
     const handleOpenAction = (action: ReportActionId) => {
         if (action === 'm_det' && movimientosParams.almacenId === "000") {
-            setMovimientosParams((prev) => ({ ...prev, almacenId: "001" }));
+            setMovimientosParams((prev) => ({ ...prev, almacenId: ALMACEN_ID }));
         }
         setActiveAction(action);
     };

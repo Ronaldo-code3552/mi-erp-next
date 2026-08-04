@@ -31,6 +31,14 @@ import {
     IconBarcode, IconEdit, IconSearch, IconLoader, IconX
 } from '@tabler/icons-react';
 import { upsertOptionByValue } from '@/utils/selectOptions';
+import {
+    ALMACEN_ID,
+    EMPRESA_ID,
+    EMPRESA_RUC,
+    MONEDA_ID_DEFAULT,
+    TENANT_ID,
+    USER_ID
+} from '@/config/appConfig';
 
 const SectionTitle = ({ title, icon: Icon }: any) => (
     <div className="flex items-center gap-2 text-slate-800 border-b border-slate-200 pb-2 mb-4 mt-6">
@@ -55,12 +63,7 @@ const FormInput = ({ label, className, disabled, value, ...props }: any) => (
 
 export default function CrearGuiaPage() {
     const router = useRouter();
-    
-    const EMPRESA_ID = "005";
-    const ALMACEN_ID = "001"; 
-    const USER_ID = "CU0001";
-    const TENANT_ID = 1; 
-    const EMPRESA_RUC_CLIENTE = "20100100100";
+    const EMPRESA_RUC_CLIENTE = EMPRESA_RUC;
 
     const [loading, setLoading] = useState(false);
     const [products, setProducts] = useState<any[]>([]);
@@ -91,7 +94,7 @@ export default function CrearGuiaPage() {
         fecha_traslado: todayStr, fecha_doc: todayStr, fecha_entrega: null, doc_referencia:'', 
         doc_referencia_numero: '', documentoReferencia: '', documentoReferenciaTipo: '', 
         solicitudReposicionId: null,
-        foto_guiaremision: '', monedaId: '001', tipo_cambio: 1.0, estado: 'REGISTRADO',
+        foto_guiaremision: '', monedaId: MONEDA_ID_DEFAULT, tipo_cambio: 1.0, estado: 'REGISTRADO',
         estado_documento_sunat: 'PENDIENTEXML', incluye_igv: true, clienteId: '',
         proveedorId: '', puntoventaId: '', trabajadorId: '', id_almacen_inicio: ALMACEN_ID, 
         id_almacen_destino: '', motivotrasladoId: '', otro_motivo_traslado: '',

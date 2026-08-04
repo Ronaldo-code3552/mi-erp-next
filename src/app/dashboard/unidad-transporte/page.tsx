@@ -6,6 +6,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { unidadTransporteService } from "@/services/unidadTransporteService";
 import { useCatalogs } from "@/hooks/useCatalogs";
 import { UnidadTransporte } from "@/types/unidadTransporte.types";
+import { EMPRESA_ID } from "@/config/appConfig";
 
 import DataTable from "@/components/shared/DataTable";
 import SidebarFiltros from "@/components/filter/FiltrosAvanzados";
@@ -18,7 +19,6 @@ import {
 } from '@tabler/icons-react';
 
 export default function UnidadTransportePage() {
-    const EMPRESA_ID = "005";
     const initialFilters = { marca: [], modelo: [] };
 
     const { 

@@ -14,6 +14,7 @@ import { toast } from "sonner";
 
 import Modal from "@/components/ui/Modal";
 import { ordenCompraServicioService } from "@/services/ordenCompraServicioService";
+import { IGV_RATE } from "@/config/appConfig";
 import { OrdenCompraServicio, OrdenCompraServicioDetalle } from "@/types/ordenCompraServicio.types";
 
 interface Props {
@@ -221,7 +222,7 @@ export default function OrdenCompraImportModal({ isOpen, onClose, onImport }: Pr
         const exempt = details.length > 0
             ? detailTotals.exempt
             : numberOf(raw.valorventa_exonerado ?? raw.subtotalExonerado ?? raw.SubtotalExonerado);
-        const igv = affected * 0.18;
+        const igv = affected * IGV_RATE;
 
         return {
             id: orderIdOf(detailOrder),

@@ -30,6 +30,7 @@ import {
     ProveedorFilters
 } from "@/types/proveedor.types";
 import ProveedorCuentasModal from "./components/ProveedorCuentasModal";
+import { PROVEEDOR_ESTADO_OPTIONS } from "@/config/appConfig";
 
 type Option = {
     value: string | number;
@@ -42,11 +43,6 @@ const initialFilters: ProveedorFilters = {
     tipoproveedorId: [],
     claseproveedorId: []
 };
-
-const estadoOptions = [
-    { value: 1, label: "ACTIVO" },
-    { value: 0, label: "ANULADO" }
-];
 
 const getTipoDescripcion = (row: Proveedor) => {
     return row.tipo_proveedor?.descripcion || row.tipoProveedor?.descripcion || row.tipoproveedorId || row.TipoproveedorId || "-";
@@ -434,7 +430,7 @@ export default function ProveedorPage() {
                     <div className="flex flex-col gap-5">
                         <MultiSelect
                             label="Estado"
-                            options={estadoOptions}
+                            options={PROVEEDOR_ESTADO_OPTIONS}
                             value={draftFilters.estado || []}
                             onChange={(value) => setDraftFilters(prev => ({ ...prev, estado: value }))}
                         />

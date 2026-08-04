@@ -30,6 +30,7 @@ import { proveedorService } from "@/services/proveedorService";
 import { tipoOrdenService } from "@/services/tipoOrdenService";
 import { OrdenCompraServicio, OrdenCompraServicioFilters } from "@/types/ordenCompraServicio.types";
 import { DOCUMENTO_PDF_REFERENCIAS } from "@/types/documentoPdf.types";
+import { ORDEN_COMPRA_ESTADO_OPTIONS } from "@/config/appConfig";
 
 type Option = {
     value: string | number;
@@ -44,14 +45,6 @@ const initialFilters: OrdenCompraServicioFilters = {
     fechaInicio: "",
     fechaFin: ""
 };
-
-const estadoOptions = [
-    { value: "REGISTRADO", label: "REGISTRADO" },
-    { value: "PENDIENTE", label: "PENDIENTE" },
-    { value: "APROBADO", label: "APROBADO" },
-    { value: "COMPROMETIDO", label: "COMPROMETIDO" },
-    { value: "ANULADO", label: "ANULADO" }
-];
 
 const formatDate = (value?: string | null) => {
     if (!value) return "-";
@@ -634,7 +627,7 @@ export default function OrdenCompraServicioPage() {
                     <div className="flex flex-col gap-5">
                         <MultiSelect
                             label="Estado"
-                            options={estadoOptions}
+                            options={ORDEN_COMPRA_ESTADO_OPTIONS}
                             value={draftFilters.estado || []}
                             onChange={(value) => setDraftFilters(prev => ({ ...prev, estado: value }))}
                         />

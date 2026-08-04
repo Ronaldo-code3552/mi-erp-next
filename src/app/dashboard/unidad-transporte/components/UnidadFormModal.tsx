@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { UnidadTransporte } from '@/types/unidadTransporte.types';
 import { PlacaVehiculoResponse } from '@/types/apiExternal.types';
 import { useValidation } from '@/hooks/useValidation';
+import { EMPRESA_ID } from '@/config/appConfig';
 
 interface Props {
     isOpen: boolean;
@@ -27,7 +28,6 @@ interface Props {
 
 export default function UnidadFormModal({ isOpen, onClose, onSuccess, unitToEdit }: Props) {
     const [loading, setLoading] = useState(false);
-    const EMPRESA_ID = "005";
 
     // 1. Catálogos Dinámicos
     const { catalogs, loadingCatalogs, refreshCatalogs } = useCatalogs(isOpen ? ['Marca', 'Modelo'] : []);

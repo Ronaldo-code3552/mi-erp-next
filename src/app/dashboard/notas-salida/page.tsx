@@ -11,6 +11,11 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useCatalogs } from "@/hooks/useCatalogs"; 
 import { notaSalidaService } from "@/services/notaSalidaService"; // 🚀 Asumimos que crearás este servicio
 import { NotaSalidaResponse } from "@/types/notaSalida.types"; // 🚀 Asumimos que crearás este tipo
+import {
+    EMPRESA_ID,
+    NOTA_SALIDA_ESTADO_OPTIONS,
+    USUARIO_NOMBRE
+} from "@/config/appConfig";
 
 import DataTable from "@/components/shared/DataTable";
 import FiltrosAvanzados from "@/components/filter/FiltrosAvanzados";
@@ -25,8 +30,7 @@ import {
 } from '@tabler/icons-react';
 
 export default function NotasSalidaPage() {
-    const EMPRESA_ID = "005";
-    const USER_NAME = "BIOSNET";
+    const USER_NAME = USUARIO_NOMBRE;
 
     const initialFilters = { 
         estadoJson: [], 
@@ -357,13 +361,6 @@ export default function NotasSalidaPage() {
         }
     ];
 
-    const estadoOptions = [
-        { value: 'REGISTRADO', label: 'REGISTRADO' },
-        { value: 'PENDIENTE', label: 'PENDIENTE' },
-        { value: 'COMPROMETIDO', label: 'COMPROMETIDO' },
-        { value: 'ANULADO', label: 'ANULADO' }
-    ];
-
     return (
         <div className="p-6 animate-fade-in-up">
             <div className="flex justify-between items-center mb-6">
@@ -488,7 +485,7 @@ export default function NotasSalidaPage() {
                         />
                         <MultiSelect 
                             label="Estado" 
-                            options={estadoOptions} 
+                            options={NOTA_SALIDA_ESTADO_OPTIONS}
                             value={tempFilters.estadoJson} 
                             onChange={(v) => setTempFilters({...tempFilters, estadoJson: v})} 
                         />

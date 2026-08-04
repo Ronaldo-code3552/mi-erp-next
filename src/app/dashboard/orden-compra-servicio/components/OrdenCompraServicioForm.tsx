@@ -39,10 +39,12 @@ import {
     DOCUMENTO_PDF_REFERENCIAS,
     DocumentoPdfFormSubmitResult
 } from "@/types/documentoPdf.types";
-
-const EMPRESA_ID = "005";
-const USER_ID = "CU0001";
-const IGV_RATE = 0.18;
+import {
+    EMPRESA_ID,
+    IGV_RATE,
+    MONEDA_ID_DEFAULT,
+    USER_ID
+} from "@/config/appConfig";
 
 type SelectOption = {
     key?: string | number;
@@ -266,7 +268,7 @@ const normalizeOrden = (source?: Partial<OrdenCompraServicio>): OrdenFormValue =
         fotoCotizacion: firstString(raw, ["fotoCotizacion", "foto_cotizacion", "FotoCotizacion"]),
         fechaEmision: toDateInput(firstString(raw, ["fechaEmision", "fecha_emision", "FechaEmision"])) || todayInput(),
         fechaEntrega: toDateInput(firstString(raw, ["fechaEntrega", "fecha_entrega", "FechaEntrega"])) || todayInput(),
-        monedaId: firstString(raw, ["monedaId", "MonedaId"]) || "001",
+        monedaId: firstString(raw, ["monedaId", "MonedaId"]) || MONEDA_ID_DEFAULT,
         tipoCambio: firstString(raw, ["tipoCambio", "tipo_cambio", "TipoCambio"]) || "1",
         subtotalAfecto: firstString(raw, ["subtotalAfecto", "subtotal_afecto", "SubtotalAfecto", "valorventaAfecto", "valorventa_afecto", "ValorventaAfecto"]) || "0",
         subtotalExonerado: firstString(raw, ["subtotalExonerado", "subtotal_exonerado", "SubtotalExonerado", "valorventaExonerado", "valorventa_exonerado", "ValorventaExonerado", "subtotalInafecto", "subtotal_inafecto", "SubtotalInafecto"]) || "0",
